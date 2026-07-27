@@ -1,0 +1,16 @@
+---
+description: OpenSpec lifecycle — sync before commit/PR, not every agent stop
+alwaysApply: true
+---
+
+# OpenSpec
+
+Non-trivial changes must use `openspec/changes/<name>/` (proposal, design, tasks).
+
+- Sync or archive OpenSpec when the change is ready to keep — typically **before commit or PR**
+- Do not burn a turn syncing half-baked work after every agent stop
+- Skip only for trivial typos/comments/tiny docs
+
+A `beforeShellExecution` hook may **ask** on `git commit` / `gh pr create` if code changed without OpenSpec updates. Sync artifacts, then retry.
+
+See `openspec/config.yaml` and `AGENTS.md`.

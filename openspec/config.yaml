@@ -1,0 +1,18 @@
+schema: spec-driven
+
+# Injected into agent context for OpenSpec workflows
+context: |
+  gotit-ai verifies learning (false fluency), not note collection.
+  Stack: Python 3.12 + uv + FastAPI + MCP; React web via npm; Postgres + Redis.
+  OpenClaw integrates via MCP tools; do not add chat channels inside gotit.
+  Keep gotit.core framework-free. Verified = done. Harness evidence for prompt/skill adopts.
+
+rules:
+  proposal:
+    - Tie every change to verification outcomes or harness/tooling that enables them.
+  specs:
+    - Prefer SHALL requirements with concrete scenarios (given/when/then).
+  design:
+    - Call out REST/MCP schema parity and Postgres/Redis impact.
+  tasks:
+    - Include test or harness steps; mark gate commands explicitly.

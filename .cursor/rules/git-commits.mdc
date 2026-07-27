@@ -1,0 +1,34 @@
+---
+description: Git commit message convention (Conventional Commits, English)
+alwaysApply: true
+---
+
+# Git Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/) in **English**, aligned with [clowder-ai](https://github.com/zts212653/clowder-ai) style.
+
+## Format
+
+```text
+<type>(<scope>): <short summary>
+
+[optional body]
+```
+
+## Rules
+
+- Subject in English only; imperative mood (`add`, not `added` / `Adding`)
+- Types: `feat` | `fix` | `docs` | `perf` | `refactor` | `test` | `chore` | `ci`
+- Scope = package or domain: `core` | `api` | `mcp` | `web` | `harness` | `openspec` | feature id when relevant
+- Keep the subject concise; put rationale and details in the body when needed
+- Pass the message via HEREDOC when committing; do not use Chinese in the subject
+
+## Examples
+
+```text
+feat(core): add verify-loop state machine
+fix(mcp): pass bearer auth to tool handlers
+docs(adr): record postgres-over-sqlite decision
+test(harness): add summary-vs-verify holdout cases
+chore(repo): scaffold pnpm workspace and docker compose
+```

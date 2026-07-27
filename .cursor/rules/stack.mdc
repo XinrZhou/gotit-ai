@@ -1,0 +1,23 @@
+---
+description: Gotit-ai stack and boundaries (uv Python + OpenClaw MCP)
+alwaysApply: true
+---
+
+# Stack
+
+- Backend: Python 3.12+, **uv**, FastAPI, MCP under `src/gotit/`
+- `gotit.core` stays framework-free (no FastAPI/MCP imports)
+- Web: React + Vite under `web/` with **npm** only
+- Data: Postgres + Redis via `docker compose`
+- Specs: OpenSpec changes + `docs/adr/` + `docs/VISION.md`
+- OpenClaw: MCP tools + `skills/gotit/SKILL.md` — no channel adapters in gotit
+
+# Commands
+
+```bash
+uv sync --all-extras
+uv run gotit-api
+uv run gotit-mcp
+./scripts/gate.sh
+cd web && npm install && npm run dev
+```

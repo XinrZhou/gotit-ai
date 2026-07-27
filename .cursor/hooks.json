@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "/usr/bin/python3 .cursor/hooks/openspec-session-start.py",
+        "timeout": 10
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "/usr/bin/python3 .cursor/hooks/openspec-before-commit.py",
+        "matcher": "git\\s+commit|gh\\s+pr\\s+create|gh\\s+pr\\s+edit",
+        "timeout": 15,
+        "failClosed": false
+      }
+    ]
+  }
+}

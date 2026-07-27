@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE / OS
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+coverage/
+
+# OpenSpec / Cursor local
+.cursor/plans/
+
+# Data / docker volume mounts
+data/postgres/
+data/redis/
+tmp/
+
+# Web build
+web/dist/
+web/.vite/
