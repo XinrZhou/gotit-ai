@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://gotit:gotit@127.0.0.1:5432/gotit"
     redis_url: str = "redis://127.0.0.1:6379/0"
+    gotit_user_id: str = "local"
+    # When true (default), create tables on API startup (handy for sqlite/dev).
+    gotit_db_create_all: bool = True
 
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""

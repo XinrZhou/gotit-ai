@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 .venv/
+.venv-work/
+*.db
+gotit.db
 __pycache__/
 *.py[cod]
 *$py.class
@@ -42,3 +45,4 @@ tmp/
 # Web build
 web/dist/
 web/.vite/
+web/public/yuque-assets/
