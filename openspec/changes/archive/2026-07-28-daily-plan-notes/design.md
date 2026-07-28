@@ -25,4 +25,4 @@
 ## Risks
 
 - No Docker locally → tests use `sqlite+aiosqlite` when `GOTIT_TEST_DATABASE_URL` unset; production path remains Postgres.
-- Examine remains stub; writeback uses request flag `passed` for deterministic tests until real Examiner lands.
+- Examine remains stub; writeback uses request flag `passed` for deterministic tests until real Examiner lands. **(Superseded 2026-07-28 by `agent-rewrite`: `passed` replaced by continuous `verdict: passed|almost|owe_next`.)**

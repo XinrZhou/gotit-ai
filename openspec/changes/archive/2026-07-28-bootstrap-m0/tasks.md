@@ -1,5 +1,7 @@
 # Tasks — bootstrap M0
 
+Delivered in commits `ea682c8` + `3ab9388`.
+
 - [x] uv project + dependencies
 - [x] core VerifyLoop + models
 - [x] FastAPI health + ingest stub
@@ -8,5 +10,8 @@
 - [x] React web stub
 - [x] AGENTS.md / VISION / ADRs / OpenClaw skill
 - [x] `scripts/gate.sh` (ruff + pytest)
-- [ ] Wire real Librarian extraction (next change)
-- [ ] Streamable-http MCP for remote OpenClaw
+
+## Deferred (intentionally out of scope, moved to `agent-rewrite`)
+
+- [ ] Wire real Librarian extraction → replaced by Compass agent in `agent-rewrite`
+- [ ] Streamable-http MCP for remote OpenClaw → still open, not in `agent-rewrite`

@@ -46,3 +46,6 @@ tmp/
 web/dist/
 web/.vite/
 web/public/yuque-assets/
+
+# Resume uploads (local storage, M0)
+uploads/

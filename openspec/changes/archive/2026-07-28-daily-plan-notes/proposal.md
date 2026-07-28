@@ -1,5 +1,9 @@
 # Daily plan + notes (verification-oriented)
 
+> **Archived 2026-07-28** — delivered in commit `3ab9388`. All items shipped.
+> The examine stub's `passed` flag was later superseded by the continuous
+> verdict (`passed|almost|owe_next`) in the `agent-rewrite` change.
+
 ## Why
 
 Learners need a day-scoped place to plan what to verify and store notes agents can consume — without turning gotit into a second brain. Plans and notes support the check loop; mastery still requires evidence.

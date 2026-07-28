@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 
@@ -23,10 +24,8 @@ Read `openspec/config.yaml` and `AGENTS.md`. Optional slash commands after \
 
 
 def main() -> None:
-    try:
+    with contextlib.suppress(Exception):
         sys.stdin.read()
-    except Exception:
-        pass
     print(json.dumps({"additional_context": CONTEXT}))
 
 

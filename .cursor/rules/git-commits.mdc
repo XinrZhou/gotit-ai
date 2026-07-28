@@ -17,18 +17,38 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/) in **English
 
 ## Rules
 
-- Subject in English only; imperative mood (`add`, not `added` / `Adding`)
+- Subject in English; imperative mood (`add`, not `added` / `Adding`)
+- **Subject ≤ 72 characters** (aim ~50); one line only
 - Types: `feat` | `fix` | `docs` | `perf` | `refactor` | `test` | `chore` | `ci`
-- Scope = package or domain: `core` | `api` | `mcp` | `web` | `harness` | `openspec` | feature id when relevant
-- Keep the subject concise; put rationale and details in the body when needed
-- Pass the message via HEREDOC when committing; do not use Chinese in the subject
+- Scope = package or domain: `core` | `api` | `mcp` | `web` | `harness` | `openspec`
+- Body is **optional**. If present: 1–3 short sentences on **why / impact**, not a file checklist
+- Do **not** list every touched path, UI detail, or OpenSpec folder in the body — put that in the PR or `openspec/changes/`
+- Prefer several small commits over one mega-message when scopes differ
+- Commit in batches by change — group related edits into one commit, separate unrelated edits into their own commits
+- Pass the message via HEREDOC; no Chinese in the subject
 
-## Examples
+## Good
 
 ```text
 feat(core): add verify-loop state machine
 fix(mcp): pass bearer auth to tool handlers
 docs(adr): record postgres-over-sqlite decision
-test(harness): add summary-vs-verify holdout cases
-chore(repo): scaffold pnpm workspace and docker compose
 ```
+
+```text
+feat(web): add daily workspace sidebar
+
+Learners need plan/queue and notes in one place for same-day review.
+```
+
+## Bad
+
+```text
+feat(core): add daily plan, notes, chat persistence and web workspace
+
+- gotit.db: SQLAlchemy async models ...
+- api.routes: /v1/days ...
+- web: Apple-style ...
+```
+
+(Too long; reads like a changelog. Split commits or move detail to the PR.)

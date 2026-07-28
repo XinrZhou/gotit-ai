@@ -22,6 +22,7 @@ uv run mypy src
 uv run pytest
 uv run gotit-api          # http://127.0.0.1:8787
 uv run gotit-mcp          # stdio MCP
+uv run python scripts/run_harness.py --label gate   # dev case set
 cd web && npm install && npm run dev
 docker compose up -d postgres redis
 ./scripts/gate.sh

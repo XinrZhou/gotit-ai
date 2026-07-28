@@ -1,5 +1,7 @@
 # Tasks — daily-plan-notes
 
+Delivered in commit `3ab9388`.
+
 - [x] OpenSpec proposal / design / tasks
 - [x] Core DTOs: PlanItemSource, PlanItemStatus, day/plan/note schemas
 - [x] `gotit.db`: ORM models, async session, Alembic migration
@@ -12,4 +14,3 @@
 - [x] Delete ops + routes: plan item, note; GET single note
 - [x] Chat persistence: `chat_messages` table + `GET/POST /v1/plan/items/{id}/messages`; Web loads/saves history per item
 - [x] Web UI redesign: Apple-style black/white, sidebar workspace, examination chat, compose modal, SVG icon, fixed vite port + proxy
-
