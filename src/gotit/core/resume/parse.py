@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic_ai import Agent
 
-from gotit.core.models import ResumeDocument, ResumeParseOutput, ResumeProject
+from gotit.core.models import ResumeParseOutput
 
 ResumeParserAgent = Agent[Any, ResumeParseOutput]
 
@@ -48,21 +48,14 @@ async def run_resume_parser(
 
 
 def stub_parse(*, upload_id: Any, resume_text: str) -> ResumeParseOutput:
-    """No-LLM bypass: return a single placeholder project from the text head."""
-    from uuid import UUID, uuid4
+    """No-LLM bypass: heuristic rule-based structured parse.
 
-    uid: Any = upload_id
-    if not isinstance(uid, UUID):
-        uid = uuid4()
-    return ResumeParseOutput(
-        upload_id=uid,
-        document=ResumeDocument(
-            projects=[
-                ResumeProject(
-                    name="占位项目",
-                    description=resume_text[:500],
-                )
-            ]
-        ),
-    )
+    Delegates to ``heuristic_parse`` (regex + section segmentation) so users
+    without an LLM key still get structured basics + projects instead of a
+    single placeholder blob. Falls back to a single placeholder project only
+    when no structure can be detected at all.
+    """
+    from gotit.core.resume.heuristic import heuristic_parse
+
+    return heuristic_parse(upload_id=upload_id, resume_text=resume_text)
 

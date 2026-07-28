@@ -22,6 +22,7 @@ dependencies = [
   "pydantic-ai>=0.30.0",
   "pypdf>=4.0",
   "python-docx>=1.1",
+  "pymupdf>=1.28.0",
 ]
 
 [project.optional-dependencies]
@@ -59,3 +60,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 packages = ["gotit"]
+
+[[tool.mypy.overrides]]
+module = ["fitz"]
+ignore_missing_imports = true
