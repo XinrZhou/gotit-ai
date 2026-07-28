@@ -16,8 +16,8 @@ export function DrillPage() {
     drillAnswer,
     setDrillAnswer,
     drillDone,
-    setShowResumeModal,
     setShowMaterialModal,
+    setShowResumeViewer,
     onBackToDrillStart,
     onDrillAnswer,
   } = useStore();
@@ -33,27 +33,38 @@ export function DrillPage() {
                 简历已导入 · {resume.document.projects.length} 个项目
                 {resume.document.basics.name ? ` · ${resume.document.basics.name}` : ""}
               </span>
+              <button
+                type="button"
+                className={styles.viewResumeBtn}
+                disabled={busy}
+                onClick={() => setShowResumeViewer(true)}
+                title="查看简历原文件"
+              >
+                查看简历
+              </button>
             </>
           ) : (
-            <span className={styles.muted}>还没导入简历</span>
+            <span className={styles.muted}>还没导入简历（点左侧「项目」旁的 + 导入）</span>
           )}
         </div>
         <div className={styles.topActions}>
           <button
             type="button"
-            className="btn-ghost"
-            disabled={busy}
-            onClick={() => setShowResumeModal(true)}
-          >
-            {resume ? "重新导入" : "导入简历"}
-          </button>
-          <button
-            type="button"
-            className="btn-ghost"
+            className={styles.materialBtn}
             disabled={busy}
             onClick={() => setShowMaterialModal(true)}
+            title="管理深挖资料"
           >
-            深挖资料 · {drillMaterials.length}
+            <svg className={styles.materialIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 6.5C4 5.67 4.67 5 5.5 5h4.17l2 2.5H18.5c.83 0 1.5.67 1.5 1.5v8.5c0 .83-.67 1.5-1.5 1.5h-13c-.83 0-1.5-.67-1.5-1.5V6.5z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path d="M8 12h8M8 15h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span>资料管理 · {drillMaterials.length}</span>
           </button>
         </div>
       </div>
@@ -65,7 +76,7 @@ export function DrillPage() {
           examinerName="桑迪"
           empty={
             <EmptyState avatar={<SandyAvatar />}>
-              先导入简历，桑迪就能像面试官一样深挖你的项目了。
+              先点左侧「项目」旁的 + 导入简历，桑迪就能像面试官一样深挖你的项目了。
             </EmptyState>
           }
         />

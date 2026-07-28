@@ -31,3 +31,14 @@ export async function uploadFile<T>(path: string, file: File): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+export async function fetchBlob(path: string): Promise<{ blob: Blob; contentType: string }> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${API_KEY}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return { blob: await res.blob(), contentType: res.headers.get("content-type") ?? "" };
+}

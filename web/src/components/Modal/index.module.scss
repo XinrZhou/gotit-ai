@@ -20,6 +20,19 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
 }
 
+.modalWide {
+  width: 720px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modalWide .modalBody {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .modalHead {
   display: flex;
   align-items: flex-start;

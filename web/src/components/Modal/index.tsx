@@ -6,12 +6,16 @@ type ModalProps = {
   onClose: () => void;
   children?: ReactNode;
   actions?: ReactNode;
+  wide?: boolean;
 };
 
-export function Modal({ title, onClose, children, actions }: ModalProps) {
+export function Modal({ title, onClose, children, actions, wide }: ModalProps) {
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`${styles.modal}${wide ? ` ${styles.modalWide}` : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.modalHead}>
           <div className={styles.modalTitle}>{title}</div>
           <button

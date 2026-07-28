@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStore } from "../../store";
 import type { DrillMaterial } from "../../types";
 import { Modal } from "../Modal";
@@ -11,11 +11,15 @@ export function DrillMaterialModal() {
     busy,
     drillMaterials,
     onUpsertMaterial,
+    onImportMaterialFile,
     onDeleteMaterial,
   } = useStore();
   const [editing, setEditing] = useState<DrillMaterial | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   if (!showMaterialModal) return null;
 
@@ -23,17 +27,37 @@ export function DrillMaterialModal() {
     setEditing(null);
     setTitle("");
     setBody("");
+    setImportErr("");
   }
 
   function startEdit(m: DrillMaterial) {
     setEditing(m);
     setTitle(m.title);
     setBody(m.body);
+    setImportErr("");
   }
 
   async function save() {
     await onUpsertMaterial(editing?.id ?? null, title, body);
-    if (!editing) startNew();
+    setShowMaterialModal(false);
+  }
+
+  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    setImportErr("");
+    try {
+      const out = await onImportMaterialFile(file);
+      setEditing(null);
+      setTitle(out.title);
+      setBody(out.body);
+    } catch (err) {
+      setImportErr(err instanceof Error ? err.message : "导入失败");
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function remove(id: string) {
@@ -41,36 +65,23 @@ export function DrillMaterialModal() {
     if (editing?.id === id) startNew();
   }
 
+  const canSave = !busy && !importing && title.trim().length > 0 && body.trim().length > 0;
+
   return (
     <Modal
       title="深挖资料"
       onClose={() => setShowMaterialModal(false)}
       actions={
         editing === null ? (
-          <button
-            type="button"
-            className="btn-ink"
-            disabled={busy || !title.trim() || !body.trim()}
-            onClick={save}
-          >
+          <button type="button" className="btn-ink" disabled={!canSave} onClick={save}>
             {busy ? "处理中…" : "添加"}
           </button>
         ) : (
           <>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={startNew}
-              disabled={busy}
-            >
+            <button type="button" className="btn-ghost" onClick={startNew} disabled={busy}>
               新建
             </button>
-            <button
-              type="button"
-              className="btn-ink"
-              disabled={busy || !title.trim() || !body.trim()}
-              onClick={save}
-            >
+            <button type="button" className="btn-ink" disabled={!canSave} onClick={save}>
               {busy ? "处理中…" : "保存"}
             </button>
           </>
@@ -82,12 +93,31 @@ export function DrillMaterialModal() {
       </div>
 
       <div className={styles.editor}>
+        <div className={styles.importRow}>
+          <button
+            type="button"
+            className={styles.importBtn}
+            disabled={busy || importing}
+            onClick={() => fileRef.current?.click()}
+          >
+            {importing ? "导入中…" : "导入文件"}
+          </button>
+          <span className={styles.importHint}>支持 PDF / DOCX / TXT / MD，导入后可编辑再保存</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx,.txt,.md"
+            className={styles.fileInput}
+            onChange={(e) => void onPickFile(e)}
+          />
+        </div>
+        {importErr ? <div className={styles.importErr}>{importErr}</div> : null}
         <input
           className={styles.titleInput}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="标题，例如：订单中台深挖要点"
-          disabled={busy}
+          disabled={busy || importing}
         />
         <textarea
           className={styles.bodyInput}
@@ -95,7 +125,7 @@ export function DrillMaterialModal() {
           onChange={(e) => setBody(e.target.value)}
           placeholder="内容，例如：事件驱动 vs 同步调用的取舍；Kafka 分区策略…"
           rows={6}
-          disabled={busy}
+          disabled={busy || importing}
         />
       </div>
 

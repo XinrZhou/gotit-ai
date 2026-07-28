@@ -77,6 +77,32 @@
   gap: 8px;
 }
 
+.sectionAdd {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sectionAdd:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.sectionAdd:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .scopeToggle {
   display: flex;
   gap: 2px;
@@ -115,44 +141,60 @@
   font-variant-numeric: tabular-nums;
 }
 
-.projectChips {
+.projectList {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 18px 14px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px 14px;
 }
 
-.chip {
-  border: 1px solid var(--line);
-  background: var(--bg);
+.projItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 5px 12px;
-  border-radius: 999px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
-  max-width: 140px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.projItem:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.projActive {
+  background: var(--fill);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.projActive::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+
+.projName {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.chip:hover {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-
-.active {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-}
-
-.add {
-  border-style: dashed;
-  color: var(--muted);
-  padding: 5px 10px;
 }
 
 .notesList {

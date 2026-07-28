@@ -1,6 +1,7 @@
 import { NoteComposeModal } from "../NoteComposeModal";
 import { ProjectModal } from "../ProjectModal";
 import { ResumeUploadModal } from "../ResumeUploadModal";
+import { ResumeViewerModal } from "../ResumeViewerModal";
 import { DrillMaterialModal } from "../DrillMaterialModal";
 import { Sidebar } from "../Sidebar";
 import { SegmentedTabs } from "../SegmentedTabs";
@@ -37,6 +38,7 @@ export function Shell() {
       <ViewNoteModal />
       <ProjectModal />
       <ResumeUploadModal />
+      <ResumeViewerModal />
       <DrillMaterialModal />
     </div>
   );

@@ -14,6 +14,11 @@ export function Sidebar() {
     projects,
     selectedProjectId,
     setSelectedProjectId,
+    projectPicked,
+    setProjectPicked,
+    setMode,
+    resume,
+    setShowResumeModal,
     onOpenEditProject,
     openMenuId,
     setOpenMenuId,
@@ -66,25 +71,45 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className={styles.sectionLabel}>项目</div>
-      <div className={styles.projectChips}>
+      <div className={styles.sectionLabel}>
+        <span>项目 · {projects.length}</span>
         <button
           type="button"
-          className={selectedProjectId === null ? `${styles.chip} ${styles.active}` : styles.chip}
-          onClick={() => setSelectedProjectId(null)}
+          className={styles.sectionAdd}
+          onClick={() => setShowResumeModal(true)}
+          disabled={busy}
+          title={resume ? "重新导入简历" : "导入简历"}
+          aria-label={resume ? "重新导入简历" : "导入简历"}
         >
-          全部
+          +
+        </button>
+      </div>
+      <div className={styles.projectList}>
+        <button
+          type="button"
+          className={projectPicked && selectedProjectId === null ? `${styles.projItem} ${styles.projActive}` : styles.projItem}
+          onClick={() => {
+            setSelectedProjectId(null);
+            setProjectPicked(true);
+            setMode("drill");
+          }}
+        >
+          <span className={styles.projName}>全部</span>
         </button>
         {projects.map((p) => (
           <button
             key={p.id}
             type="button"
-            className={selectedProjectId === p.id ? `${styles.chip} ${styles.active}` : styles.chip}
-            onClick={() => setSelectedProjectId(p.id)}
+            className={selectedProjectId === p.id ? `${styles.projItem} ${styles.projActive}` : styles.projItem}
+            onClick={() => {
+              setSelectedProjectId(p.id);
+              setProjectPicked(true);
+              setMode("drill");
+            }}
             onDoubleClick={() => onOpenEditProject(p)}
             title="双击编辑"
           >
-            {p.name}
+            <span className={styles.projName}>{p.name}</span>
           </button>
         ))}
       </div>

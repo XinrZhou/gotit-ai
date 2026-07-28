@@ -115,6 +115,7 @@ export type ResumeRecord = {
 
 export type ResumeUploadResponse = {
   upload_id: string;
+  file_path: string;
   document: ResumeDocument;
 };
 

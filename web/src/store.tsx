@@ -38,6 +38,8 @@ type Store = {
   items: { id: string; title: string; topic: string | null; status: string }[];
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string | null) => void;
+  projectPicked: boolean;
+  setProjectPicked: (v: boolean) => void;
   selectedProject: Project | null;
   mode: Mode;
   setMode: (m: Mode) => void;
@@ -104,9 +106,16 @@ type Store = {
   setShowResumeModal: (b: boolean) => void;
   showMaterialModal: boolean;
   setShowMaterialModal: (b: boolean) => void;
+  showResumeViewer: boolean;
+  setShowResumeViewer: (b: boolean) => void;
   onUploadResume: (file: File) => Promise<ResumeUploadResponse>;
-  onApplyResume: (uploadId: string, document: ResumeDocument) => Promise<void>;
+  onApplyResume: (
+    uploadId: string,
+    document: ResumeDocument,
+    filePath: string,
+  ) => Promise<void>;
   onUpsertMaterial: (id: string | null, title: string, body: string) => Promise<void>;
+  onImportMaterialFile: (file: File) => Promise<{ title: string; body: string }>;
   onDeleteMaterial: (id: string) => Promise<void>;
   onDrillStartSession: () => void;
   onDrillAnswer: () => void;
@@ -130,6 +139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [noteScope, setNoteScope] = useState<"today" | "all">("today");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectPicked, setProjectPicked] = useState(false);
   const [mode, setMode] = useState<Mode>("examine");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -159,7 +169,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [drillMaterials, setDrillMaterials] = useState<DrillMaterial[]>([]);
   const [drillSessions, setDrillSessions] = useState<DrillSession[]>([]);
   const [activeDrillSession, setActiveDrillSession] = useState<DrillSession | null>(null);
-  const [drillRound, setDrillRound] = useState<DrillRound>("tech_2");
+  const [drillRound, setDrillRound] = useState<DrillRound>("tech_1");
   const [drillDirection, setDrillDirection] = useState("");
   const [drillFocusProjectId, setDrillFocusProjectId] = useState<string | null>(null);
   const [drillChat, setDrillChat] = useState<
@@ -170,6 +180,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<ProjectProgress | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [showResumeViewer, setShowResumeViewer] = useState(false);
 
   const items = plan?.items ?? [];
   const selectedProject = useMemo(
@@ -322,11 +333,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const onApplyResume = useCallback(
-    async (uploadId: string, document: ResumeDocument) => {
+    async (uploadId: string, document: ResumeDocument, filePath: string) => {
       await run(async () => {
         await api<ResumeApplyResponse>("/v1/resumes/apply", {
           method: "POST",
-          body: JSON.stringify({ upload_id: uploadId, document, ingest: false }),
+          body: JSON.stringify({
+            upload_id: uploadId,
+            file_path: filePath,
+            document,
+            ingest: false,
+          }),
         });
         setShowResumeModal(false);
       }, "简历已导入，项目库已重建");
@@ -345,6 +361,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }, id ? "资料已更新" : "资料已添加");
     },
     [run],
+  );
+
+  const onImportMaterialFile = useCallback(
+    (file: File) =>
+      uploadFile<{ title: string; body: string }>("/v1/drill/materials/upload", file),
+    [],
   );
 
   const onDeleteMaterial = useCallback(
@@ -567,6 +589,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDrillRound(s.round);
     setDrillDirection(s.direction ?? "");
     setDrillFocusProjectId(s.project_id);
+    setProjectPicked(true);
   }, []);
 
   const onBackToDrillStart = useCallback(() => {
@@ -587,6 +610,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     items: items as { id: string; title: string; topic: string | null; status: string }[],
     selectedProjectId,
     setSelectedProjectId,
+    projectPicked,
+    setProjectPicked,
     selectedProject,
     mode,
     setMode,
@@ -647,9 +672,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setShowResumeModal,
     showMaterialModal,
     setShowMaterialModal,
+    showResumeViewer,
+    setShowResumeViewer,
     onUploadResume,
     onApplyResume,
     onUpsertMaterial,
+    onImportMaterialFile,
     onDeleteMaterial,
     onDrillStartSession,
     onDrillAnswer,

@@ -10,7 +10,8 @@
 .pick {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  position: relative;
 }
 
 .hiddenInput {
@@ -54,6 +55,28 @@
   color: var(--muted, #6b6b6b);
 }
 
+.fileMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.fileName {
+  color: var(--ink, #1a1a1a);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.fileSize {
+  color: var(--muted, #6b6b6b);
+  flex-shrink: 0;
+}
+
 .muted {
   font-size: 12.5px;
   color: var(--muted, #6b6b6b);
@@ -62,7 +85,41 @@
 .preview {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  position: relative;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6b6b);
+}
+
+.sectionCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink, #1a1a1a);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .basicsInput,
@@ -71,15 +128,74 @@
   border: 1px solid var(--hair, rgba(0, 0, 0, 0.12));
   border-radius: 8px;
   font-size: 13px;
+  transition: border-color 0.12s ease;
+}
+
+.basicsInput:focus,
+.projInput:focus,
+.projBody:focus {
+  outline: none;
+  border-color: var(--ink, #1a1a1a);
 }
 
 .projCard {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--hair, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.projHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6b6b);
+}
+
+.projRemove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--faint, #9a9a9a);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.projRemove:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink, #1a1a1a);
+}
+
+.addProj {
+  align-self: flex-start;
+  padding: 7px 14px;
+  border: 1px dashed var(--hair, rgba(0, 0, 0, 0.18));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted, #6b6b6b);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.addProj:hover {
+  border-color: var(--ink, #1a1a1a);
+  color: var(--ink, #1a1a1a);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .projBody {
@@ -87,6 +203,58 @@
   border: 1px solid var(--hair, rgba(0, 0, 0, 0.12));
   border-radius: 8px;
   font-size: 13px;
+  line-height: 1.55;
   resize: vertical;
+  min-height: 88px;
   font-family: inherit;
+}
+
+.emptyProjects {
+  padding: 14px;
+  border: 1px dashed var(--hair, rgba(0, 0, 0, 0.14));
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--muted, #6b6b6b);
+  line-height: 1.55;
+  text-align: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: -4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border-radius: 12px;
+}
+
+.spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinnerRing {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid rgba(0, 0, 0, 0.12);
+  border-top-color: var(--ink, #1a1a1a);
+  border-radius: 50%;
+  animation: resume-spin 0.7s linear infinite;
+}
+
+.spinnerLabel {
+  font-size: 12.5px;
+  color: var(--muted, #6b6b6b);
+}
+
+@keyframes resume-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
