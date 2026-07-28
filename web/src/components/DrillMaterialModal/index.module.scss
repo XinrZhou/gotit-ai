@@ -1,0 +1,81 @@
+.muted {
+  font-size: 12.5px;
+  color: var(--muted, #6b6b6b);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.titleInput {
+  padding: 8px 10px;
+  border: 1px solid var(--hair, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.bodyInput {
+  padding: 8px 10px;
+  border: 1px solid var(--hair, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #6b6b6b);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hair, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+}
+
+.itemMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink, #1a1a1a);
+}
+
+.itemBody {
+  font-size: 11.5px;
+  color: var(--muted, #6b6b6b);
+}
+
+.itemDel {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  color: var(--muted, #6b6b6b);
+  cursor: pointer;
+}
+
+.itemDel:hover {
+  color: #c00;
+}

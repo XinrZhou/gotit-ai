@@ -1,0 +1,16 @@
+.goal {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 10px 14px;
+  font-size: 14px;
+  resize: vertical;
+  transition: border-color 0.12s ease;
+}
+
+.goal:focus {
+  outline: none;
+  border-color: var(--ink);
+}

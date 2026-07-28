@@ -1,0 +1,74 @@
+.composer {
+  padding: 20px 36px 26px;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.field {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  transition: border-color 0.15s ease;
+}
+
+.field:focus-within {
+  border-color: var(--ink);
+}
+
+.field textarea {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 18px 110px 18px 20px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  display: block;
+  min-height: 96px;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  padding: 6px 6px 6px 4px;
+  min-height: 64px;
+}
+
+.topicInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  padding: 14px 10px;
+  outline: none;
+}
+
+.sendBtn {
+  flex-shrink: 0;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.sendBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+/* textarea: button sits at bottom-right inside the field */
+.field textarea + .sendBtn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}

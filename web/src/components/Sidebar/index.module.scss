@@ -1,0 +1,330 @@
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  background: var(--soft);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebarHead {
+  padding: 24px 22px 18px;
+  flex-shrink: 0;
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.brandIcon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: block;
+  color: var(--ink);
+}
+
+.dayPicker {
+  position: relative;
+  cursor: pointer;
+}
+
+.dayPicker input {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  padding: 0;
+  border: 0;
+  position: absolute;
+}
+
+.dayLabel {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--faint);
+  transition: color 0.15s ease;
+}
+
+.dayPicker:hover .dayLabel {
+  color: var(--ink);
+}
+
+.sectionLabel {
+  padding: 20px 22px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scopeToggle {
+  display: flex;
+  gap: 2px;
+  background: var(--fill);
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.scopeBtn {
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: all 0.12s ease;
+}
+
+.scopeBtn:hover {
+  color: var(--muted);
+}
+
+.scopeActive {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.noteDate {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.projectChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 18px 14px;
+}
+
+.chip {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.add {
+  border-style: dashed;
+  color: var(--muted);
+  padding: 5px 10px;
+}
+
+.notesList {
+  padding: 0 12px 10px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.empty {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--faint);
+  line-height: 1.45;
+}
+
+.noteItem {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 0;
+  border-radius: var(--radius-sm);
+}
+
+.noteItemDim {
+  opacity: 0.55;
+}
+
+.listDivider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 4px 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+.dividerAction {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 4px;
+  cursor: pointer;
+  letter-spacing: 0;
+  transition: color 0.12s ease;
+}
+
+.dividerAction:hover {
+  color: var(--ink);
+}
+
+.dividerAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.noteMain {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 10px 10px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13.5px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.noteMain:hover {
+  background: var(--fill);
+}
+
+.noteTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.noteBadge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--fill);
+}
+
+.noteBadgeDim {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.noteMenu {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.noteMenu:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.menuPop {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  z-index: 20;
+  min-width: 132px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.menuPop button {
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.menuPop button:hover {
+  background: var(--fill);
+}
+
+.menuDanger {
+  color: var(--danger);
+}
+
+.menuDanger:hover {
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.foot {
+  padding: 16px 16px 18px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
