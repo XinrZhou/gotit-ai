@@ -34,7 +34,7 @@ async def test_manual_plan_and_notes(session: AsyncSession) -> None:
     assert "schedules tools" in note.excerpt
 
     ingested = await day_ops.ingest_note(session, note.id)
-    assert ingested["plan_item"] is not None
+    assert len(ingested["plan_items"]) >= 1
     claims = ingested["claims"]
     assert isinstance(claims, list) and len(claims) == 1
 
@@ -71,6 +71,40 @@ async def test_fill_queue_and_examine_writeback(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_apply_examine_verdict_continuous(session: AsyncSession) -> None:
+    day = date(2026, 7, 27)
+    claim = day_ops.stub_extract_claim("Continuous verdicts map to claim/plan states.")
+    session.add(
+        ClaimRow(
+            id=claim.id,
+            user_id="local",
+            text=claim.text,
+            source_excerpt=claim.source_excerpt,
+            status=MasteryStatus.NOT_YET.value,
+        )
+    )
+    await session.flush()
+
+    almost = await day_ops.apply_examine_verdict(
+        session, claim.id, verdict="almost", as_of=day
+    )
+    assert almost["verdict"] == "almost"
+    assert almost["claim"]["status"] == MasteryStatus.IN_PROGRESS.value
+
+    passed = await day_ops.apply_examine_verdict(
+        session, claim.id, verdict="passed", as_of=day
+    )
+    assert passed["claim"]["status"] == MasteryStatus.MASTERED.value
+    assert passed["claim"]["next_review_at"] is None
+
+    owe = await day_ops.apply_examine_verdict(
+        session, claim.id, verdict="owe_next", as_of=day
+    )
+    assert owe["claim"]["status"] == MasteryStatus.QUEUED.value
+    assert owe["claim"]["next_review_at"] == (day + timedelta(days=1)).isoformat()
+
+
+@pytest.mark.asyncio
 async def test_api_today_plan_notes(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     day = "2026-07-27"
     r = await client.post(
@@ -100,7 +134,7 @@ async def test_api_today_plan_notes(client: AsyncClient, auth_headers: dict[str,
     r = await client.post(
         "/v1/examine",
         headers=auth_headers,
-        json={"claim_id": claim_id, "passed": False},
+        json={"claim_id": claim_id, "verdict": "owe_next"},
     )
     assert r.status_code == 200
     assert r.json()["writeback"]["claim"]["status"] == "queued"
