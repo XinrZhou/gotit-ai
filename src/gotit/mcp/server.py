@@ -1,17 +1,43 @@
 from __future__ import annotations
 
 from datetime import date
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
 import anyio
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit import __version__
-from gotit.api.settings import get_settings
-from gotit.core.models import CheckMode, PlanItemSource, PlanItemStatus
+from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
+from gotit.api.settings import Settings, get_settings
+from gotit.core.agents.axiom import (
+    build_axiom_agent,
+    build_topic_axiom_agent,
+    run_axiom,
+    run_topic_examine,
+    stub_topic_examine,
+)
+from gotit.core.agents.compass import build_compass_agent, run_compass
+from gotit.core.agents.echo import build_echo_agent, run_echo
+from gotit.core.agents.sage import build_sage_agent, run_sage, stub_sage
+from gotit.core.models import (
+    DrillMaterial,
+    DrillRound,
+    MasteryStatus,
+    PlanItemSource,
+    PlanItemStatus,
+    Project,
+    ProjectStatus,
+    ResumeDocument,
+    SageVerdict,
+    TeachVerdict,
+)
+from gotit.core.resume.extract import extract_text
+from gotit.core.resume.parse import build_resume_parser, run_resume_parser, stub_parse
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
-from gotit.db.models import ClaimRow
+from gotit.db.models import ClaimRow, DayNoteRow
 from gotit.db.runtime import ensure_db
 
 mcp = FastMCP("gotit")
@@ -53,28 +79,111 @@ async def gotit_ingest(material: str) -> dict[str, object]:
 
 @mcp.tool()
 async def gotit_examine(
-    claim_id: str,
-    mode: str = CheckMode.PROBE.value,
-    passed: bool | None = None,
+    claim_id: str | None = None,
+    topic: str | None = None,
+    note_id: str | None = None,
+    answer: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    verdict: str | None = None,
 ) -> dict[str, object]:
-    """Run an Examiner check for a claim (stub). Optional passed writeback."""
+    """Examine a claim (multi-turn). Pass `note_id` for note-session mode or
+    `topic` for topic-session mode (Axiom shuttles across the claims); pass
+    `verdict` to bypass the agent (stub/tests, single-claim mode only)."""
     await ensure_db()
-    result: dict[str, object] = {
-        "claim_id": claim_id,
-        "mode": mode,
-        "status": "stub",
-        "message": "Examiner not wired yet",
-    }
-    if passed is not None:
+    user_id = _user_id()
+
+    # --- Claims-session mode (note_id or topic) ---
+    if note_id is not None or topic is not None:
         async with session_scope() as session:
-            writeback = await day_ops.apply_examine_result(
-                session,
-                UUID(claim_id),
-                passed=passed,
-                user_id=_user_id(),
+            if note_id is not None:
+                claims = await day_ops.list_note_claims(
+                    session, UUID(note_id), user_id=user_id
+                )
+            elif topic is not None:
+                claims = await day_ops.list_topic_claims_today(
+                    session, topic, user_id=user_id
+                )
+        if not get_settings().llm_api_key:
+            session_result = stub_topic_examine(
+                claims=claims, answer=answer, history=history
             )
-        result["writeback"] = writeback
-    return result
+        else:
+            async with session_scope() as session:
+                prompt = await SessionPromptReader(session).get_active_prompt("axiom")
+                system_prompt = prompt.system_prompt if prompt else ""
+                reader = SessionMemoryReader(session, user_id=user_id)
+                claims_agent = build_topic_axiom_agent(
+                    get_model(), system_prompt=system_prompt
+                )
+            session_result = await run_topic_examine(
+                claims_agent,
+                reader,
+                topic=topic or "",
+                claims=claims,
+                history=history or [],
+                answer=answer,
+            )
+        writeback: dict[str, object] | None = None
+        if (
+            session_result.done
+            and session_result.verdict is not None
+            and session_result.current_claim_id
+        ):
+            async with session_scope() as session:
+                writeback = await day_ops.apply_examine_verdict(
+                    session,
+                    session_result.current_claim_id,
+                    verdict=session_result.verdict,
+                    user_id=user_id,
+                )
+        return {
+            "verdict": session_result.model_dump(mode="json"),
+            "writeback": writeback,
+        }
+
+    # --- Single-claim mode ---
+    if claim_id is None:
+        return {"error": "one of `note_id`, `topic`, or `claim_id` is required"}
+
+    if verdict is not None:
+        async with session_scope() as session:
+            direct_writeback = await day_ops.apply_examine_verdict(
+                session, UUID(claim_id), verdict=verdict, user_id=user_id
+            )
+        return {
+            "verdict": {
+                "done": True,
+                "verdict": verdict,
+                "score": None,
+                "evidence": None,
+                "follow_up": "",
+            },
+            "writeback": direct_writeback,
+        }
+
+    async with session_scope() as session:
+        claim = await session.get(ClaimRow, UUID(claim_id))
+        if claim is None or claim.user_id != user_id:
+            return {"error": f"claim not found: {claim_id}"}
+        prompt = await SessionPromptReader(session).get_active_prompt("axiom")
+        system_prompt = prompt.system_prompt if prompt else ""
+        reader = SessionMemoryReader(session, user_id=user_id)
+        agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
+        result = await run_axiom(
+            agent,
+            reader,
+            claim_text=claim.text,
+            history=history or [],
+            answer=answer,
+        )
+
+    writeback = None
+    if result.done and result.verdict is not None:
+        async with session_scope() as session:
+            writeback = await day_ops.apply_examine_verdict(
+                session, UUID(claim_id), verdict=result.verdict, user_id=user_id
+            )
+    return {"verdict": result.model_dump(mode="json"), "writeback": writeback}
 
 
 @mcp.tool()
@@ -175,6 +284,15 @@ async def gotit_list_notes(day: str) -> list[dict[str, object]]:
 
 
 @mcp.tool()
+async def gotit_list_all_notes() -> list[dict[str, object]]:
+    """List all notes across days (newest first, bodies truncated to excerpts)."""
+    await ensure_db()
+    async with session_scope() as session:
+        notes = await day_ops.list_all_notes(session, user_id=_user_id())
+    return [n.model_dump(mode="json") for n in notes]
+
+
+@mcp.tool()
 async def gotit_add_note(
     day: str,
     body: str,
@@ -197,15 +315,484 @@ async def gotit_add_note(
 
 @mcp.tool()
 async def gotit_ingest_note(note_id: str, add_plan_item: bool = True) -> dict[str, object]:
-    """Ingest a stored note into claims (stub extraction) and optionally a plan item."""
+    """Ingest a stored note into claims (Compass when LLM configured, else stub)."""
     await ensure_db()
+    user_id = _user_id()
+    settings = get_settings()
+    claims = None
+
+    if settings.llm_api_key:
+        async with session_scope() as session:
+            note = await session.get(DayNoteRow, UUID(note_id))
+            if note is None:
+                return {"error": f"note not found: {note_id}"}
+            prompt = await SessionPromptReader(session).get_active_prompt("compass")
+            system_prompt = prompt.system_prompt if prompt else ""
+            reader = SessionMemoryReader(session, user_id=user_id)
+            agent = build_compass_agent(get_model(), system_prompt=system_prompt)
+            output = await run_compass(agent, reader, note_body=note.body)
+        from gotit.core.models import Claim
+
+        claims = [
+            Claim(
+                text=c.text,
+                source_excerpt=note.body[:200],
+                status=MasteryStatus.NOT_YET,
+                source_note_id=UUID(note_id),
+                topic=c.topic,
+                tags=list(c.tags),
+            )
+            for c in output.claims
+        ]
+
     async with session_scope() as session:
         return await day_ops.ingest_note(
             session,
             UUID(note_id),
-            user_id=_user_id(),
+            claims=claims,
+            user_id=user_id,
             add_plan_item=add_plan_item,
         )
+
+
+@mcp.tool()
+async def gotit_curate(day: str, claim_texts: list[str]) -> dict[str, object]:
+    """Add plan items for recommended claims (matched by text) for the day."""
+    await ensure_db()
+    async with session_scope() as session:
+        view = await day_ops.curate_claims(
+            session,
+            date.fromisoformat(day),
+            claim_texts=claim_texts,
+            user_id=_user_id(),
+        )
+    return view.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_teach(
+    topic: str,
+    answer: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    you_taught_well: bool | None = None,
+) -> dict[str, object]:
+    """Teach-back mode (Echo). Pass `you_taught_well` to bypass the agent (stub/tests)."""
+    await ensure_db()
+    user_id = _user_id()
+
+    if you_taught_well is not None:
+        return {
+            "verdict": TeachVerdict(
+                done=True,
+                you_taught_well=you_taught_well,
+                gaps=[],
+                next_question=None,
+            ).model_dump(mode="json")
+        }
+
+    async with session_scope() as session:
+        prompt = await SessionPromptReader(session).get_active_prompt("echo")
+        system_prompt = prompt.system_prompt if prompt else ""
+        reader = SessionMemoryReader(session, user_id=user_id)
+        agent = build_echo_agent(get_model(), system_prompt=system_prompt)
+        verdict = await run_echo(
+            agent,
+            reader,
+            topic=topic,
+            history=history or [],
+            answer=answer,
+        )
+    return {"verdict": verdict.model_dump(mode="json")}
+
+
+@mcp.tool()
+async def gotit_list_memory(
+    layer: str | None = None,
+    kind: str | None = None,
+    topic: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    """List memory entries (filtered by layer/kind/topic)."""
+    await ensure_db()
+    async with session_scope() as session:
+        entries = await day_ops.list_memory(
+            session,
+            user_id=_user_id(),
+            layer=layer,
+            kind=kind,
+            topic=topic,
+            limit=limit,
+        )
+    return [e.model_dump(mode="json") for e in entries]
+
+
+@mcp.tool()
+async def gotit_add_memory(
+    layer: str,
+    kind: str,
+    content: dict[str, object] | None = None,
+    topic: str | None = None,
+    source: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Add a memory entry (long/working/session)."""
+    await ensure_db()
+    async with session_scope() as session:
+        entry = await day_ops.add_memory(
+            session,
+            user_id=_user_id(),
+            layer=layer,
+            kind=kind,
+            content=content or {},
+            topic=topic,
+            source=source,
+        )
+    return entry.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_list_prompts(
+    agent_name: str | None = None,
+    active_only: bool = False,
+) -> list[dict[str, object]]:
+    """List prompt versions (optionally filtered)."""
+    await ensure_db()
+    async with session_scope() as session:
+        versions = await day_ops.list_prompts(
+            session,
+            agent_name=agent_name,
+            active_only=active_only,
+        )
+    return [v.model_dump(mode="json") for v in versions]
+
+
+@mcp.tool()
+async def gotit_register_prompts() -> list[dict[str, object]]:
+    """Load prompts/*.md into the database and mark the newest per agent active."""
+    from pathlib import Path
+
+    from gotit.prompts import load_prompt_dir
+
+    await ensure_db()
+    versions = load_prompt_dir(Path("prompts"))
+    async with session_scope() as session:
+        registered = await day_ops.register_prompts(session, versions)
+    return [v.model_dump(mode="json") for v in registered]
+
+
+# --- Project drill ---
+
+
+@mcp.tool()
+async def gotit_list_projects(include_archived: bool = False) -> list[dict[str, object]]:
+    """List the learner's projects (active by default)."""
+    await ensure_db()
+    async with session_scope() as session:
+        projects = await day_ops.list_projects(
+            session, user_id=_user_id(), include_archived=include_archived
+        )
+    return [p.model_dump(mode="json") for p in projects]
+
+
+@mcp.tool()
+async def gotit_get_project(project_id: str) -> dict[str, object]:
+    """Get a single project by id."""
+    await ensure_db()
+    async with session_scope() as session:
+        project = await day_ops.get_project(
+            session, UUID(project_id), user_id=_user_id()
+        )
+    return project.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_update_project(
+    project_id: str,
+    name: str | None = None,
+    role: str | None = None,
+    goal: str | None = None,
+    tech_stack: list[str] | None = None,
+    status: str | None = None,
+) -> dict[str, object]:
+    """Update a project's fields. Set status='archived' to archive."""
+    await ensure_db()
+    async with session_scope() as session:
+        project = await day_ops.update_project(
+            session,
+            UUID(project_id),
+            user_id=_user_id(),
+            name=name,
+            role=role,
+            goal=goal,
+            tech_stack=tech_stack,
+            status=ProjectStatus(status) if status else None,
+        )
+    return project.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_project_progress(project_id: str) -> dict[str, object]:
+    """Return claim mastery progress for a project."""
+    await ensure_db()
+    async with session_scope() as session:
+        progress = await day_ops.project_progress(
+            session, UUID(project_id), user_id=_user_id()
+        )
+    return progress.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_upload_resume(file_path: str) -> dict[str, object]:
+    """Upload a resume file (local path), extract text + parse to ResumeDocument.
+
+    MCP stdio cannot pass multipart; OpenClaw downloads the file and passes a
+    local path. Returns {upload_id, document}.
+    """
+    await ensure_db()
+    settings = get_settings()
+    path = Path(file_path)
+    content = path.read_bytes()
+    if len(content) > 10 * 1024 * 1024:
+        raise ValueError("resume file too large (max 10MB)")
+    content_type = _resume_content_type(path)
+    upload_id = uuid4()
+    ext = _resume_ext(content_type)
+    stored = f"uploads/{upload_id}.{ext}"
+    Path(stored).parent.mkdir(parents=True, exist_ok=True)
+    Path(stored).write_bytes(content)
+    resume_text = extract_text(content, content_type)
+    if not settings.llm_api_key:
+        out = stub_parse(upload_id=upload_id, resume_text=resume_text)
+        return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
+    system_prompt = await _mcp_active_prompt("compass")
+    agent = build_resume_parser(get_model(), system_prompt=system_prompt)
+    out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
+    return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
+
+
+@mcp.tool()
+async def gotit_apply_resume(
+    upload_id: str, document: dict[str, object], ingest: bool = False
+) -> dict[str, object]:
+    """Apply an (edited) parsed resume: clear-rebuild projects + resume notes."""
+    await ensure_db()
+    doc = ResumeDocument.model_validate(document)
+    async with session_scope() as session:
+        return await day_ops.apply_resume(
+            session,
+            doc,
+            upload_id=UUID(upload_id),
+            file_path=f"uploads/{upload_id}",
+            ingest=ingest,
+            user_id=_user_id(),
+        )
+
+
+@mcp.tool()
+async def gotit_get_resume() -> dict[str, object] | None:
+    """Return the current global resume record (or null if none)."""
+    await ensure_db()
+    async with session_scope() as session:
+        rec = await day_ops.get_resume(session, user_id=_user_id())
+    return rec.model_dump(mode="json") if rec else None
+
+
+@mcp.tool()
+async def gotit_list_drill_materials() -> list[dict[str, object]]:
+    """List all deep-dive materials for the user."""
+    await ensure_db()
+    async with session_scope() as session:
+        mats = await day_ops.list_drill_materials(session, user_id=_user_id())
+    return [m.model_dump(mode="json") for m in mats]
+
+
+@mcp.tool()
+async def gotit_upsert_drill_material(
+    title: str,
+    body: str,
+    material_id: str | None = None,
+) -> dict[str, object]:
+    """Create or update a deep-dive material (pass id to update)."""
+    await ensure_db()
+    async with session_scope() as session:
+        m = await day_ops.upsert_drill_material(
+            session,
+            material_id=UUID(material_id) if material_id else None,
+            title=title,
+            body=body,
+            user_id=_user_id(),
+        )
+    return m.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_delete_drill_material(material_id: str) -> dict[str, str]:
+    """Delete a deep-dive material by id."""
+    await ensure_db()
+    async with session_scope() as session:
+        await day_ops.delete_drill_material(session, UUID(material_id), user_id=_user_id())
+    return {"status": "deleted"}
+
+
+@mcp.tool()
+async def gotit_list_drill_sessions() -> list[dict[str, object]]:
+    """List all mock-interview drill sessions (newest first)."""
+    await ensure_db()
+    async with session_scope() as session:
+        sessions = await day_ops.list_drill_sessions(session, user_id=_user_id())
+    return [s.model_dump(mode="json") for s in sessions]
+
+
+@mcp.tool()
+async def gotit_get_drill_session(session_id: str) -> dict[str, object]:
+    """Get a single drill session (with messages)."""
+    await ensure_db()
+    async with session_scope() as session:
+        s = await day_ops.get_drill_session(session, UUID(session_id), user_id=_user_id())
+    return s.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_start_drill_session(
+    round: str,
+    direction: str | None = None,
+    project_id: str | None = None,
+) -> dict[str, object]:
+    """Start a resume-driven mock interview session. `round` is tech_1/2/3/4/hr."""
+    await ensure_db()
+    settings = get_settings()
+    user_id = _user_id()
+    async with session_scope() as session:
+        resume = await day_ops.get_resume(session, user_id=user_id)
+        if resume is None:
+            raise ValueError("no resume imported yet; upload a resume first")
+        round_ = DrillRound(round)
+        project: Project | None = None
+        if project_id:
+            project = await day_ops.get_project(session, UUID(project_id), user_id=user_id)
+        materials = await day_ops.list_drill_materials(session, user_id=user_id)
+        ds = await day_ops.create_drill_session(
+            session,
+            resume_id=resume.id,
+            round_=round_,
+            direction=direction,
+            project_id=UUID(project_id) if project_id else None,
+            user_id=user_id,
+        )
+        verdict = await _mcp_run_sage(
+            settings, session,
+            user_id=user_id,
+            resume=resume.document,
+            materials=materials,
+            project=project,
+            round_=round_,
+            direction=direction,
+            answer=None,
+        )
+        await day_ops.append_drill_message(
+            session, ds.id, role="examiner", text=verdict.follow_up or "", user_id=user_id
+        )
+        if verdict.done:
+            await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+    return {"session": ds.model_dump(mode="json"), "verdict": verdict.model_dump(mode="json")}
+
+
+@mcp.tool()
+async def gotit_continue_drill_session(session_id: str, answer: str) -> dict[str, object]:
+    """Continue a drill session with the candidate's latest answer."""
+    await ensure_db()
+    settings = get_settings()
+    user_id = _user_id()
+    async with session_scope() as session:
+        ds = await day_ops.get_drill_session(session, UUID(session_id), user_id=user_id)
+        if ds.status == "done":
+            raise ValueError("session already done")
+        resume = await day_ops.get_resume(session, user_id=user_id)
+        if resume is None:
+            raise ValueError("no resume")
+        project: Project | None = None
+        if ds.project_id:
+            try:
+                project = await day_ops.get_project(session, ds.project_id, user_id=user_id)
+            except KeyError:
+                project = None
+        materials = await day_ops.list_drill_materials(session, user_id=user_id)
+        await day_ops.append_drill_message(
+            session, ds.id, role="user", text=answer, user_id=user_id
+        )
+        verdict = await _mcp_run_sage(
+            settings, session,
+            user_id=user_id,
+            resume=resume.document,
+            materials=materials,
+            project=project,
+            round_=ds.round,
+            direction=ds.direction,
+            answer=answer,
+        )
+        await day_ops.append_drill_message(
+            session, ds.id, role="examiner", text=verdict.follow_up or "", user_id=user_id
+        )
+        if verdict.done:
+            await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+    return {"verdict": verdict.model_dump(mode="json")}
+
+
+# --- helpers ---
+
+
+def _resume_content_type(path: Path) -> str:
+    ext = path.suffix.lower().lstrip(".")
+    return {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "txt": "text/plain",
+        "md": "text/markdown",
+    }.get(ext, "text/plain")
+
+
+def _resume_ext(content_type: str) -> str:
+    return {
+        "application/pdf": "pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+        "text/plain": "txt",
+        "text/markdown": "md",
+    }[content_type]
+
+
+async def _mcp_active_prompt(agent_name: str) -> str:
+    async with session_scope() as session:
+        prompt = await SessionPromptReader(session).get_active_prompt(agent_name)
+        return prompt.system_prompt if prompt else ""
+
+
+async def _mcp_run_sage(
+    settings: Settings,
+    session: AsyncSession,
+    *,
+    user_id: str,
+    resume: ResumeDocument,
+    materials: list[DrillMaterial],
+    project: Project | None,
+    round_: DrillRound,
+    direction: str | None,
+    answer: str | None,
+) -> SageVerdict:
+    if not settings.llm_api_key:
+        return stub_sage(round_=round_, project=project, answer=answer)
+    system_prompt = await SessionPromptReader(session).get_active_prompt("sage")
+    system_prompt_text = system_prompt.system_prompt if system_prompt else ""
+    reader = SessionMemoryReader(session, user_id=user_id)
+    agent = build_sage_agent(get_model(), system_prompt=system_prompt_text)
+    return await run_sage(
+        agent,
+        reader,
+        resume=resume,
+        materials=materials,
+        project=project,
+        round_=round_,
+        direction=direction,
+        answer=answer,
+    )
 
 
 def main() -> None:
