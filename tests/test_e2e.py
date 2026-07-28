@@ -122,6 +122,7 @@ async def test_e2e_agent_rewrite_flow(client: AsyncClient, auth_headers: dict[st
         headers=auth_headers,
         json={
             "upload_id": str(uuid4()),
+            "file_path": "uploads/e2e-resume.pdf",
             "document": resume_doc.model_dump(mode="json"),
             "ingest": False,
         },

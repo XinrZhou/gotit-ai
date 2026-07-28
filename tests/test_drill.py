@@ -24,7 +24,12 @@ async def _seed_resume(client: AsyncClient, headers: dict[str, str]) -> None:
     r = await client.post(
         "/v1/resumes/apply",
         headers=headers,
-        json={"upload_id": str(uuid4()), "document": doc.model_dump(mode="json"), "ingest": False},
+        json={
+            "upload_id": str(uuid4()),
+            "file_path": "uploads/test-resume.pdf",
+            "document": doc.model_dump(mode="json"),
+            "ingest": False,
+        },
     )
     assert r.status_code == 200
 
@@ -61,6 +66,54 @@ async def test_drill_materials_crud(client: AsyncClient, auth_headers: dict[str,
     assert r.status_code == 200
     r = await client.get("/v1/drill/materials", headers=auth_headers)
     assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_drill_material_upload_txt(client: AsyncClient, auth_headers: dict[str, str]) -> None:
+    payload = "事件驱动 vs 同步调用\nKafka 分区策略".encode()
+    r = await client.post(
+        "/v1/drill/materials/upload",
+        headers=auth_headers,
+        files={"file": ("订单笔记.txt", payload, "text/plain")},
+    )
+    assert r.status_code == 200
+    out = r.json()
+    assert out["title"] == "订单笔记"
+    assert "事件驱动" in out["body"]
+
+
+@pytest.mark.asyncio
+async def test_drill_material_upload_unsupported_type(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    r = await client.post(
+        "/v1/drill/materials/upload",
+        headers=auth_headers,
+        files={"file": ("x.bin", b"\x00\x01", "application/octet-stream")},
+    )
+    assert r.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_drill_material_upload_then_save(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """Upload returns a preview; client then saves it via the upsert endpoint."""
+    r = await client.post(
+        "/v1/drill/materials/upload",
+        headers=auth_headers,
+        files={"file": ("架构要点.md", "# 架构\n事件驱动取舍".encode(), "text/markdown")},
+    )
+    assert r.status_code == 200
+    preview = r.json()
+    assert preview["title"] == "架构要点"
+    r = await client.post(
+        "/v1/drill/materials",
+        headers=auth_headers,
+        json={"title": preview["title"], "body": preview["body"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["title"] == "架构要点"
 
 
 @pytest.mark.asyncio

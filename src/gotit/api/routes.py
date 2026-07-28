@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -834,6 +835,7 @@ MAX_RESUME_BYTES = 10 * 1024 * 1024
 class ResumeApplyRequest(BaseModel):
     upload_id: UUID
     document: ResumeDocument
+    file_path: str
     ingest: bool = False
 
 
@@ -871,12 +873,20 @@ async def upload_resume(
 
     if not settings.llm_api_key:
         out = stub_parse(upload_id=upload_id, resume_text=resume_text)
-        return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
+        return {
+            "upload_id": str(upload_id),
+            "file_path": file_path,
+            "document": out.document.model_dump(mode="json"),
+        }
 
     system_prompt = await _active_prompt(settings, "compass")
     agent = build_resume_parser(get_model(), system_prompt=system_prompt)
     out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
-    return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
+    return {
+        "upload_id": str(upload_id),
+        "file_path": file_path,
+        "document": out.document.model_dump(mode="json"),
+    }
 
 
 @router.post(
@@ -892,7 +902,7 @@ async def apply_resume(
             session,
             body.document,
             upload_id=body.upload_id,
-            file_path=f"uploads/{body.upload_id}",
+            file_path=body.file_path,
             ingest=body.ingest,
             user_id=_user_id(settings),
         )
@@ -909,6 +919,41 @@ async def get_resume(
 ) -> ResumeRecord | None:
     async with session_scope() as session:
         return await day_ops.get_resume(session, user_id=_user_id(settings))
+
+
+_RESUME_MEDIA_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "txt": "text/plain; charset=utf-8",
+    "md": "text/markdown; charset=utf-8",
+}
+
+
+@router.get(
+    "/v1/resumes/file",
+    dependencies=[Depends(require_api_key)],
+)
+async def get_resume_file(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FileResponse:
+    """Serve the originally uploaded resume file (pdf/docx/txt/md)."""
+    async with session_scope() as session:
+        record = await day_ops.get_resume(session, user_id=_user_id(settings))
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no resume")
+    file_path = record.file_path
+    # Fallback for legacy rows whose file_path lacked an extension: glob by upload_id.
+    if not Path(file_path).exists():
+        candidates = sorted(Path("uploads").glob(f"{record.upload_id}.*"))
+        if candidates:
+            file_path = str(candidates[0])
+    if not Path(file_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="resume file missing on disk"
+        )
+    ext = Path(file_path).suffix.lstrip(".").lower()
+    media_type = _RESUME_MEDIA_TYPES.get(ext, "application/octet-stream")
+    return FileResponse(file_path, media_type=media_type, filename=f"resume.{ext or 'bin'}")
 
 
 # --- Drill materials ---
@@ -987,6 +1032,43 @@ async def delete_drill_material(
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return {"status": "deleted"}
+
+
+# --- Drill material file import ---
+
+
+@router.post(
+    "/v1/drill/materials/upload",
+    dependencies=[Depends(require_api_key)],
+)
+async def upload_drill_material(
+    file: Annotated[UploadFile, Field(alias="file")],
+) -> dict[str, str]:
+    """Extract text from an uploaded file and return it as a material preview.
+
+    Does not persist; the client reviews the {title, body} and saves via the
+    existing upsert endpoint. Reuses resume extraction (PDF/DOCX/TXT/MD).
+    """
+    content = await file.read()
+    if len(content) > MAX_RESUME_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file too large (max 10MB)",
+        )
+    content_type = (file.content_type or "text/plain").strip()
+    if content_type not in ALLOWED_RESUME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"unsupported content type: {content_type}",
+        )
+    try:
+        body = extract_text(content, content_type)
+    except ResumeExtractError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    title = (Path(file.filename or "导入资料").stem or "导入资料").strip() or "导入资料"
+    return {"title": title, "body": body}
 
 
 # --- Drill sessions (resume-driven mock interview) ---
