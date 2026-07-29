@@ -140,6 +140,23 @@ async def delete_note(
     await session.flush()
 
 
+async def delete_notes(
+    session: AsyncSession,
+    note_ids: list[UUID],
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> int:
+    """Delete many notes owned by ``user_id``. Skips unknown ids. Returns deleted count."""
+    deleted = 0
+    for note_id in note_ids:
+        try:
+            await delete_note(session, note_id, user_id=user_id)
+            deleted += 1
+        except KeyError:
+            continue
+    return deleted
+
+
 async def ingest_note(
     session: AsyncSession,
     note_id: UUID,

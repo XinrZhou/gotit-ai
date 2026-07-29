@@ -20,6 +20,17 @@ from gotit.db.ops.claim import (
     list_project_claims,
     list_topic_claims_today,
 )
+from gotit.db.ops.connectors import (
+    delete_connector,
+    get_connector,
+    import_connectors,
+    list_connectors,
+    normalize_connector_config,
+    parse_mcp_servers_json,
+    set_connector_status,
+    update_connector,
+    upsert_connector,
+)
 from gotit.db.ops.day import (
     add_chat_message,
     delete_plan_item,
@@ -67,11 +78,19 @@ from gotit.db.ops.memory import (
     list_memory,
     list_trajectory,
 )
+from gotit.db.ops.shell import (
+    build_graph_v0,
+    build_profile_v0,
+    list_shell_activity,
+    record_interest,
+    record_shell_event,
+)
 from gotit.db.ops.note import (
     _strip_html,
     add_note,
     curate_claims,
     delete_note,
+    delete_notes,
     get_note,
     ingest_note,
     list_all_notes,
@@ -102,15 +121,28 @@ from gotit.db.ops.resume import (
     get_resume,
     upsert_resume,
 )
+from gotit.db.ops.skills import (
+    delete_user_skill,
+    install_skill,
+    list_skill_catalog,
+    parse_skill_markdown,
+    resolve_skill_body,
+    set_skill_enabled,
+)
 from gotit.db.ops.thread import (
     add_message,
     clear_ball,
+    count_user_messages,
     create_thread,
+    delete_thread,
+    derive_thread_title,
     get_ball,
     get_thread,
     list_messages,
     list_threads,
     set_ball,
+    touch_thread,
+    update_thread_title,
 )
 
 __all__ = [
@@ -148,6 +180,7 @@ __all__ = [
     "list_all_notes",
     "get_note",
     "delete_note",
+    "delete_notes",
     "stub_extract_claim",
     "ingest_note",
     "curate_claims",
@@ -188,6 +221,12 @@ __all__ = [
     "append_trajectory",
     "list_trajectory",
     "count_prior_failures",
+    # shell / obs (OpenClaw bridge)
+    "record_shell_event",
+    "record_interest",
+    "list_shell_activity",
+    "build_profile_v0",
+    "build_graph_v0",
     # harness
     "add_harness_run",
     "add_harness_case_result",
@@ -203,9 +242,30 @@ __all__ = [
     "create_thread",
     "list_threads",
     "get_thread",
+    "update_thread_title",
+    "touch_thread",
+    "delete_thread",
+    "derive_thread_title",
     "add_message",
+    "count_user_messages",
     "list_messages",
     "get_ball",
     "set_ball",
     "clear_ball",
+    # skills / connectors (profile center)
+    "list_skill_catalog",
+    "resolve_skill_body",
+    "install_skill",
+    "set_skill_enabled",
+    "delete_user_skill",
+    "parse_skill_markdown",
+    "list_connectors",
+    "get_connector",
+    "upsert_connector",
+    "update_connector",
+    "set_connector_status",
+    "delete_connector",
+    "import_connectors",
+    "normalize_connector_config",
+    "parse_mcp_servers_json",
 ]

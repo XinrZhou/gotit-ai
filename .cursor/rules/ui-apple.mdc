@@ -1,0 +1,62 @@
+---
+description: Apple-inspired UI visual language for web/
+globs: web/**/*.{tsx,scss,css}
+alwaysApply: true
+---
+
+# UI — Apple-inspired
+
+Visual north star: **Apple** (quiet hierarchy, soft selection, no shouty chrome).
+Also borrow restraint from Claude/Google: clarity over decoration.
+
+User preference (locked): prefer Apple HIG over “more contrast / louder chrome”
+fixes. When readability and quiet select conflict, keep quiet select and nudge
+type color one step only (`--faint` ↔ `--muted`) — never add ink borders,
+inset bars, or accent colors for secondary UI.
+
+## Tokens (already in `global.scss`)
+
+Prefer `--bg --ink --muted --faint --line --soft --fill`. Do not invent new
+purples/creams, accent blues for chrome, or multi-layer glows.
+
+## Selection / chips / tabs
+
+Quiet select — never inverted black pills for secondary controls.
+
+```scss
+/* ✅ selected */
+background: var(--fill);
+color: var(--ink);
+font-weight: 400; /* or 500 max */
+
+/* ❌ avoid */
+background: var(--ink);
+color: #fff;
+font-weight: 600+;
+box-shadow: inset 0 0 0 1px …; /* double-ring “loud” select */
+border: 1px solid var(--ink); /* ring select on chips */
+/* left ink bar / ::before accent on list rows */
+```
+
+- Default chips: often **borderless**, muted text; hover → `--soft`
+- Active: `--fill` + ink text; **no bold bump** just to mark selected
+- Primary CTA (发送 / 确认) may stay solid `--ink` — that’s intentional Apple
+
+## Type
+
+- Body / chips: `400`; section labels: `500` or small caps + `--faint`
+- Titles (modal/page): `600` OK; don’t bold every interactive label
+- Prefer `letter-spacing: -0.01em` on UI labels; anti-aliased system stack
+
+## Motion & chrome
+
+- Transitions ~`0.15s–0.2s ease`; no bounce / glow / emoji decoration
+- Hover: soft fill or ink color shift — **not** danger-red wash on delete
+- Avoid card stacks + lift (`translateY` + heavy shadow) for simple lists;
+  prefer hairline `--line` or `--soft` fill
+- Destructive confirm: use shared `Modal` + `btn-ink`, not `window.confirm`
+
+## When unsure
+
+Match `ChatPage` mention chips / workflow tabs after the Apple pass — those are
+the reference selected states.

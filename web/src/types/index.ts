@@ -188,6 +188,7 @@ export type ChatMessage = {
 export type AgentReply = {
   user_message: ChatMessage;
   agent_messages: ChatMessage[];
+  thread?: Thread | null;
 };
 
 export type AgentIdentity = {
@@ -201,4 +202,69 @@ export type AgentIdentity = {
   prompt_version_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type SkillInfo = {
+  name: string;
+  notes: string | null;
+  enabled: boolean;
+  source: "builtin" | "user";
+};
+
+export type McpConnector = {
+  id: string;
+  user_id: string;
+  name: string;
+  transport: "stdio" | "http" | "sse";
+  config: Record<string, unknown>;
+  enabled: boolean;
+  last_status: "unknown" | "ok" | "error";
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MemoryEntry = {
+  id: string;
+  user_id: string;
+  layer: string;
+  kind: string;
+  topic: string | null;
+  content: Record<string, unknown>;
+  source: Record<string, unknown>;
+  created_at: string;
+  expires_at: string | null;
+};
+
+export type ProfileTopicStat = {
+  topic: string;
+  trajectory_failures: number;
+  trajectory_passes: number;
+  interest_count: number;
+};
+
+export type ProfileView = {
+  topics: ProfileTopicStat[];
+  weak_topics: string[];
+  interest_total: number;
+  shell_event_total: number;
+  trajectory_total: number;
+};
+
+export type GraphNode = {
+  id: string;
+  type: "claim" | "topic" | "project" | "interest";
+  label: string;
+  meta: Record<string, unknown>;
+};
+
+export type GraphEdge = {
+  source: string;
+  target: string;
+  rel: "has_topic" | "in_project" | "interest_topic";
+};
+
+export type GraphView = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 };

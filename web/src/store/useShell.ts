@@ -1,4 +1,9 @@
 import { useCallback, useState } from "react";
+import {
+  loadUserProfile,
+  saveUserProfile,
+  type UserProfile,
+} from "../lib/userProfile";
 import type { Mode } from "../types";
 import type { Run } from "./types";
 
@@ -11,6 +16,15 @@ export function useShell() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   /** 资料/项目侧栏；默认收起，避免三栏空旷 */
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userProfile, setUserProfileState] = useState<UserProfile>(() =>
+    loadUserProfile(),
+  );
+
+  const setUserProfile = useCallback((next: UserProfile) => {
+    saveUserProfile(next);
+    setUserProfileState(loadUserProfile());
+  }, []);
 
   const bindRun = useCallback((refresh: () => Promise<void>): Run => {
     return async (action, okMessage) => {
@@ -41,6 +55,10 @@ export function useShell() {
     setOpenMenuId,
     libraryOpen,
     setLibraryOpen,
+    settingsOpen,
+    setSettingsOpen,
+    userProfile,
+    setUserProfile,
     bindRun,
   };
 }

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from gotit.api.routes import (
     chat,
+    connectors,
     day,
     drill,
     examine,
@@ -21,6 +22,8 @@ from gotit.api.routes import (
     projects,
     prompts,
     resume,
+    shell,
+    skills,
     teach,
 )
 
@@ -28,12 +31,15 @@ router = APIRouter()
 router.include_router(health.router)
 router.include_router(chat.router)
 router.include_router(identities.router)
+router.include_router(skills.router)
+router.include_router(connectors.router)
 router.include_router(ingest.router)
 router.include_router(examine.router)
 router.include_router(day.router)
 router.include_router(notes.router)
 router.include_router(teach.router)
 router.include_router(memory.router)
+router.include_router(shell.router)
 router.include_router(prompts.router)
 router.include_router(projects.router)
 router.include_router(resume.router)

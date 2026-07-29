@@ -91,6 +91,71 @@ async def get_thread(session: AsyncSession, thread_id: UUID) -> Thread | None:
     return _thread_view(row) if row is not None else None
 
 
+async def update_thread_title(
+    session: AsyncSession,
+    thread_id: UUID,
+    *,
+    title: str,
+) -> Thread | None:
+    row = await session.get(ThreadRow, thread_id)
+    if row is None:
+        return None
+    row.title = title
+    row.updated_at = datetime.now(UTC)
+    await session.flush()
+    return _thread_view(row)
+
+
+async def touch_thread(session: AsyncSession, thread_id: UUID) -> None:
+    row = await session.get(ThreadRow, thread_id)
+    if row is not None:
+        row.updated_at = datetime.now(UTC)
+        await session.flush()
+
+
+async def delete_thread(
+    session: AsyncSession,
+    thread_id: UUID,
+    *,
+    user_id: str,
+) -> bool:
+    """Delete a thread and its messages / ball. Returns False if missing/forbidden."""
+    row = await session.get(ThreadRow, thread_id)
+    if row is None or row.user_id != user_id:
+        return False
+    msgs = list(
+        (
+            await session.execute(
+                select(MessageRow).where(MessageRow.thread_id == thread_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for m in msgs:
+        await session.delete(m)
+    ball = (
+        await session.execute(
+            select(BallCustodyRow).where(BallCustodyRow.thread_id == thread_id)
+        )
+    ).scalar_one_or_none()
+    if ball is not None:
+        await session.delete(ball)
+    await session.delete(row)
+    await session.flush()
+    return True
+
+
+def derive_thread_title(text: str, *, max_len: int = 28) -> str:
+    """Heuristic title from the first user message (no LLM)."""
+    cleaned = " ".join(text.strip().split())
+    if not cleaned:
+        return "新对话"
+    if len(cleaned) <= max_len:
+        return cleaned
+    return cleaned[: max_len - 1] + "…"
+
+
 # --- messages ---
 
 
@@ -115,7 +180,19 @@ async def add_message(
     )
     session.add(row)
     await session.flush()
+    await touch_thread(session, thread_id)
     return _message_view(row)
+
+
+async def count_user_messages(session: AsyncSession, thread_id: UUID) -> int:
+    from sqlalchemy import func
+
+    stmt = (
+        select(func.count())
+        .select_from(MessageRow)
+        .where(MessageRow.thread_id == thread_id, MessageRow.role == "user")
+    )
+    return int((await session.execute(stmt)).scalar_one())
 
 
 async def list_messages(

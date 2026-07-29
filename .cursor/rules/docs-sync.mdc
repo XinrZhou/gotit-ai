@@ -1,0 +1,33 @@
+---
+description: Keep docs/SYSTEM.md + README in sync with shipped reality
+alwaysApply: true
+---
+
+# Doc sync (SYSTEM + README)
+
+## Source of truth for agents
+
+- **`docs/SYSTEM.md`** — short architecture / stack / features snapshot.
+  New sessions should **Read it first** (sessionStart also injects an excerpt).
+- **`README.md` + `README.zh-CN.md`** — human-facing pitch; keep aligned with SYSTEM.
+- **`docs/VISION.md`** — principles; change rarely.
+
+## When to update (before commit/PR)
+
+If the change alters product behavior, public API/MCP surface, architecture, or
+the quick-start story:
+
+1. Update `docs/SYSTEM.md` (keep it short — token budget).
+2. If humans would notice (positioning, features table, quick start, roadmap):
+   update **both** `README.md` and `README.zh-CN.md`.
+3. Non-trivial behavior → also OpenSpec (`openspec/changes/`).
+
+Skip only for trivial typos/comments/pure refactors with no user-visible story change.
+
+## Automation
+
+- `sessionStart` hook → injects SYSTEM pointer + excerpt.
+- `beforeShellExecution` on `git commit` / `gh pr create` → **ask** if code
+  changed without OpenSpec/SYSTEM, or user-facing code without README/SYSTEM.
+
+Do **not** invent a second long architecture essay in chat — edit SYSTEM.md instead.

@@ -7,15 +7,22 @@ type ModalProps = {
   children?: ReactNode;
   actions?: ReactNode;
   wide?: boolean;
+  /** Children own padding/layout (e.g. settings split pane). */
+  flush?: boolean;
 };
 
-export function Modal({ title, onClose, children, actions, wide }: ModalProps) {
+export function Modal({ title, onClose, children, actions, wide, flush }: ModalProps) {
+  const shell = [
+    styles.modal,
+    wide ? styles.modalWide : "",
+    flush ? styles.modalFlush : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div
-        className={`${styles.modal}${wide ? ` ${styles.modalWide}` : ""}`}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={shell} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHead}>
           <div className={styles.modalTitle}>{title}</div>
           <button

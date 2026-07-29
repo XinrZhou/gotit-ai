@@ -11,6 +11,10 @@ os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["GOTIT_DB_CREATE_ALL"] = "true"
 os.environ["GOTIT_API_KEY"] = "dev-change-me"
 os.environ["GOTIT_USER_ID"] = "local"
+# Force stub agent path in tests (ignore developer .env LLM keys).
+os.environ["LLM_API_KEY"] = ""
+os.environ["LLM_BASE_URL"] = ""
+os.environ["LLM_MODEL"] = "gpt-4.1-mini"
 
 from gotit.api.settings import get_settings
 

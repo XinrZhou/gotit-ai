@@ -186,6 +186,55 @@ class MemoryEntry(BaseModel):
     expires_at: datetime | None = None
 
 
+class ShellDigestItem(BaseModel):
+    """One RSS item inside a shell_event."""
+
+    n: int
+    title: str
+    link: str | None = None
+    feed_id: str | None = None
+    label: str | None = None
+
+
+class ProfileTopicStat(BaseModel):
+    """Per-topic aggregation for obs profile v0."""
+
+    topic: str
+    trajectory_failures: int = 0
+    trajectory_passes: int = 0
+    interest_count: int = 0
+
+
+class ProfileView(BaseModel):
+    """User profile v0 from trajectory + interest (+ shell volume)."""
+
+    topics: list[ProfileTopicStat] = Field(default_factory=list)
+    weak_topics: list[str] = Field(default_factory=list)
+    interest_total: int = 0
+    shell_event_total: int = 0
+    trajectory_total: int = 0
+
+
+class GraphNode(BaseModel):
+    id: str
+    type: Literal["claim", "topic", "project", "interest"]
+    label: str
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    rel: Literal["has_topic", "in_project", "interest_topic"]
+
+
+class GraphView(BaseModel):
+    """Knowledge graph v0: claim–topic–project; interest may link topic only."""
+
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
+
+
 class PromptVersion(BaseModel):
     """提示词版本（agent_name + version_label + is_active）。"""
 
@@ -442,11 +491,16 @@ class RecheckVerdict(BaseModel):
 class ChatTurn(BaseModel):
     """A conversational agent's structured reply: text + optional A2A handoff.
 
+    `thinking` is optional chain-of-thought shown in a collapsed UI block.
     `handoff_to` lets an agent cede the floor to another agent in the same turn
     (true agent-to-agent接力). `reason` is injected into the next holder's
     context so it knows why it was handed the ball.
     """
 
+    thinking: str | None = Field(
+        default=None,
+        description="Optional brief reasoning before the visible reply.",
+    )
     text: str
     handoff_to: str | None = None
     reason: str | None = None
@@ -460,3 +514,34 @@ class AgentReply(BaseModel):
         description="Agent replies produced this turn — may be more than one when "
         "agents hand off to each other (A2A 接力).",
     )
+    thread: Thread | None = Field(
+        default=None,
+        description="Updated thread when title (or other fields) changed this turn.",
+    )
+
+
+# --- Profile center: skills / MCP connectors (for companion agents) ---
+
+
+class SkillInfo(BaseModel):
+    """Installed or builtin on-demand skill visible in Settings + chat tray."""
+
+    name: str
+    notes: str | None = None
+    enabled: bool = True
+    source: Literal["builtin", "user"] = "builtin"
+
+
+class McpConnector(BaseModel):
+    """User-configured MCP server that companion agents may call as tools."""
+
+    id: UUID = Field(default_factory=uuid4)
+    user_id: str
+    name: str
+    transport: Literal["stdio", "http", "sse"]
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+    last_status: Literal["unknown", "ok", "error"] = "unknown"
+    last_error: str | None = None
+    created_at: datetime
+    updated_at: datetime

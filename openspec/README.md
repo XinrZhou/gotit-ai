@@ -25,3 +25,7 @@ openspec init
 ```
 
 Until then, treat `docs/VISION.md` + `docs/adr/` + change folders under `openspec/changes/` as the intent layer.
+
+**Prefer merge:** before `changes/<new>/`, scan active siblings — same subdomain,
+UI surface, or follow-up of an open proposal → fold in; do not spawn duplicates.
+See `.cursor/rules/openspec.mdc` and `changes/README.md`.

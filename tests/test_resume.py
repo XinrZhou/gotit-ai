@@ -8,6 +8,10 @@ import pytest
 from httpx import AsyncClient
 
 from gotit.core.resume.extract import ResumeExtractError, extract_text
+from gotit.core.resume.parse import (
+    clip_resume_text,
+    load_resume_system_prompt,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -80,6 +84,25 @@ def test_extract_text_empty_raises() -> None:
 def test_extract_text_unsupported_type() -> None:
     with pytest.raises(ResumeExtractError):
         extract_text(b"abc", "application/octet-stream")
+
+
+def test_clip_resume_text_short_unchanged() -> None:
+    assert clip_resume_text("短简历") == "短简历"
+
+
+def test_clip_resume_text_keeps_head_and_tail() -> None:
+    body = ("头" * 9000) + ("尾" * 9000)
+    clipped = clip_resume_text(body, max_chars=1000)
+    assert len(clipped) <= 1000
+    assert clipped.startswith("头")
+    assert clipped.endswith("尾")
+    assert "中间已截断" in clipped
+
+
+def test_load_resume_system_prompt_from_file() -> None:
+    prompt = load_resume_system_prompt()
+    assert "ResumeDocument" in prompt or "projects" in prompt
+    assert "SpongeBob" not in prompt  # not the claim-curation compass persona dump
 
 
 # --- heuristic parser (no-LLM fallback) ---
@@ -167,7 +190,7 @@ async def test_apply_resume_clear_rebuild(
     )
     upload_id = uuid4()
 
-    # First apply: 1 project + 1 resume note, no claims.
+    # First apply: projects only — no quiz notes / claims.
     r = await client.post(
         "/v1/resumes/apply",
         headers=auth_headers,
@@ -181,7 +204,7 @@ async def test_apply_resume_clear_rebuild(
     assert r.status_code == 200
     body = r.json()
     assert len(body["projects"]) == 1
-    assert len(body["notes"]) == 1
+    assert body["notes"] == []
     assert body["claims"] == []
 
     # Resume record exists.
@@ -220,18 +243,17 @@ async def test_apply_resume_clear_rebuild(
     body = r.json()
     assert len(body["projects"]) == 1
     assert body["projects"][0]["name"] == "风控引擎"
+    assert body["notes"] == []
 
     # Old project gone, new project present.
     r = await client.get("/v1/projects", headers=auth_headers)
     names = {p["name"] for p in r.json()}
     assert names == {"风控引擎"}
 
-    # Resume note replaced (only 1 resume note now, for 风控引擎).
-    # apply_resume creates the resume note on today's day, so query today.
+    # No resume-tagged notes in the quiz library.
     r = await client.get(f"/v1/days/{date.today().isoformat()}/notes", headers=auth_headers)
     resume_notes = [n for n in r.json() if "resume" in (n.get("tags") or [])]
-    assert len(resume_notes) == 1
-    assert resume_notes[0]["title"] == "风控引擎"
+    assert resume_notes == []
 
     # Hand-written note still exists (learning data preserved).
     r = await client.get(f"/v1/notes/{handwritten_id}", headers=auth_headers)

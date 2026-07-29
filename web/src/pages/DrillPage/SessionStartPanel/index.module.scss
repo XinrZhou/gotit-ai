@@ -138,14 +138,14 @@
 }
 
 .roundActive {
-  background: var(--ink, #1a1a1a);
-  border-color: var(--ink, #1a1a1a);
-  color: #fff;
+  background: var(--fill);
+  border-color: var(--fill);
+  color: var(--ink);
 }
 
 .roundLabel {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .roundHint {
@@ -244,13 +244,13 @@
 }
 
 .selectOptionActive {
-  background: var(--ink, #1a1a1a);
-  color: var(--bg, #fff);
-  font-weight: 600;
+  background: var(--fill);
+  color: var(--ink);
+  font-weight: 400;
 }
 
 .selectOptionActive:hover {
-  background: var(--ink, #1a1a1a);
+  background: var(--fill);
 }
 
 .history {

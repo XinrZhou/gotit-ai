@@ -34,7 +34,12 @@ from gotit.core.models import (
     TeachVerdict,
 )
 from gotit.core.resume.extract import extract_text
-from gotit.core.resume.parse import build_resume_parser, run_resume_parser, stub_parse
+from gotit.core.resume.parse import (
+    build_resume_parser,
+    load_resume_system_prompt,
+    run_resume_parser,
+    stub_parse,
+)
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 from gotit.db.models import ClaimRow, DayNoteRow
@@ -356,6 +361,16 @@ async def gotit_ingest_note(note_id: str, add_plan_item: bool = True) -> dict[st
 
 
 @mcp.tool()
+async def gotit_delete_notes(note_ids: list[str]) -> dict[str, object]:
+    """Delete one or more notes by id. Skips unknown ids. Returns {deleted: n}."""
+    await ensure_db()
+    ids = [UUID(x) for x in note_ids]
+    async with session_scope() as session:
+        deleted = await day_ops.delete_notes(session, ids, user_id=_user_id())
+    return {"deleted": deleted}
+
+
+@mcp.tool()
 async def gotit_curate(day: str, claim_texts: list[str]) -> dict[str, object]:
     """Add plan items for recommended claims (matched by text) for the day."""
     await ensure_db()
@@ -447,6 +462,100 @@ async def gotit_add_memory(
             source=source,
         )
     return entry.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_record_shell_event(
+    job: str,
+    items: list[dict[str, object]] | None = None,
+    due_summary: list[str] | None = None,
+    errors: list[str] | None = None,
+    delivery_ok: bool | None = None,
+    channel: str = "openclaw-weixin",
+    skill: str = "digest",
+    run_id: str | None = None,
+) -> dict[str, object]:
+    """Record an OpenClaw digest/cron push as kind=shell_event (obs truth)."""
+    await ensure_db()
+    async with session_scope() as session:
+        entry = await day_ops.record_shell_event(
+            session,
+            user_id=_user_id(),
+            job=job,
+            items=items,
+            due_summary=due_summary,
+            errors=errors,
+            delivery_ok=delivery_ok,
+            channel=channel,
+            skill=skill,
+            run_id=run_id,
+        )
+    return entry.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_record_interest(
+    event_id: str,
+    item_index: int,
+    title: str,
+    link: str | None = None,
+    feed_id: str | None = None,
+    topic: str | None = None,
+    channel: str = "openclaw-weixin",
+    skill: str = "digest",
+) -> dict[str, object]:
+    """Record 「这篇有用」 as kind=interest (no ingest)."""
+    await ensure_db()
+    async with session_scope() as session:
+        entry = await day_ops.record_interest(
+            session,
+            user_id=_user_id(),
+            event_id=event_id,
+            item_index=item_index,
+            title=title,
+            link=link,
+            feed_id=feed_id,
+            topic=topic,
+            channel=channel,
+            skill=skill,
+        )
+    return entry.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_list_shell_activity(
+    kinds: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    """List shell_event / interest activity (comma kinds, newest first)."""
+    await ensure_db()
+    kind_list = [k.strip() for k in kinds.split(",")] if kinds else None
+    async with session_scope() as session:
+        entries = await day_ops.list_shell_activity(
+            session,
+            user_id=_user_id(),
+            kinds=kind_list,
+            limit=limit,
+        )
+    return [e.model_dump(mode="json") for e in entries]
+
+
+@mcp.tool()
+async def gotit_obs_profile() -> dict[str, object]:
+    """Profile v0: trajectory + interest aggregates by topic."""
+    await ensure_db()
+    async with session_scope() as session:
+        view = await day_ops.build_profile_v0(session, user_id=_user_id())
+    return view.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_obs_graph() -> dict[str, object]:
+    """Graph v0: claim–topic–project edges; interest→topic only."""
+    await ensure_db()
+    async with session_scope() as session:
+        view = await day_ops.build_graph_v0(session, user_id=_user_id())
+    return view.model_dump(mode="json")
 
 
 @mcp.tool()
@@ -563,7 +672,7 @@ async def gotit_upload_resume(file_path: str) -> dict[str, object]:
     if not settings.llm_api_key:
         out = stub_parse(upload_id=upload_id, resume_text=resume_text)
         return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
-    system_prompt = await _mcp_active_prompt("compass")
+    system_prompt = load_resume_system_prompt()
     agent = build_resume_parser(get_model(), system_prompt=system_prompt)
     out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
     return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
@@ -573,7 +682,7 @@ async def gotit_upload_resume(file_path: str) -> dict[str, object]:
 async def gotit_apply_resume(
     upload_id: str, document: dict[str, object], ingest: bool = False
 ) -> dict[str, object]:
-    """Apply an (edited) parsed resume: clear-rebuild projects + resume notes."""
+    """Apply an (edited) parsed resume: clear-rebuild projects (no quiz notes)."""
     await ensure_db()
     doc = ResumeDocument.model_validate(document)
     async with session_scope() as session:
@@ -816,6 +925,19 @@ async def gotit_list_threads(kind: str | None = None) -> list[dict[str, object]]
 
 
 @mcp.tool()
+async def gotit_delete_thread(thread_id: str) -> dict[str, object]:
+    """Delete a conversation thread and its messages."""
+    await ensure_db()
+    async with session_scope() as session:
+        ok = await day_ops.delete_thread(
+            session, UUID(thread_id), user_id=_user_id()
+        )
+        if not ok:
+            return {"error": "thread not found"}
+        return {"ok": True}
+
+
+@mcp.tool()
 async def gotit_list_messages(thread_id: str) -> list[dict[str, object]]:
     """Replay a thread's message history."""
     await ensure_db()
@@ -836,7 +958,7 @@ async def gotit_post_message(
 
     Routes by @mention (first mention wins), else current ball holder, else
     default agent. Agents may hand off to each other (A2A 接力); every reply in
-    the chain is returned. Returns {user_message, agent_messages}.
+    the chain is returned. Returns {user_message, agent_messages, thread?}.
     """
     await ensure_db()
     settings = get_settings()
@@ -858,10 +980,13 @@ async def gotit_post_message(
             skills=list(skills or []),
             handoff_to=handoff_to,
         )
-        return {
+        out: dict[str, object] = {
             "user_message": reply.user_message.model_dump(mode="json"),
             "agent_messages": [m.model_dump(mode="json") for m in reply.agent_messages],
         }
+        if reply.thread is not None:
+            out["thread"] = reply.thread.model_dump(mode="json")
+        return out
 
 
 @mcp.tool()
@@ -874,11 +999,120 @@ async def gotit_seed_identities() -> list[dict[str, object]]:
 
 
 @mcp.tool()
-async def gotit_list_skills() -> list[str]:
-    """List available on-demand skill names (debug / review / …)."""
-    from gotit.core.skills import list_skills
+async def gotit_list_skills() -> list[dict[str, object]]:
+    """List skill catalog (builtin + user installs) with enabled flags."""
+    await ensure_db()
+    async with session_scope() as session:
+        items = await day_ops.list_skill_catalog(session, user_id=_user_id())
+        return [s.model_dump(mode="json") for s in items]
 
-    return list_skills()
+
+@mcp.tool()
+async def gotit_install_skill(markdown: str, name: str | None = None) -> dict[str, object]:
+    """Install a skill from SKILL.md / markdown content (for companion agents)."""
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            skill = await day_ops.install_skill(
+                session,
+                user_id=_user_id(),
+                raw_markdown=markdown,
+                fallback_name=name,
+            )
+            return skill.model_dump(mode="json")
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def gotit_set_skill_enabled(name: str, enabled: bool) -> dict[str, object]:
+    """Enable or disable a skill in the catalog."""
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            skill = await day_ops.set_skill_enabled(
+                session, user_id=_user_id(), name=name, enabled=enabled
+            )
+            return skill.model_dump(mode="json")
+    except KeyError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def gotit_delete_skill(name: str) -> dict[str, object]:
+    """Delete a user-installed skill (or clear a builtin override)."""
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            await day_ops.delete_user_skill(session, user_id=_user_id(), name=name)
+            return {"ok": True}
+    except KeyError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def gotit_list_connectors() -> list[dict[str, object]]:
+    """List MCP connectors configured for companion agents."""
+    await ensure_db()
+    async with session_scope() as session:
+        items = await day_ops.list_connectors(session, user_id=_user_id())
+        return [c.model_dump(mode="json") for c in items]
+
+
+@mcp.tool()
+async def gotit_upsert_connector(
+    name: str,
+    transport: str,
+    config: dict[str, object] | None = None,
+    enabled: bool = True,
+) -> dict[str, object]:
+    """Create or replace an MCP connector (stdio | http | sse)."""
+    await ensure_db()
+    if transport not in ("stdio", "http", "sse"):
+        return {"error": "transport must be stdio|http|sse"}
+    try:
+        async with session_scope() as session:
+            conn = await day_ops.upsert_connector(
+                session,
+                user_id=_user_id(),
+                name=name,
+                transport=transport,  # type: ignore[arg-type]
+                config=dict(config or {}),
+                enabled=enabled,
+            )
+            return conn.model_dump(mode="json")
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def gotit_import_connectors(
+    config: dict[str, object],
+) -> list[dict[str, object]] | dict[str, object]:
+    """Import connectors from Claude/Cursor-style mcpServers JSON."""
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            items = await day_ops.import_connectors(
+                session, user_id=_user_id(), payload=dict(config)
+            )
+            return [c.model_dump(mode="json") for c in items]
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def gotit_delete_connector(connector_id: str) -> dict[str, object]:
+    """Delete an MCP connector by id."""
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            await day_ops.delete_connector(
+                session, user_id=_user_id(), connector_id=UUID(connector_id)
+            )
+            return {"ok": True}
+    except (KeyError, ValueError) as exc:
+        return {"error": str(exc)}
 
 
 @mcp.tool()

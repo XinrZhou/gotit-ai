@@ -39,13 +39,3 @@ async def list_identities(
     async with session_scope() as session:
         return await day_ops.list_identities(session)
 
-
-@router.get(
-    "/v1/skills",
-    response_model=list[str],
-    dependencies=[Depends(require_api_key)],
-)
-async def list_skills() -> list[str]:
-    from gotit.core.skills import list_skills as _list
-
-    return _list()

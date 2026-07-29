@@ -36,7 +36,7 @@ router = APIRouter()
 
 
 class ThreadCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=500)
+    title: str = Field(default="新对话", min_length=1, max_length=500)
     kind: str = Field(default="chat", pattern="^(chat|verify)$")
 
 
@@ -87,6 +87,23 @@ async def list_threads(
         )
 
 
+@router.delete(
+    "/v1/threads/{thread_id}",
+    dependencies=[Depends(require_api_key)],
+)
+async def delete_thread(
+    thread_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, bool]:
+    async with session_scope() as session:
+        ok = await day_ops.delete_thread(
+            session, thread_id, user_id=_user_id(settings)
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="thread not found")
+        return {"ok": True}
+
+
 @router.get(
     "/v1/threads/{thread_id}/messages",
     response_model=list[Message],
@@ -131,6 +148,13 @@ async def post_message(
             )
         except KeyError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            # Surface a short, actionable reason (LLM/gateway structured-output issues).
+            detail = str(exc).split("\n", 1)[0][:240]
+            raise HTTPException(
+                status_code=502,
+                detail=f"搭子暂时没回上（{type(exc).__name__}: {detail}）",
+            ) from exc
 
 
 class VerifyRequest(BaseModel):

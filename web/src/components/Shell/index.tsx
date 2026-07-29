@@ -8,6 +8,7 @@ import { Toast } from "../Toast";
 import { ViewNoteModal } from "../ViewNoteModal";
 import { useStore } from "../../store";
 import { ChatPage } from "../../pages/ChatPage";
+import { SettingsPage } from "../../pages/SettingsPage";
 import styles from "./index.module.scss";
 
 export function Shell() {
@@ -45,6 +46,7 @@ export function Shell() {
       <ResumeUploadModal />
       <ResumeViewerModal />
       <DrillMaterialModal />
+      <SettingsPage />
     </div>
   );
 }

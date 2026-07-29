@@ -33,6 +33,10 @@ class NoteIngestRequest(BaseModel):
     add_plan_item: bool = True
 
 
+class NotesBatchDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(min_length=1)
+
+
 class CurateRequest(BaseModel):
     day: date
     claim_texts: list[str] = Field(default_factory=list)
@@ -188,3 +192,18 @@ async def delete_note(
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@router.post(
+    "/v1/notes/batch-delete",
+    dependencies=[Depends(require_api_key)],
+)
+async def batch_delete_notes(
+    body: NotesBatchDeleteRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, int]:
+    async with session_scope() as session:
+        deleted = await day_ops.delete_notes(
+            session, body.ids, user_id=_user_id(settings)
+        )
+    return {"deleted": deleted}

@@ -14,6 +14,9 @@ context: |
 rules:
   proposal:
     - Tie every change to verification outcomes or harness/tooling that enables them.
+    - Before a new change folder, scan active openspec/changes/*/ — merge into an
+      existing change when same subdomain, same UI surface, or an open proposal
+      already calls this a follow-up. New folder only if distinct why / Out boundary.
   specs:
     - Prefer SHALL requirements with concrete scenarios (given/when/then).
   design:

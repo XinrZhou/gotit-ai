@@ -47,10 +47,15 @@ export type Store = {
   setOpenMenuId: (id: string | null) => void;
   libraryOpen: boolean;
   setLibraryOpen: (open: boolean) => void;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+  userProfile: { name: string; avatar: string };
+  setUserProfile: (p: { name: string; avatar: string }) => void;
   viewNote: DayNote | null;
   setViewNote: (n: DayNote | null) => void;
   onOpenNote: (id: string) => void;
   onDeleteNote: (id: string) => void;
+  onDeleteNotes: (ids: string[]) => void;
   onIngestNote: (id: string) => void;
   onIngestAll: () => void;
   showCompose: boolean;

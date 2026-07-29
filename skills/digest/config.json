@@ -1,0 +1,33 @@
+{
+  "timezone": "Asia/Shanghai",
+  "item_count": 5,
+  "morning_cron": "0 8 * * *",
+  "evening_cron": "0 21 * * *",
+  "feeds": [
+    {
+      "id": "solidot",
+      "label": "科技·Solidot",
+      "url": "https://www.solidot.org/index.rss"
+    },
+    {
+      "id": "36kr",
+      "label": "创投·36氪",
+      "url": "https://36kr.com/feed"
+    },
+    {
+      "id": "sspai",
+      "label": "科技·少数派",
+      "url": "https://sspai.com/feed"
+    },
+    {
+      "id": "verge",
+      "label": "科技·The Verge",
+      "url": "https://www.theverge.com/rss/index.xml"
+    }
+  ],
+  "gotit": {
+    "repo": "",
+    "api_url": "",
+    "note": "repo 空=本 skill 上两级仓库根；api_url 空则 uv+db 读 today，可填 http://127.0.0.1:8787"
+  }
+}

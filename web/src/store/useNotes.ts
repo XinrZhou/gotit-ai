@@ -48,6 +48,20 @@ export function useNotes({
     [run],
   );
 
+  const onDeleteNotes = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      void run(async () => {
+        await api<{ deleted: number }>("/v1/notes/batch-delete", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+        setViewNote((cur) => (cur && ids.includes(cur.id) ? null : cur));
+      }, ids.length === 1 ? "笔记已删除" : `已删除 ${ids.length} 条资料`);
+    },
+    [run],
+  );
+
   const onIngestNote = useCallback(
     (id: string) => {
       void run(
@@ -92,6 +106,7 @@ export function useNotes({
     setShowCompose,
     onOpenNote,
     onDeleteNote,
+    onDeleteNotes,
     onIngestNote,
     onIngestAll,
   };

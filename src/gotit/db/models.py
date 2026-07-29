@@ -359,3 +359,51 @@ class BallCustodyRow(Base):
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+# --- Profile center: user skills / MCP connectors ---
+
+
+class UserSkillRow(Base):
+    """User-installed skill body and/or enabled override for a builtin skill."""
+
+    __tablename__ = "user_skills"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_user_skills_user_name"),
+    )
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    source: Mapped[str] = mapped_column(String(16), default="user")  # builtin | user
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class McpConnectorRow(Base):
+    __tablename__ = "mcp_connectors"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_mcp_connectors_user_name"),
+    )
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    transport: Mapped[str] = mapped_column(String(16))  # stdio | http | sse
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_status: Mapped[str] = mapped_column(String(16), default="unknown")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

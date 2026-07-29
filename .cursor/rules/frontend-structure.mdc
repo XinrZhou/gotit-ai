@@ -87,3 +87,4 @@ src/
 4. Reusable hook → `hooks/`.
 5. UI: shared → `components/<Name>/`; page-only → `pages/<Name>Page/<Name>/`.
 6. Page shell → `pages/<Name>Page/` (`index.tsx` + `index.module.scss`).
+7. Visual language → `.cursor/rules/ui-apple.mdc` (quiet select, Apple-like).

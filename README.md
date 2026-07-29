@@ -19,78 +19,78 @@
 
 Most study tools help you **collect** — notes, highlights, saved threads. Few help you **verify**.
 
-You finish a chapter, an article, a deep dive on Agent Runtime. It feels familiar. You bookmark it. Two days later, a follow-up question lands and the answer collapses into "I think I've seen this…"
+You finish a chapter. It feels familiar. Two days later a follow-up lands and the answer collapses into "I think I've seen this…"
 
-That gap has a name: **false fluency** — looking like you got it, without being able to show it.
+That gap is **false fluency** — looking like you got it, without being able to show it.
 
 > *"I don't need another second brain that stores more."*
-> *"I need a small team that asks: got it — for real?"*
+> *"I need a small crew that talks with me daily — and asks: got it, for real?"*
 
-**gotit-ai** is a multi-agent learning checkbench. Paste what you studied. A team runs checks — probes, short drills, apply-it tasks, teach-backs — in whatever form fits. Fail → targeted coaching → check again. Pass only when evidence says so.
-
-Most tutors summarize. gotit-ai **stress-tests whether you actually got it.**
+**gotit-ai** is a **daily learning companion**: personality-bearing agents chat with you in threads, remember weak spots across sessions, and run a verify workflow when it's time to prove it. Pass only when evidence says so — the mastery gate is **deterministic code**, never an LLM shrug.
 
 ## What It Does
 
-| Capability | What It Means |
+| Capability | What it means |
 |-----------|---------------|
-| **Multi-Agent Check Loop** | Librarian gathers → Examiner checks → Coach patches gaps → Examiner rechecks |
-| **Multiple Check Modes** | Probing Q&A, short drills, apply-it tasks, teach-backs — not locked to one format |
-| **Mastery Gate** | A topic stays "not yet" until it passes; no silent promotion from "I read it" |
-| **Missed-Item Regression** | Failed points land in a retry queue — recheck later, not just scroll past |
-| **Context on a Budget** | Checks inject the claim under test, not the whole notebook |
-| **OpenClaw via MCP** | Channel inbox stays on OpenClaw; gotit exposes verification tools |
-| **Tiny Eval Harness** | Snapshot cases + held-out rechecks so "improvement" is measurable |
-| **Trace & Metrics** | Rounds, pass/fail, latency, token use — compare "summary only" vs "check first" |
+| **Companion chat** | Threads, @mention, in-character replies with memory |
+| **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
+| **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell |
+| **Verify loop** | Examine → Critic recheck → deterministic gate → trajectory / SR |
+| **Notes → claims** | Ingest study material into testable claims + daily plan |
+| **Resume drill** | Project / resume-driven mock interview (Sage) |
+| **Settings** | Skills + MCP connectors for companion agents (DIY install, no store) |
+| **OpenClaw via MCP** | Optional channel; gotit exposes the same domain ops as REST |
+| **Harness** | Snapshot cases so prompt/skill changes stay measurable |
+
+Crew (UI nicknames): **章鱼哥** (examiner) · **海绵宝宝** (curator) · **派大星** (teach-back) · **桑迪** (drill) · **凯伦** (critic).
 
 ## Architecture
 
 ```
-OpenClaw (channels / sessions)
-        │  MCP + Skill
+React web (ChatPage = main surface)
+        │  REST
         ▼
-gotit-ai  (Python / uv)
-  core verify-loop · FastAPI · MCP · harness
-  Postgres · Redis · React web
+gotit-ai (Python / uv)
+  core/     identity · messaging · agents · verify-loop · skills
+  db/ops/   shared domain ops (REST + MCP)
+  api/      FastAPI routes + A2A chat orchestrator
+  mcp/      OpenClaw tools (thin)
+  Postgres · Redis
 ```
 
-**Design rule:** summarizing is cheap. **Verification is the product.**
+**Design rule:** the companion owns chat. **Verification is the spine**, not a headless pipeline. OpenClaw is an optional distribution channel.
 
 ## Stack
 
 | Layer | Choice |
 |-------|--------|
 | Runtime | Python 3.12 · **uv** · FastAPI · MCP |
-| Data | Postgres 16 · Redis 7 |
-| Web | React · Vite · **npm** (under `web/`) |
-| Engineering | OpenSpec · ADR · AGENTS.md · `scripts/gate.sh` |
-| Integration | OpenClaw MCP (`skills/gotit`) |
+| Core | `gotit.core` — framework-free |
+| Data | Postgres 16 · Redis 7 (SQLite OK for local/dev) |
+| Web | React · Vite · **npm** (`web/`) |
+| LLM | OpenAI-compatible endpoint (e.g. Zhipu `glm-4-flash`) |
+| Engineering | OpenSpec · ADR · `docs/SYSTEM.md` · `scripts/gate.sh` |
 
 ## Quick Start
 
-**Prerequisites:** Python 3.12+ · [uv](https://docs.astral.sh/uv/) · Node.js 20+ · Docker · LLM API key
+**Prerequisites:** Python 3.12+ · [uv](https://docs.astral.sh/uv/) · Node.js 20+ · Docker (or SQLite) · LLM API key
 
 ```bash
-# 1. Clone
 git clone https://github.com/<you>/gotit-ai.git
 cd gotit-ai
 
-# 2. Python deps
 uv sync --all-extras
-cp .env.example .env   # set GOTIT_API_KEY / LLM_API_KEY
+cp .env.example .env
+# set GOTIT_API_KEY, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
 
-# 3. Infra
-docker compose up -d postgres redis
+docker compose up -d postgres redis   # or use SQLite in .env
 
-# 4. API
 uv run gotit-api
 # → http://127.0.0.1:8787/health
 
-# 5. Web UI
 cd web && npm install && npm run dev
 # → http://127.0.0.1:5173
 
-# 6. Quality gate
 ./scripts/gate.sh
 ```
 
@@ -109,66 +109,62 @@ cd web && npm install && npm run dev
 }
 ```
 
-See `skills/gotit/SKILL.md` for agent guidance.
+See `skills/gotit/SKILL.md`. WeChat channel: `docs/openclaw-wechat.md`.
+Morning/evening digests (OpenClaw cron + RSS): `docs/openclaw-digest.md`,
+`skills/digest/`.
 
-## How a Round Works
+## How it feels day-to-day
 
-1. **Ingest** — paste notes, a doc chunk, or a study outline  
-2. **Check** — Examiner picks a mode and runs one or more checks  
-3. **Gate** — pass → mark mastered (for now); fail → Coach on the gap only  
-4. **Recheck** — Examiner runs again; still fail → stay in the missed-item queue  
-5. **Regress** — later, pull missed items and prove it again  
+1. **Talk** — open a thread, @ a companion, optionally load a skill  
+2. **Ingest** — add notes; extract claims into today's plan  
+3. **Verify** — from chat, start 考我 / 回讲 / 深挖  
+4. **Gate** — Critic rechecks; code decides pass / almost / owe-next  
+5. **Remember** — outcomes land on a trajectory so the next session is sharper  
 
 ## Roadmap
 
-Built in the open. Honest status.
-
 | Feature | Status |
 |---------|--------|
-| Repo scaffolding (uv / API / MCP / web / harness stubs) | Done |
-| OpenSpec + VISION + ADRs | Done |
-| Librarian / Examiner / Coach loop | In Progress |
-| Multiple check modes | Planned |
-| Mastery gate + missed-item queue | Planned |
-| MCP streamable-http + OpenClaw skill polish | Planned |
-| Web UI (paste → check → results) | In Progress |
-| Mini harness (snapshot + holdout) | Planned |
-| "Summary only" vs "check first" A/B | Planned |
+| Companion chat + identities + memory | Done |
+| A2A handoff + ball custody | Done |
+| Chat-first nav (workflows embedded) | Done |
+| Verify loop + deterministic gate + Critic | Done |
+| Notes / claims / plan / resume drill | Done |
+| REST ↔ MCP parity + harness gate | Done |
+| OpenClaw WeChat digests (RSS + evening `gotit_today`) | Done |
+| OpenClaw→gotit shell writeback + obs (profile/graph v0) | Done |
+| Real agent tool-calling against MCP ops | Next |
+| Per-agent multi-model binding | Next |
+| Persist workflow turns into thread history | Next |
 
 ## Philosophy
-
-### Collect vs Check
-
-- **Collect** = more notes, more context, more "I'll review later."  
-- **Check** = a claim under test, a mode, a pass/fail, a retry path.
-
-gotit-ai biases hard toward **check**. Storage is support infrastructure, not the hero feature.
-
-### Three Principles
 
 | # | Principle | Meaning |
 |---|-----------|---------|
 | P1 | Verified = got it | Confidence is not evidence |
-| P2 | Fail is useful | A miss should become a small lesson + a recheck, not shame |
-| P3 | Form follows the claim | Probe, drill, apply, or teach-back — pick what tests the idea |
+| P2 | Fail is useful | A miss → lesson + recheck on a trajectory |
+| P3 | Form follows the claim | Probe, drill, apply, teach-back |
+| P4 | Context on a budget | Inject the claim under test, not the whole notebook |
+| P5 | Harness-backed evolution | Prompt/skill changes need evidence |
+| P6 | Stable personality + rubric | Persona drift ≠ judgement drift |
+| P7 | Gate is code | Never let an LLM be the mastery judge |
 
 ## Learn More
 
 - **[README.zh-CN.md](README.zh-CN.md)** — Chinese  
-- **[AGENTS.md](AGENTS.md)** — agent / contributor operating guide  
+- **[docs/SYSTEM.md](docs/SYSTEM.md)** — concise architecture snapshot (agents: start here)  
+- **[AGENTS.md](AGENTS.md)** — contributor / agent operating guide  
 - **[docs/VISION.md](docs/VISION.md)** · **[docs/adr/](docs/adr/)**  
 
 ## Contributing
 
-PRs welcome once the core loop is runnable.
-
-- Keep the product about **verification**, not another note dump  
-- Prefer small, reviewable changes; English Conventional Commits  
-- Use OpenSpec for non-trivial changes; add harness evidence when behavior shifts  
+- Keep the product about **companion + verification**, not another note dump  
+- Small reviewable PRs; English Conventional Commits  
+- Non-trivial work → OpenSpec; sync `docs/SYSTEM.md` (+ README if user-facing) before commit/PR  
 
 ## License
 
-[MIT](LICENSE) — Use it, modify it, ship it. Keep the copyright notice.
+[MIT](LICENSE)
 
 ---
 

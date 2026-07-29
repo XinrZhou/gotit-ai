@@ -1,4 +1,4 @@
-"""P4: skills on-demand loading."""
+"""P4: skills on-demand loading + catalog."""
 
 from __future__ import annotations
 
@@ -24,13 +24,11 @@ def test_skills_list_and_load() -> None:
 async def test_chat_accepts_skills(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     await client.post("/v1/identities/seed", headers=auth_headers)
 
-    # list skills via REST
     r = await client.get("/v1/skills", headers=auth_headers)
     assert r.status_code == 200
-    assert "debug" in r.json()
+    names = {s["name"] for s in r.json()}
+    assert "debug" in names
 
-    # create a thread and post a message requesting a skill (stub path: no LLM,
-    # but the route must accept the `skills` field without erroring)
     r = await client.post(
         "/v1/threads",
         headers=auth_headers,

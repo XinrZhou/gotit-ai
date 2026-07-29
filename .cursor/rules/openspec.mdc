@@ -1,5 +1,5 @@
 ---
-description: OpenSpec lifecycle — sync before commit/PR, not every agent stop
+description: OpenSpec lifecycle — prefer merge, sync before commit/PR
 alwaysApply: true
 ---
 
@@ -7,10 +7,32 @@ alwaysApply: true
 
 Non-trivial changes must use `openspec/changes/<name>/` (proposal, design, tasks).
 
-- Sync or archive OpenSpec when the change is ready to keep — typically **before commit or PR**
+## Before creating a new change
+
+**Always scan active `openspec/changes/*/` first** (skip `archive/`). Prefer
+**merge into an existing change** over a new folder when ANY of these hold:
+
+| Signal | Prefer merge into |
+|--------|-------------------|
+| Same subdomain / vertical (resume, chat shell, OpenClaw, notes, …) | That change |
+| Follow-up / “later change” called out by an open proposal | The parent change |
+| Same user-facing surface (ChatPage shell, Settings, Library drawer, …) | The surface change |
+| Tiny additive API that only exists to finish an open scope | The open scope |
+
+Only create a **new** folder when the work has a distinct why, different Out
+boundary, or would make the parent tasks.md hard to scan (>~1 screen of
+unrelated sections). If merging: fold proposal/design/tasks into the target;
+delete the old folder; fix doc cross-links (`SYSTEM`, README, digests).
+
+## Lifecycle
+
+- Sync or archive when the change is ready to keep — typically **before commit or PR**
+- Also keep `docs/SYSTEM.md` current (and README if user-facing) — see `docs-sync`
 - Do not burn a turn syncing half-baked work after every agent stop
 - Skip only for trivial typos/comments/tiny docs
 
-A `beforeShellExecution` hook may **ask** on `git commit` / `gh pr create` if code changed without OpenSpec updates. Sync artifacts, then retry.
+A `beforeShellExecution` hook may **ask** on `git commit` / `gh pr create` if
+code changed without OpenSpec / SYSTEM (or user-facing code without README).
+Sync, then retry.
 
-See `openspec/config.yaml` and `AGENTS.md`.
+See `openspec/config.yaml`, `docs/SYSTEM.md`, and `AGENTS.md`.

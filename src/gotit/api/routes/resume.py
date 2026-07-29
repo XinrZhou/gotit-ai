@@ -15,14 +15,18 @@ from gotit.api.deps import get_model
 from gotit.api.routes._common import (
     ALLOWED_RESUME_TYPES,
     MAX_RESUME_BYTES,
-    _active_prompt,
     _resume_ext,
     _user_id,
 )
 from gotit.api.settings import Settings, get_settings
 from gotit.core.models import ResumeDocument, ResumeRecord
 from gotit.core.resume.extract import ResumeExtractError, extract_text
-from gotit.core.resume.parse import build_resume_parser, run_resume_parser, stub_parse
+from gotit.core.resume.parse import (
+    build_resume_parser,
+    load_resume_system_prompt,
+    run_resume_parser,
+    stub_parse,
+)
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 
@@ -84,7 +88,7 @@ async def upload_resume(
             "document": out.document.model_dump(mode="json"),
         }
 
-    system_prompt = await _active_prompt(settings, "compass")
+    system_prompt = load_resume_system_prompt()
     agent = build_resume_parser(get_model(), system_prompt=system_prompt)
     out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
     return {

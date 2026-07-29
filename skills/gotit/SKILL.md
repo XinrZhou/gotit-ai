@@ -28,8 +28,9 @@ When the user wants to **check understanding** (not just summarize):
    - `gotit_list_prompts` / `gotit_register_prompts` — prompt version observation
    - `gotit_upload_resume` — upload a resume file (local path), extract + parse to a
      `ResumeDocument{basics, projects[]}`; returns `{upload_id, document}`
-   - `gotit_apply_resume` — apply an (edited) parsed resume: **clear-rebuilds** the project
-     library + one resume-note per project (default no ingest); user hand-written notes/claims
+   - `gotit_apply_resume` — apply an (edited) parsed resume: **clear-rebuilds** the
+     project library from resume projects (no quiz notes; Sage consumes the resume
+     document during 深挖); user hand-written notes/claims
      are preserved (project_id detached)
    - `gotit_get_resume` — current global resume record (or null)
    - `gotit_list_drill_materials` / `gotit_upsert_drill_material` / `gotit_delete_drill_material`
@@ -62,3 +63,24 @@ When the user wants to **check understanding** (not just summarize):
 ```
 
 For remote HTTP MCP (when streamable-http is enabled on the API), use `url` + `transport: "streamable-http"` and `Authorization: Bearer <GOTIT_API_KEY>`.
+
+## WeChat channel (P0)
+
+Channels live on **OpenClaw**, not inside gotit. For WeChat (Tencent
+`@tencent-weixin/openclaw-weixin`) + this MCP server:
+
+1. Follow **[docs/openclaw-wechat.md](../../docs/openclaw-wechat.md)** (Node 22+,
+   plugin install, QR login, MCP path).
+2. Acceptance: WeChat DM can drive `gotit_health` and `gotit_today`.
+3. Do **not** add Feishu/WeChat adapters under `src/gotit/`.
+
+## Digests (P1)
+
+Morning/evening RSS + evening `gotit_today` excerpts are the **`digest`**
+OpenClaw skill (`skills/digest/`), not this gotit skill. See
+**[docs/openclaw-digest.md](../../docs/openclaw-digest.md)**.
+
+Shell writeback / obs (bridge):
+
+- `gotit_record_shell_event` / `gotit_record_interest`
+- `gotit_list_shell_activity` / `gotit_obs_profile` / `gotit_obs_graph`

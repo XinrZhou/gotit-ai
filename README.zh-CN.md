@@ -19,56 +19,61 @@
 
 多数学习工具帮你**收集**——笔记、高亮、收藏的对话。很少帮你**验证**。
 
-读完一章、一篇文章、一次 Agent Runtime 深挖，感觉很熟，收藏了。两天后被追问一句，答案塌成「我好像见过……」
+读完一章感觉很熟；两天后被追问，答案塌成「我好像见过……」
 
-这种落差有个名字：**假懂（false fluency）**——看起来会了，却拿不出证据。
+这种落差叫**假懂（false fluency）**——看起来会了，却拿不出证据。
 
 > 「我不需要又一个只负责存更多的第二大脑。」
-> 「我需要一支小队追问：你是真会了吗？」
+> 「我需要一群日常陪学的搭子——并追问：你是真会了吗？」
 
-**gotit-ai** 是一个多 Agent 学习检验台。贴上刚学的内容，小队用多种方式检验——追问、短练、应用题、回讲，按知识点选形式。不过 → 针对性补一小块 → 再检。只有证据过关，才算会。
-
-多数助手在总结。gotit-ai 在**压力测试你是否真的 Got it。**
+**gotit-ai** 是**日常学习搭子**：带人格的 agent 在 thread 里和你聊、跨会话记住薄弱点，到该证明的时候跑验证工作流。只有证据过关才算会——掌握门禁是**确定性代码**，不是 LLM 随口说一声。
 
 ## 它能做什么
 
 | 能力 | 含义 |
 |------|------|
-| **多 Agent 检验闭环** | Librarian 收束 → Examiner 检验 → Coach 补洞 → Examiner 再检 |
-| **多种检验形式** | 追问、短练、应用、回讲——不锁死某一种 |
-| **掌握门禁** | 主题默认「还不会」；读过 ≠ 会了 |
-| **错题 / 未掌握回归** | 失败点进重测队列，稍后回炉 |
-| **Context 预算** | 检验时注入「待检主张」，而不是整本笔记 |
-| **OpenClaw via MCP** | 频道入口在 OpenClaw；gotit 暴露检验工具 |
-| **小型评测 Harness** | case 快照 + holdout，进步可测 |
-| **轨迹与指标** | 轮次、通过与否、延迟、Token |
+| **搭子对话** | Thread、@mention、带记忆的人格回复 |
+| **A2A 接力** | Agent 可在同一轮把球转给同伴（ball custody） |
+| **工作流** | 考我 / 回讲 / 项目深挖——从聊天主面发起 |
+| **验证闭环** | 考察 → Critic 复核 → 确定性 gate → 轨迹 / 间隔复习 |
+| **笔记 → claim** | 导入资料，抽出可检验主张 + 今日计划 |
+| **简历深挖** | 项目 / 简历驱动的模拟面试（桑迪） |
+| **设置** | 技能 + MCP 连接器给搭子用（自己安装配置，无市场） |
+| **OpenClaw via MCP** | 可选分发渠道；与 REST 共用领域操作 |
+| **Harness** | Case 快照，提示词/技能改动可测 |
+
+小队（UI 名）：**章鱼哥**（考官）· **海绵宝宝**（整理）· **派大星**（回讲）· **桑迪**（深挖）· **凯伦**（复核）。
 
 ## 架构
 
 ```
-OpenClaw（频道 / 会话）
-        │  MCP + Skill
+React Web（ChatPage 主面）
+        │  REST
         ▼
 gotit-ai（Python / uv）
-  检验闭环 · FastAPI · MCP · harness
-  Postgres · Redis · React Web
+  core/     身份 · 消息 · agents · verify-loop · skills
+  db/ops/   领域操作（REST + MCP 共用）
+  api/      FastAPI + A2A orchestrator
+  mcp/      OpenClaw 工具（薄封装）
+  Postgres · Redis
 ```
 
-**设计原则：** 总结很便宜。**验证才是产品。**
+**设计原则：** 搭子拥有聊天面。**验证是脊柱**，不是无头流水线。OpenClaw 是可选渠道。
 
 ## 技术栈
 
 | 层 | 选型 |
 |----|------|
 | 运行时 | Python 3.12 · **uv** · FastAPI · MCP |
-| 数据 | Postgres 16 · Redis 7 |
+| 领域核 | `gotit.core` — 无框架依赖 |
+| 数据 | Postgres 16 · Redis 7（本地可用 SQLite） |
 | Web | React · Vite · **npm**（`web/`） |
-| 工程 | OpenSpec · ADR · AGENTS.md · `scripts/gate.sh` |
-| 集成 | OpenClaw MCP（`skills/gotit`） |
+| LLM | OpenAI 兼容接口（如智谱 `glm-4-flash`） |
+| 工程 | OpenSpec · ADR · `docs/SYSTEM.md` · `scripts/gate.sh` |
 
 ## 快速开始
 
-**环境：** Python 3.12+ · [uv](https://docs.astral.sh/uv/) · Node.js 20+ · Docker · 至少一家大模型 API Key
+**环境：** Python 3.12+ · [uv](https://docs.astral.sh/uv/) · Node.js 20+ · Docker（或 SQLite）· 大模型 API Key
 
 ```bash
 git clone https://github.com/<you>/gotit-ai.git
@@ -76,11 +81,12 @@ cd gotit-ai
 
 uv sync --all-extras
 cp .env.example .env
+# 配置 GOTIT_API_KEY、LLM_BASE_URL、LLM_API_KEY、LLM_MODEL
 
 docker compose up -d postgres redis
-uv run gotit-api          # http://127.0.0.1:8787/health
 
-cd web && npm install && npm run dev
+uv run gotit-api          # http://127.0.0.1:8787/health
+cd web && npm install && npm run dev   # :5173
 ./scripts/gate.sh
 ```
 
@@ -99,58 +105,57 @@ cd web && npm install && npm run dev
 }
 ```
 
-详见 `skills/gotit/SKILL.md`。
+详见 `skills/gotit/SKILL.md`。微信通道：`docs/openclaw-wechat.md`。
+早晚简报（OpenClaw cron + RSS）：`docs/openclaw-digest.md`、`skills/digest/`。
 
-## 一轮怎么走
+## 日常怎么用
 
-1. **导入** — 粘贴笔记、文档片段或学习大纲  
-2. **检验** — Examiner 选形式并出检  
-3. **门禁** — 过 → 暂标掌握；不过 → Coach 只补缺口  
-4. **再检** — Examiner 再跑；仍不过 → 留在未掌握队列  
-5. **回归** — 之后抽出未掌握项，再证明一次  
+1. **聊** — 开 thread，@ 搭子，可选技能  
+2. **导入** — 加笔记，抽 claim 进今日计划  
+3. **验证** — 从聊天发起考我 / 回讲 / 深挖  
+4. **门禁** — 凯伦复核；代码判定过 / 差点 / 欠下次  
+5. **记住** — 结果写入轨迹，下次更有针对性  
 
 ## 路线图
 
 | 功能 | 状态 |
 |------|------|
-| 仓库脚手架（uv / API / MCP / web / harness 桩） | 完成 |
-| OpenSpec + VISION + ADR | 完成 |
-| Librarian / Examiner / Coach 闭环 | 进行中 |
-| 多种检验形式 | 规划中 |
-| 掌握门禁 + 未掌握队列 | 规划中 |
-| MCP streamable-http + OpenClaw Skill | 规划中 |
-| Web UI | 进行中 |
-| 小 Harness（快照 + holdout） | 规划中 |
-| 「只总结」vs「先检验」对比 | 规划中 |
+| 搭子对话 + 身份 + 记忆 | 完成 |
+| A2A 接力 + ball custody | 完成 |
+| 聊天主面（工作流内嵌） | 完成 |
+| 验证闭环 + 确定性 gate + Critic | 完成 |
+| 笔记 / claim / 计划 / 简历深挖 | 完成 |
+| REST ↔ MCP + harness gate | 完成 |
+| OpenClaw 微信早晚简报（RSS + 晚报 `gotit_today`） | 完成 |
+| OpenClaw→gotit 外设写回 + 观测（画像/图谱 v0） | 完成 |
+| Agent 真调 MCP 工具 | 下一步 |
+| 按 agent 绑不同模型 | 下一步 |
+| 工作流回合写入同一 thread | 下一步 |
 
 ## 理念
-
-### 收集 vs 检验
-
-- **收集** = 更多笔记、更多上下文、更多「回头再看」。  
-- **检验** = 一条待检主张、一种形式、一次通过/失败、一条重测路径。
-
-gotit-ai 明显偏向 **检验**。
-
-### 三条原则
 
 | # | 原则 | 含义 |
 |---|------|------|
 | P1 | 验证过 = 会了 | 自信不是证据 |
-| P2 | 失败有用 | 未过应收成小课 + 再检 |
-| P3 | 形式服从知识点 | 追问、短练、应用、回讲——选能测到的 |
+| P2 | 失败有用 | 未过 → 小课 + 再检 + 轨迹 |
+| P3 | 形式服从知识点 | 追问、短练、应用、回讲 |
+| P4 | Context 预算 | 注入待检主张，不是整本笔记 |
+| P5 | Harness 驱动演进 | 提示词/技能改动要有证据 |
+| P6 | 人格与 rubric 稳定 | 人格漂移 ≠ 判断漂移 |
+| P7 | 门禁是代码 | 绝不让 LLM 当最终裁判 |
 
 ## 了解更多
 
 - **[README.md](README.md)** — English  
-- **[AGENTS.md](AGENTS.md)** — Agent / 贡献者操作说明  
+- **[docs/SYSTEM.md](docs/SYSTEM.md)** — 精简架构快照（新 Agent 先读这个）  
+- **[AGENTS.md](AGENTS.md)** — 贡献者 / Agent 操作说明  
 - **[docs/VISION.md](docs/VISION.md)** · **[docs/adr/](docs/adr/)**  
 
 ## 参与贡献
 
-- 产品焦点保持在 **验证**  
-- 改动尽量小、可审；提交信息用英文 Conventional Commits  
-- 非琐碎改动走 OpenSpec；行为变化尽量带 harness 证据  
+- 产品焦点：**搭子 + 验证**，不是又一个笔记堆  
+- 小步可审 PR；英文 Conventional Commits  
+- 非琐碎改动走 OpenSpec；提交前同步 `docs/SYSTEM.md`（对外变化再改 README）  
 
 ## License
 
