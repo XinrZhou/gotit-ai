@@ -1,7 +1,7 @@
 import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
-import { SessionStartPanel } from "../../components/SessionStartPanel";
+import { SessionStartPanel } from "./SessionStartPanel";
 import { SandyAvatar } from "../../components/Avatars";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";

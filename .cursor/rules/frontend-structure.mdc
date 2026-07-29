@@ -15,11 +15,17 @@ src/
 ├── api/         # HTTP client + endpoint modules (barrel: api/index.ts)
 │   └── client.ts
 ├── types/       # shared TS types (barrel: types/index.ts)
-├── store/       # global store: StoreProvider + useStore (store/index.tsx)
+├── store/       # global store: Provider + domain hooks (see below)
 ├── lib/         # framework-free utils (lib/format.ts)
 ├── hooks/       # custom hooks (useStore stays with its Provider in store/)
-├── components/  # one folder per component: index.tsx + index.module.scss
-├── pages/       # route-level pages (ExaminePage / TeachPage / DrillPage)
+├── components/  # shared only — used by ≥2 pages or by Shell/App
+├── pages/       # route-level pages; page-private components live here
+│   └── TeachPage/
+│       ├── index.tsx
+│       ├── index.module.scss
+│       └── SomeWidget/          # page-private: PascalCase folder
+│           ├── index.tsx
+│           └── index.module.scss
 ├── assets/      # static assets
 ├── App.tsx
 ├── main.tsx
@@ -35,25 +41,49 @@ src/
   `client.ts`) and, when endpoint helpers accrete, one file per subdomain
   (`day.ts`, `drill.ts`, `resume.ts`, …) re-exported from `api/index.ts`.
   Components call endpoints through these, not raw `fetch`.
-- `store/` owns the global context: `StoreProvider` + `useStore` +
-  `Store` type, co-located. `useStore` is **not** moved to `hooks/` because it
-  is bound to its Provider.
+- `store/` owns the global context. Keep **one** `StoreProvider` + `useStore`
+  for callers; do not split into multiple Contexts. Internals are domain hooks
+  aligned with backend subdomains:
+  ```
+  store/
+  ├── index.tsx       # StoreProvider assembles hooks → one Store value
+  ├── types.ts        # Store (+ ChatTurn, Run)
+  ├── useShell.ts     # mode / busy / flash / error / menus + bindRun
+  ├── useWorkspace.ts # day snapshot + refresh (plan/notes/projects/resume/drill lists)
+  ├── useNotes.ts
+  ├── useProject.ts
+  ├── useExamine.ts
+  ├── useTeach.ts
+  └── useDrill.ts
+  ```
+  `useStore` stays here (not in `hooks/`) because it is bound to this Provider.
 - `lib/` is framework-free pure utils (date/format/html helpers). No React
   imports here.
 - `hooks/` is for reusable React hooks shared across components. A hook
   coupled to a single Provider stays with that Provider.
-- `components/<Name>/` = `index.tsx` + `index.module.scss` (CSS Modules, no
-  global class names). Group into `components/{chat,drill,resume,common}/`
-  only when the flat list grows unwieldy.
-- `pages/` are route-level shells that compose components + `useStore`.
+- **Shared vs page-private components:**
+  - `components/<Name>/` — only if used by Shell/App or by **two or more**
+    pages. Same two-file rule: `index.tsx` + `index.module.scss` (CSS Modules,
+    no global class names).
+  - `pages/<Name>Page/<Child>/` — if a component is only used by one page,
+    put it under that page as a PascalCase subfolder with the same two files.
+    Import as `from "./Child"`. Do **not** leave page-private UI in
+    `components/`.
+  - A shared component’s private helper may live as a sibling under
+    `components/` (e.g. `YuqueNoteEditor` used only by `NoteComposeModal`).
+- `pages/<Name>Page/` is the route shell (`index.tsx` + optional
+  `index.module.scss`) plus any page-private child folders.
 - Keep subdomain naming aligned with the backend (`day`, `note`, `drill`,
   `resume`, `project`, `memory`, `prompt`) so frontend `api/<domain>.ts`
-  maps 1:1 to backend `api/routes/<domain>.py` + `db/ops/<domain>.py`.
+  maps 1:1 to backend `api/routes/<domain>.py` + `db.ops/<domain>.py`.
 
 ## When adding a feature
 
 1. Types → `types/index.ts` (or a domain file re-exported by the barrel).
 2. Endpoint helper → `api/<domain>.ts` (re-export from `api/index.ts`); fall
    back to `api<T>("/v1/...")` inline only for one-off calls.
-3. Reusable hook → `hooks/`; component → `components/<Name>/`.
-4. Page shell → `pages/<Name>Page/`.
+3. Store state/actions → matching `store/use<Domain>.ts` (wire in
+   `store/index.tsx`); shared lists that `refresh` loads go in `useWorkspace`.
+4. Reusable hook → `hooks/`.
+5. UI: shared → `components/<Name>/`; page-only → `pages/<Name>Page/<Name>/`.
+6. Page shell → `pages/<Name>Page/` (`index.tsx` + `index.module.scss`).

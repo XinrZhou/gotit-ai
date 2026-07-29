@@ -2,8 +2,11 @@
 
 ## Product
 
-gotit-ai is a **learning verification** checkbench: false fluency → examine → coach → recheck → mastery gate.
-**Verified = done.** Summarizing is not the product.
+gotit-ai is a **daily learning companion**: a small crew of personality-bearing
+agents that talk with you in threads, remember your weaknesses across sessions,
+and run a verify-loop workflow (examine → recheck → deterministic gate) when it's
+time to prove you got it. **Verified = done.** The companion owns the chat
+surface; verification is the spine, not the whole product.
 
 ## Stack
 

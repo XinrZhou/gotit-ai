@@ -1,7 +1,7 @@
 import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
-import { SpongeBobAvatar, SquidwardAvatar } from "../../components/Avatars";
+import { SquidwardAvatar } from "../../components/Avatars";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
 
@@ -56,7 +56,7 @@ export function ExaminePage() {
   return (
     <div className={styles.picker}>
       {entries.length === 0 ? (
-        <EmptyState avatar={<SpongeBobAvatar />}>
+        <EmptyState avatar={<SquidwardAvatar />}>
           <strong>我准备好了！</strong>
           <div>先把左侧笔记出成题，章鱼哥就能考你了～</div>
         </EmptyState>

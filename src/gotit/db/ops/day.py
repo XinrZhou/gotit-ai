@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,7 +41,13 @@ async def ensure_day(
         return existing
     row = LearningDayRow(id=uuid4(), user_id=user_id, day=day, timezone=timezone_name)
     session.add(row)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        # concurrent ensure_day on the same (user, day) won the race; reuse it.
+        await session.rollback()
+        loaded = (await session.execute(stmt)).scalar_one()
+        return loaded
     loaded = (await session.execute(stmt)).scalar_one()
     return loaded
 

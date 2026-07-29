@@ -1,3 +1,4 @@
+import karen from "../../assets/avatars/karen.png";
 import patrick from "../../assets/avatars/patrick.png";
 import sandy from "../../assets/avatars/sandy.png";
 import spongebob from "../../assets/avatars/spongebob.png";
@@ -32,4 +33,8 @@ export function PatrickAvatar() {
 
 export function SandyAvatar() {
   return <AvatarImg src={sandy} alt="桑迪" />;
+}
+
+export function KarenAvatar() {
+  return <AvatarImg src={karen} alt="凯伦" />;
 }

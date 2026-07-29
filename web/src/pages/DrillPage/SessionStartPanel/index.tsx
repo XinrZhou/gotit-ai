@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "../../store";
-import type { DrillRound } from "../../types";
+import { useStore } from "../../../store";
+import type { DrillRound } from "../../../types";
 import styles from "./index.module.scss";
 
 const ROUNDS: { value: DrillRound; label: string; hint: string }[] = [

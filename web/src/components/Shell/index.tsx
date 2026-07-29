@@ -4,32 +4,37 @@ import { ResumeUploadModal } from "../ResumeUploadModal";
 import { ResumeViewerModal } from "../ResumeViewerModal";
 import { DrillMaterialModal } from "../DrillMaterialModal";
 import { Sidebar } from "../Sidebar";
-import { SegmentedTabs } from "../SegmentedTabs";
 import { Toast } from "../Toast";
 import { ViewNoteModal } from "../ViewNoteModal";
 import { useStore } from "../../store";
-import { ExaminePage } from "../../pages/ExaminePage";
-import { TeachPage } from "../../pages/TeachPage";
-import { DrillPage } from "../../pages/DrillPage";
+import { ChatPage } from "../../pages/ChatPage";
 import styles from "./index.module.scss";
 
 export function Shell() {
-  const { mode, setMode, notes, error, flash } = useStore();
-
-  const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
+  const { error, flash, libraryOpen, setLibraryOpen } = useStore();
 
   return (
     <div className={styles.shell}>
-      <Sidebar />
+      <div
+        className={`${styles.library} ${libraryOpen ? styles.libraryOpen : ""}`}
+        aria-hidden={!libraryOpen}
+      >
+        <div className={styles.libraryInner}>
+          <Sidebar />
+        </div>
+      </div>
+
+      {libraryOpen ? (
+        <button
+          type="button"
+          className={styles.libraryScrim}
+          aria-label="关闭资料栏"
+          onClick={() => setLibraryOpen(false)}
+        />
+      ) : null}
 
       <main className={styles.main}>
-        <div className={styles.mainHead}>
-          <SegmentedTabs mode={mode} onChange={setMode} examineCount={examineCount} />
-        </div>
-
-        {mode === "examine" ? <ExaminePage /> : null}
-        {mode === "teach" ? <TeachPage /> : null}
-        {mode === "drill" ? <DrillPage /> : null}
+        <ChatPage />
       </main>
 
       <Toast error={error} flash={flash} />

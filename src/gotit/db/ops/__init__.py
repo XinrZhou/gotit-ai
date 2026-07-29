@@ -53,10 +53,19 @@ from gotit.db.ops.harness import (
     list_harness_case_results,
     list_harness_runs,
 )
+from gotit.db.ops.identity import (
+    get_identity,
+    list_identities,
+    seed_default_identities,
+    upsert_identity,
+)
 from gotit.db.ops.memory import (
     _memory_view,
     add_memory,
+    append_trajectory,
+    count_prior_failures,
     list_memory,
+    list_trajectory,
 )
 from gotit.db.ops.note import (
     _strip_html,
@@ -92,6 +101,16 @@ from gotit.db.ops.resume import (
     apply_resume,
     get_resume,
     upsert_resume,
+)
+from gotit.db.ops.thread import (
+    add_message,
+    clear_ball,
+    create_thread,
+    get_ball,
+    get_thread,
+    list_messages,
+    list_threads,
+    set_ball,
 )
 
 __all__ = [
@@ -166,10 +185,27 @@ __all__ = [
     # memory
     "add_memory",
     "list_memory",
+    "append_trajectory",
+    "list_trajectory",
+    "count_prior_failures",
     # harness
     "add_harness_run",
     "add_harness_case_result",
     "finalize_harness_run",
     "list_harness_runs",
     "list_harness_case_results",
+    # identity
+    "upsert_identity",
+    "get_identity",
+    "list_identities",
+    "seed_default_identities",
+    # thread / message / ball custody
+    "create_thread",
+    "list_threads",
+    "get_thread",
+    "add_message",
+    "list_messages",
+    "get_ball",
+    "set_ball",
+    "clear_ball",
 ]

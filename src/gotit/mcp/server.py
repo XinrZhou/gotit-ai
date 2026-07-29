@@ -795,6 +795,199 @@ async def _mcp_run_sage(
     )
 
 
+@mcp.tool()
+async def gotit_create_thread(title: str, kind: str = "chat") -> dict[str, object]:
+    """Create a learning conversation thread (kind: chat | verify)."""
+    await ensure_db()
+    async with session_scope() as session:
+        thread = await day_ops.create_thread(
+            session, user_id=_user_id(), title=title, kind=kind
+        )
+        return thread.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_list_threads(kind: str | None = None) -> list[dict[str, object]]:
+    """List the learner's conversation threads."""
+    await ensure_db()
+    async with session_scope() as session:
+        threads = await day_ops.list_threads(session, user_id=_user_id(), kind=kind)
+        return [t.model_dump(mode="json") for t in threads]
+
+
+@mcp.tool()
+async def gotit_list_messages(thread_id: str) -> list[dict[str, object]]:
+    """Replay a thread's message history."""
+    await ensure_db()
+    async with session_scope() as session:
+        msgs = await day_ops.list_messages(session, thread_id=UUID(thread_id))
+        return [m.model_dump(mode="json") for m in msgs]
+
+
+@mcp.tool()
+async def gotit_post_message(
+    thread_id: str,
+    text: str,
+    mentions: list[str] | None = None,
+    skills: list[str] | None = None,
+    handoff_to: str | None = None,
+) -> dict[str, object]:
+    """Post a learner message to a thread and get the agent reply chain.
+
+    Routes by @mention (first mention wins), else current ball holder, else
+    default agent. Agents may hand off to each other (A2A 接力); every reply in
+    the chain is returned. Returns {user_message, agent_messages}.
+    """
+    await ensure_db()
+    settings = get_settings()
+    user_id = _user_id()
+    async with session_scope() as session:
+        tid = UUID(thread_id)
+        thread = await day_ops.get_thread(session, tid)
+        if thread is None or thread.user_id != user_id:
+            return {"error": "thread not found"}
+        from gotit.api.chat_orchestrator import post_message_chain
+
+        reply = await post_message_chain(
+            session,
+            settings=settings,
+            user_id=user_id,
+            thread=thread,
+            text=text,
+            mentions=list(mentions or []),
+            skills=list(skills or []),
+            handoff_to=handoff_to,
+        )
+        return {
+            "user_message": reply.user_message.model_dump(mode="json"),
+            "agent_messages": [m.model_dump(mode="json") for m in reply.agent_messages],
+        }
+
+
+@mcp.tool()
+async def gotit_seed_identities() -> list[dict[str, object]]:
+    """Seed the 5 default agent identities (axiom/compass/echo/sage/critic)."""
+    await ensure_db()
+    async with session_scope() as session:
+        seeded = await day_ops.seed_default_identities(session)
+        return [i.model_dump(mode="json") for i in seeded]
+
+
+@mcp.tool()
+async def gotit_list_skills() -> list[str]:
+    """List available on-demand skill names (debug / review / …)."""
+    from gotit.core.skills import list_skills
+
+    return list_skills()
+
+
+@mcp.tool()
+async def gotit_start_verify(
+    thread_id: str, claim_id: str, answer: str | None = None, examine_verdict: str | None = None
+) -> dict[str, object]:
+    """Run the verify-loop (examine → recheck → gate) for one claim in a thread.
+
+    The gate is deterministic code (no LLM): stricter of examiner's and critic's
+    verdicts. Recheck is done by Critic, a different agent from Axiom.
+    """
+    await ensure_db()
+    settings = get_settings()
+    user_id = _user_id()
+    from gotit.core.agents.axiom import build_axiom_agent, run_axiom
+    from gotit.core.agents.critic import build_critic_agent, run_critic, stub_critic
+    from gotit.core.loop import VerifyWorkflow
+
+    async with session_scope() as session:
+        tid = UUID(thread_id)
+        cid = UUID(claim_id)
+        claim = await session.get(ClaimRow, cid)
+        if claim is None or claim.user_id != user_id:
+            return {"error": "claim not found"}
+
+        from gotit.db.ops.memory import (
+            append_trajectory,
+            count_prior_failures,
+            list_trajectory,
+        )
+
+        trajectory = await list_trajectory(
+            session, user_id=user_id, topic=claim.topic, claim_id=cid
+        )
+        prior_failures = count_prior_failures(trajectory, claim_id=cid)
+
+        if examine_verdict is not None:
+            ex_verdict = examine_verdict
+            ex_score: float | None = None
+            ex_evidence: str | None = None
+        elif not settings.llm_api_key:
+            ex_verdict = "passed"
+            ex_score = None
+            ex_evidence = None
+        else:
+            prompt = await SessionPromptReader(session).get_active_prompt("axiom")
+            system_prompt = prompt.system_prompt if prompt else ""
+            reader = SessionMemoryReader(session, user_id=user_id)
+            agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
+            ev = await run_axiom(
+                agent, reader, claim_text=claim.text,
+                answer=answer, trajectory=trajectory,
+            )
+            ex_verdict = ev.verdict or "almost"
+            ex_score = ev.score
+            ex_evidence = ev.evidence
+
+        ball = VerifyWorkflow.start(tid, cid)
+        ball = VerifyWorkflow.on_examine(
+            ball, verdict=ex_verdict, score=ex_score, evidence=ex_evidence
+        )
+        await day_ops.set_ball(
+            session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
+        )
+
+        if not settings.llm_api_key:
+            recheck = stub_critic(examine_verdict=ex_verdict)
+        else:
+            cprompt = await SessionPromptReader(session).get_active_prompt("critic")
+            csystem = cprompt.system_prompt if cprompt else ""
+            creader = SessionMemoryReader(session, user_id=user_id)
+            cagent = build_critic_agent(get_model(), system_prompt=csystem)
+            recheck = await run_critic(
+                cagent, creader,
+                claim_text=claim.text,
+                examine_verdict=ex_verdict,
+                examine_score=ex_score,
+                examine_evidence=ex_evidence,
+                learner_answer=answer,
+            )
+
+        ball = VerifyWorkflow.on_recheck(ball, verdict=recheck.verdict)
+        await day_ops.set_ball(
+            session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
+        )
+        gate = VerifyWorkflow.gate(ball)
+        writeback = await day_ops.apply_examine_verdict(
+            session, cid, verdict=gate.verdict, user_id=user_id,
+            prior_failures=prior_failures,
+        )
+        await day_ops.clear_ball(session, tid)
+        await append_trajectory(
+            session, user_id=user_id, claim_id=cid, topic=claim.topic,
+            verdict=ex_verdict, gate_verdict=gate.verdict,
+            score=ex_score, reason=gate.reason,
+        )
+        await day_ops.add_message(
+            session, thread_id=tid, role="agent", agent_name="gate",
+            text=f"验证完成：{gate.reason}",
+            metadata={"claim_id": str(cid), "gate_verdict": gate.verdict},
+        )
+        return {
+            "examine_verdict": ex_verdict,
+            "recheck_verdict": recheck.verdict,
+            "gate": gate.model_dump(mode="json"),
+            "writeback": writeback,
+        }
+
+
 def main() -> None:
     # stdio transport for local OpenClaw / MCP hosts
     anyio.run(mcp.run_stdio_async)

@@ -135,10 +135,56 @@ def _case_system_two_tables(session: AsyncSession) -> Case:
     )
 
 
+def _case_gate_no_llm() -> Case:
+    """The mastery gate must be deterministic code, never an LLM call."""
+
+    async def runner() -> CaseResult:
+        from gotit.core.loop import deterministic_gate
+
+        # stricter-of-two: passed + owe_next -> owe_next
+        g1 = deterministic_gate("passed", "owe_next")
+        # agreement: almost + almost -> almost (no next_review_at)
+        g2 = deterministic_gate("almost", "almost")
+        # both pass -> passed, next_review_at cleared
+        g3 = deterministic_gate("passed", "passed")
+        ok = (
+            g1.verdict == "owe_next"
+            and g1.next_review_at is not None
+            and g2.verdict == "almost"
+            and g2.next_review_at is None
+            and g3.verdict == "passed"
+            and g3.next_review_at is None
+            and not g1.passed
+            and not g2.passed
+            and g3.passed
+        )
+        return CaseResult(
+            passed=ok,
+            metrics={
+                "g1": g1.verdict,
+                "g2": g2.verdict,
+                "g3": g3.verdict,
+            },
+            trace=[
+                {"g1": g1.model_dump(mode="json")},
+                {"g2": g2.model_dump(mode="json")},
+                {"g3": g3.model_dump(mode="json")},
+            ],
+        )
+
+    return Case(
+        case_id="gate-no-llm",
+        case_type="deterministic_gate",
+        layer="loop",
+        runner=runner,
+    )
+
+
 def build_dev_cases(session: AsyncSession) -> list[Case]:
     return [
         _case_prompt_load(),
         _case_agent_build(),
         _case_loop_verdict(session),
+        _case_gate_no_llm(),
         _case_system_two_tables(session),
     ]

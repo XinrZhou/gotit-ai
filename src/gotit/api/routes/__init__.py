@@ -9,10 +9,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from gotit.api.routes import (
+    chat,
     day,
     drill,
     examine,
     health,
+    identities,
     ingest,
     memory,
     notes,
@@ -24,6 +26,8 @@ from gotit.api.routes import (
 
 router = APIRouter()
 router.include_router(health.router)
+router.include_router(chat.router)
+router.include_router(identities.router)
 router.include_router(ingest.router)
 router.include_router(examine.router)
 router.include_router(day.router)

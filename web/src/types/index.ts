@@ -158,6 +158,47 @@ export type DrillSessionContinueResponse = {
   verdict: SageVerdict;
 };
 
-export type Mode = "examine" | "teach" | "drill";
+export type Mode = "chat" | "examine" | "teach" | "drill";
 
 export type ImportTab = "write" | "link" | "zip";
+
+// --- companion-arch: chat surface ---
+
+export type Thread = {
+  id: string;
+  user_id: string;
+  title: string;
+  kind: "chat" | "verify";
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  thread_id: string;
+  agent_name: string | null;
+  role: "user" | "agent" | "system";
+  text: string;
+  mentions: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AgentReply = {
+  user_message: ChatMessage;
+  agent_messages: ChatMessage[];
+};
+
+export type AgentIdentity = {
+  id: string;
+  agent_name: string;
+  display_name: string;
+  personality: string;
+  role: string;
+  llm_config: Record<string, unknown>;
+  memory_scope: Record<string, unknown>;
+  prompt_version_id: string | null;
+  created_at: string;
+  updated_at: string;
+};

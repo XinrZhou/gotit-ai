@@ -4,6 +4,29 @@
   width: 100%;
   background: var(--bg);
   overflow: hidden;
+  position: relative;
+}
+
+.library {
+  flex-shrink: 0;
+  width: 0;
+  overflow: hidden;
+  transition: width 0.22s ease;
+  z-index: 4;
+}
+
+.libraryOpen {
+  width: min(280px, 82vw);
+  border-right: 1px solid var(--line);
+}
+
+.libraryInner {
+  width: min(280px, 82vw);
+  height: 100%;
+}
+
+.libraryScrim {
+  display: none;
 }
 
 .main {
@@ -14,39 +37,32 @@
   background: var(--bg);
 }
 
-.mainHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 22px 36px 18px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
-}
-
-.headActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.headActions .btn-ghost {
-  padding: 6px 12px;
-  font-size: 12.5px;
-}
-
-@media (max-width: 860px) {
-  .shell {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
+@media (max-width: 960px) {
+  .library {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(280px, 82vw);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    border-right: 1px solid var(--line);
+    background: var(--soft);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06);
   }
 
-  .main {
-    min-height: 60vh;
+  .libraryOpen {
+    width: min(280px, 82vw);
+    transform: translateX(0);
   }
 
-  .mainHead {
-    padding: 18px 22px;
+  .libraryScrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: none;
+    background: rgba(0, 0, 0, 0.18);
+    cursor: pointer;
   }
 }

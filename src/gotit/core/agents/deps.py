@@ -8,7 +8,8 @@ DB session coupling.
 
 from __future__ import annotations
 
-from typing import Protocol
+from datetime import datetime
+from typing import Any, Protocol
 
 from gotit.core.models import MemoryEntry, PromptVersion
 
@@ -24,6 +25,27 @@ class MemoryReader(Protocol):
         topic: str | None = None,
         limit: int = 50,
     ) -> list[MemoryEntry]: ...
+
+
+class MemoryWriter(Protocol):
+    """Write access for agents — orchestration layer flushes, agents stay pure."""
+
+    async def write_memory(
+        self,
+        *,
+        layer: str,
+        kind: str,
+        content: dict[str, Any],
+        topic: str | None = None,
+        source: dict[str, Any] | None = None,
+        expires_at: datetime | None = None,
+    ) -> MemoryEntry: ...
+
+
+class MessageReader(Protocol):
+    """Read a thread's message history for agent context (bound to one thread)."""
+
+    async def list_messages(self, *, limit: int = 50) -> list[Any]: ...
 
 
 class PromptReader(Protocol):

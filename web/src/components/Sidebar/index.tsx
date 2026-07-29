@@ -1,12 +1,9 @@
 import { useEffect, useRef } from "react";
-import { fmtDate } from "../../lib/format";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
 
 export function Sidebar() {
   const {
-    day,
-    setDay,
     busy,
     notes,
     noteScope,
@@ -27,6 +24,7 @@ export function Sidebar() {
     onIngestAll,
     onDeleteNote,
     setShowCompose,
+    setLibraryOpen,
   } = useStore();
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -46,28 +44,15 @@ export function Sidebar() {
     <aside className={styles.sidebar}>
       <div className={styles.sidebarHead}>
         <div className={styles.headRow}>
-          <div className={styles.brand}>
-            <svg className={styles.brandIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.5" />
-              <path
-                d="M7.5 12.3l3 3 6-6.6"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>gotit</span>
-          </div>
-          <label className={styles.dayPicker}>
-            <input
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              disabled={busy}
-            />
-            <span className={styles.dayLabel}>{fmtDate(day)}</span>
-          </label>
+          <span className={styles.libraryTitle}>资料库</span>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={() => setLibraryOpen(false)}
+            aria-label="关闭资料栏"
+          >
+            收起
+          </button>
         </div>
       </div>
 

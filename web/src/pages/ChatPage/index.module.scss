@@ -1,0 +1,625 @@
+.chatPage {
+  height: 100%;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+}
+
+.navRail {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  background: var(--soft);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.navBrand {
+  padding: 18px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.brandIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: block;
+  color: var(--ink);
+}
+
+.dayPicker {
+  position: relative;
+  cursor: pointer;
+}
+
+.dayPicker input {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  padding: 0;
+  border: 0;
+  position: absolute;
+}
+
+.dayLabel {
+  font-size: 12px;
+  color: var(--faint);
+  transition: color 0.15s ease;
+}
+
+.dayPicker:hover .dayLabel {
+  color: var(--ink);
+}
+
+.libraryBtn {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.libraryBtn:hover {
+  border-color: var(--ink);
+}
+
+.libraryBtnActive {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.libraryBtnLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryBtnHint {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.libraryBtnActive .libraryBtnHint {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.libraryBtnChevron {
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.workflowRow {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.workflowTab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.workflowTab:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.workflowTabActive {
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.workflowTabCount {
+  font-size: 10.5px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.threadHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 6px;
+  flex-shrink: 0;
+}
+
+.threadHeadTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.newThreadBtn {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.newThreadBtn:hover {
+  background: var(--fill);
+}
+
+.workflowPane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workflowPaneHead {
+  flex-shrink: 0;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workflowPaneBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.threadItems {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.threadItem {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.threadItem:hover {
+  background: var(--fill);
+}
+
+.threadItemActive {
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.threadItemTitle {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.threadItemSub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.conversation {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 32px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 42%, rgba(255, 214, 102, 0.14), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 72% 58%, rgba(120, 180, 220, 0.1), transparent 65%),
+    var(--bg);
+  animation: emptyIn 0.45s ease both;
+}
+
+@keyframes emptyIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.emptyCrew {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.emptyCrewAvatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--bg);
+  background: var(--soft);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-left: -12px;
+  transition: transform 0.2s ease;
+}
+
+.emptyCrewAvatar:first-child {
+  margin-left: 0;
+}
+
+.emptyCrew:hover .emptyCrewAvatar {
+  transform: translateY(-2px);
+}
+
+.emptyCrewAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.emptyLead {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.emptyHint {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.emptyPrimary {
+  margin-top: 8px;
+  border: none;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.emptyPrimary:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.emptyWorkflows {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 2px;
+  margin-top: 4px;
+}
+
+.emptyWorkflowsLabel {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.emptyWorkflowLink {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line);
+  transition: text-decoration-color 0.15s ease, background 0.15s ease;
+}
+
+.emptyWorkflowLink:hover {
+  background: var(--soft);
+  text-decoration-color: var(--ink);
+}
+
+.stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bubbleRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bubbleRowUser {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--soft);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarUser {
+  background: var(--muted);
+}
+
+.bubbleCol {
+  max-width: min(560px, 78%);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bubble {
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft, rgba(0, 0, 0, 0.04));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubbleUser {
+  background: var(--ink);
+  color: #fff;
+  margin-left: auto;
+}
+
+.bubbleName {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.handoffBadge {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent, #2b6cb0);
+  opacity: 0.85;
+}
+
+.composer {
+  border-top: 1px solid var(--line);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.composerRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 13px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  min-height: 44px;
+  max-height: 140px;
+  outline: none;
+}
+
+.textarea:focus {
+  border-color: var(--ink);
+}
+
+.sendBtn {
+  border: none;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  padding: 11px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mentionRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mentionLabel {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.mentionChip {
+  position: relative;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12.5px;
+  padding: 4px 12px 4px 5px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mentionChipAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+
+.mentionChipAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mentionChipActive {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.mentionChipActive .mentionChipAvatar {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.mentionChip[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 5;
+}
+
+.mentionChip[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

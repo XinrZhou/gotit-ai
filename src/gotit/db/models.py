@@ -278,3 +278,84 @@ class DrillSessionRow(Base):
         DateTime(timezone=True), nullable=True
     )
     messages: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+
+
+# --- Companion-arch: identity / messaging ---
+
+
+class AgentIdentityRow(Base):
+    __tablename__ = "agent_identities"
+    __table_args__ = (
+        UniqueConstraint("agent_name", name="uq_agent_identities_name"),
+    )
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    agent_name: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(64))
+    personality: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(32))
+    model_config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    memory_scope: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    prompt_version_id: Mapped[Any | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("prompt_versions.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThreadRow(Base):
+    __tablename__ = "threads"
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    kind: Mapped[str] = mapped_column(String(16), default="chat", index=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MessageRow(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    thread_id: Mapped[Any] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("threads.id"), index=True
+    )
+    agent_name: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(16))  # user | agent | system
+    text: Mapped[str] = mapped_column(Text)
+    mentions: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class BallCustodyRow(Base):
+    __tablename__ = "ball_custody"
+    __table_args__ = (
+        UniqueConstraint("thread_id", name="uq_ball_custody_thread"),
+    )
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    thread_id: Mapped[Any] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("threads.id"), unique=True, index=True
+    )
+    holder: Mapped[str] = mapped_column(String(32))
+    stage: Mapped[str] = mapped_column(String(32))  # examine | recheck | gate
+    context: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

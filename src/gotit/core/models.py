@@ -348,3 +348,115 @@ class DrillSession(BaseModel):
     started_at: datetime
     ended_at: datetime | None = None
     messages: list[dict[str, Any]] = Field(default_factory=list)  # [{role, text}]
+
+
+# --- Companion-arch: identity / messaging / loop ---
+
+
+class AgentIdentity(BaseModel):
+    """持久人格 agent = personality + role + model config + memory scope + rubric pin."""
+
+    id: UUID = Field(default_factory=uuid4)
+    agent_name: str  # axiom | compass | echo | sage | critic
+    display_name: str
+    personality: str  # 人格 prompt 片段，注入 system prompt
+    role: str  # examiner | curator | teachback | reviewer | critic
+    llm_config: dict[str, Any] = Field(default_factory=dict)  # {base_url, model_name, ...}
+    memory_scope: dict[str, Any] = Field(default_factory=dict)  # {layers, topics}
+    prompt_version_id: UUID | None = None  # 绑定的 rubric 版本
+    created_at: datetime
+    updated_at: datetime
+
+
+class ThreadKind(StrEnum):
+    CHAT = "chat"
+    VERIFY = "verify"
+
+
+class Thread(BaseModel):
+    """一个学习对话 thread（隔离的上下文工作区）。"""
+
+    id: UUID = Field(default_factory=uuid4)
+    user_id: str
+    title: str
+    kind: ThreadKind = ThreadKind.CHAT
+    status: str = "active"  # active | done
+    created_at: datetime
+    updated_at: datetime
+
+
+class MessageRole(StrEnum):
+    USER = "user"
+    AGENT = "agent"
+    SYSTEM = "system"
+
+
+class Message(BaseModel):
+    """thread 内一条消息（user / agent / system）。"""
+
+    id: UUID = Field(default_factory=uuid4)
+    thread_id: UUID
+    agent_name: str | None = None  # 哪个 agent 发的；user/system 为 None
+    role: MessageRole
+    text: str
+    mentions: list[str] = Field(default_factory=list)  # @mention 路由目标
+    metadata: dict[str, Any] = Field(default_factory=dict)  # claim_id/verdict/gate_result/step
+    created_at: datetime
+
+
+class BallStage(StrEnum):
+    CHAT = "chat"  # free-chat "current companion" custody (A2A handoff)
+    EXAMINE = "examine"
+    RECHECK = "recheck"
+    GATE = "gate"
+
+
+class BallCustody(BaseModel):
+    """verify-loop 接力棒：谁持棒、在哪个阶段、交棒上下文包。"""
+
+    id: UUID = Field(default_factory=uuid4)
+    thread_id: UUID
+    holder: str  # 当前持棒 agent_name
+    stage: BallStage
+    context: dict[str, Any] = Field(default_factory=dict)  # {claim_id, verdict, evidence, ...}
+    acquired_at: datetime
+    expires_at: datetime | None = None
+
+
+class GateResult(BaseModel):
+    """确定性 mastery gate 判定结果（不调 LLM）。"""
+
+    passed: bool
+    verdict: Literal["passed", "almost", "owe_next"]
+    next_review_at: date | None = None
+    reason: str
+
+
+class RecheckVerdict(BaseModel):
+    """Critic 对 Axiom 判定的独立复核结果。"""
+
+    verdict: Literal["passed", "almost", "owe_next"]
+    reason: str
+
+
+class ChatTurn(BaseModel):
+    """A conversational agent's structured reply: text + optional A2A handoff.
+
+    `handoff_to` lets an agent cede the floor to another agent in the same turn
+    (true agent-to-agent接力). `reason` is injected into the next holder's
+    context so it knows why it was handed the ball.
+    """
+
+    text: str
+    handoff_to: str | None = None
+    reason: str | None = None
+
+
+class AgentReply(BaseModel):
+    """Result of one user message through the A2A 接力 chain."""
+
+    user_message: Message
+    agent_messages: list[Message] = Field(
+        description="Agent replies produced this turn — may be more than one when "
+        "agents hand off to each other (A2A 接力).",
+    )

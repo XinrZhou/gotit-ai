@@ -56,12 +56,15 @@ async def apply_examine_verdict(
     verdict: str,
     user_id: str = DEFAULT_USER_ID,
     as_of: date | None = None,
+    prior_failures: int = 0,
 ) -> dict[str, object]:
     """Writeback for continuous verdicts: passed | almost | owe_next.
 
     - passed     → claim MASTERED, plan items VERIFIED
     - almost     → claim IN_PROGRESS, plan items IN_PROGRESS (stays today)
-    - owe_next   → claim QUEUED, plan items FAILED, next_review_at +1d
+    - owe_next   → claim QUEUED, plan items FAILED, next_review_at grows with
+                  prior failures on this claim (forgetting-curve weighting;
+                  SM-2 remains out of scope): interval = 1 + 2*prior_failures.
     """
     today = as_of or date.today()
     claim = await session.get(ClaimRow, claim_id)
@@ -82,7 +85,8 @@ async def apply_examine_verdict(
             item.status = PlanItemStatus.IN_PROGRESS.value
     elif verdict == "owe_next":
         claim.status = MasteryStatus.QUEUED.value
-        claim.next_review_at = today + timedelta(days=1)
+        interval = 1 + 2 * max(prior_failures, 0)
+        claim.next_review_at = today + timedelta(days=interval)
         for item in items:
             item.status = PlanItemStatus.FAILED.value
     else:

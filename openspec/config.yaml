@@ -2,10 +2,14 @@ schema: spec-driven
 
 # Injected into agent context for OpenSpec workflows
 context: |
-  gotit-ai verifies learning (false fluency), not note collection.
+  gotit-ai is a daily learning companion: personality-bearing agents talk with
+  you in threads, remember across sessions, and run a verify-loop workflow
+  (false fluency → examine → recheck → deterministic gate). Verification is
+  the spine; the companion owns the chat surface.
   Stack: Python 3.12 + uv + FastAPI + MCP; React web via npm; Postgres + Redis.
-  OpenClaw integrates via MCP tools; do not add chat channels inside gotit.
-  Keep gotit.core framework-free. Verified = done. Harness evidence for prompt/skill adopts.
+  OpenClaw is an optional distribution channel (gotit exposes MCP tools).
+  Keep gotit.core framework-free. Verified = done. The mastery gate is
+  deterministic code, never an LLM. Harness evidence for prompt/skill adopts.
 
 rules:
   proposal:
