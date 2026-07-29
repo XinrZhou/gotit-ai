@@ -1,0 +1,109 @@
+#!/usr/bin/osascript -l JavaScript
+/**
+ * Delete incomplete reminders in a named list by title (casefold).
+ * Optional due:"YYYY-MM-DD" restricts to that calendar day.
+ * argv: [listName, JSON {titles:[...], due?: "YYYY-MM-DD"}]
+ */
+function run(argv) {
+  var listName = (argv && argv[0]) ? String(argv[0]) : "学习计划";
+  var raw = (argv && argv[1]) ? String(argv[1]) : "{}";
+  var spec;
+  try {
+    spec = JSON.parse(raw);
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: "spec JSON 无效: " + String(e) });
+  }
+  var titles = (spec && spec.titles) ? spec.titles : [];
+  var dueFilter = (spec && spec.due) ? String(spec.due).trim() : "";
+  if (!titles || !titles.length) {
+    return JSON.stringify({
+      ok: true,
+      deleted: 0,
+      list: listName,
+      errors: [],
+    });
+  }
+
+  var want = {};
+  for (var t = 0; t < titles.length; t++) {
+    var key = String(titles[t] || "").trim().toLowerCase();
+    if (key) want[key] = true;
+  }
+
+  function sameDay(d, ymd) {
+    if (!d || !ymd) return true;
+    try {
+      var y = d.getFullYear();
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      var mm = (m < 10 ? "0" : "") + m;
+      var dd = (day < 10 ? "0" : "") + day;
+      return y + "-" + mm + "-" + dd === ymd;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  try {
+    var app = Application("Reminders");
+    app.includeStandardAdditions = true;
+
+    var lists = app.lists.whose({ name: listName })();
+    if (!lists || lists.length === 0) {
+      return JSON.stringify({
+        ok: true,
+        deleted: 0,
+        list: listName,
+        errors: [],
+        note: "列表不存在，无需删除",
+      });
+    }
+    var list = lists[0];
+    var reminders = list.reminders();
+    var deleted = 0;
+    var errors = [];
+
+    for (var i = reminders.length - 1; i >= 0; i--) {
+      var r = reminders[i];
+      try {
+        if (r.completed()) continue;
+      } catch (e0) {}
+      var name = "";
+      try {
+        name = String(r.name() || "").trim().toLowerCase();
+      } catch (e1) {
+        continue;
+      }
+      if (!want[name]) continue;
+      if (dueFilter) {
+        var dueDate = null;
+        try {
+          dueDate = r.dueDate();
+        } catch (e2) {}
+        if (!sameDay(dueDate, dueFilter)) continue;
+      }
+      try {
+        app.delete(r);
+        deleted++;
+      } catch (err) {
+        errors.push(name + ": " + String(err));
+      }
+    }
+
+    return JSON.stringify({
+      ok: errors.length === 0,
+      deleted: deleted,
+      list: listName,
+      errors: errors,
+      error: errors.length ? errors.join("; ") : undefined,
+    });
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "无法删除提醒事项：" +
+        String(err) +
+        "。请在 系统设置 → 隐私与安全性 → 提醒事项 中允许终端/OpenClaw。",
+    });
+  }
+}

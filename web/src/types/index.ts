@@ -266,7 +266,9 @@ export type GraphNode = {
 export type GraphEdge = {
   source: string;
   target: string;
-  rel: "has_topic" | "in_project" | "interest_topic";
+  rel: "has_topic" | "in_project" | "interest_topic" | "confused_with";
+  weight?: number;
+  meta?: Record<string, unknown>;
 };
 
 export type GraphView = {

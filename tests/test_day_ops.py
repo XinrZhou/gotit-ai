@@ -43,6 +43,17 @@ async def test_manual_plan_and_notes(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_plan_item(session: AsyncSession) -> None:
+    day = date(2026, 7, 28)
+    item = await day_ops.upsert_plan_item(session, day, title="Delete me")
+    await day_ops.delete_plan_item(session, item.id)
+    plan = await day_ops.get_plan(session, day)
+    assert all(i.id != item.id for i in plan.items)
+    with pytest.raises(KeyError):
+        await day_ops.delete_plan_item(session, item.id)
+
+
+@pytest.mark.asyncio
 async def test_fill_queue_and_examine_writeback(session: AsyncSession) -> None:
     day = date(2026, 7, 27)
     claim = day_ops.stub_extract_claim("False fluency looks like knowing.")

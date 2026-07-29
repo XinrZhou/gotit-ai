@@ -87,6 +87,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setOpenMenuId: shell.setOpenMenuId,
     libraryOpen: shell.libraryOpen,
     setLibraryOpen: shell.setLibraryOpen,
+    masteryGraphOpen: shell.masteryGraphOpen,
+    setMasteryGraphOpen: shell.setMasteryGraphOpen,
     settingsOpen: shell.settingsOpen,
     setSettingsOpen: shell.setSettingsOpen,
     userProfile: shell.userProfile,

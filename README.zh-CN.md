@@ -35,10 +35,11 @@
 | **搭子对话** | Thread、@mention、带记忆的人格回复 |
 | **A2A 接力** | Agent 可在同一轮把球转给同伴（ball custody） |
 | **工作流** | 考我 / 回讲 / 项目深挖——从聊天主面发起 |
-| **验证闭环** | 考察 → Critic 复核 → 确定性 gate → 轨迹 / 间隔复习 |
+| **验证闭环** | 考察 → Critic 复核 → 确定性 gate → 轨迹 / 间隔复习 / 掌握图谱写回 |
 | **笔记 → claim** | 导入资料，抽出可检验主张 + 今日计划 |
 | **简历深挖** | 项目 / 简历驱动的模拟面试（桑迪） |
-| **设置** | 技能 + MCP 连接器给搭子用（自己安装配置，无市场） |
+| **设置** | 资料 / Skills / MCP / 计划推送 / 动态 — 技能、连接器、计划推送配置、推送观测 |
+| **资料库图谱** | 资料库「图谱」→ 全屏掌握力导向图 |
 | **OpenClaw via MCP** | 可选分发渠道；与 REST 共用领域操作 |
 | **Harness** | Case 快照，提示词/技能改动可测 |
 
@@ -106,7 +107,8 @@ cd web && npm install && npm run dev   # :5173
 ```
 
 详见 `skills/gotit/SKILL.md`。微信通道：`docs/openclaw-wechat.md`。
-早晚简报（OpenClaw cron + RSS）：`docs/openclaw-digest.md`、`skills/digest/`。
+早晚计划触达（早=当日计划 / 晚=明日询问；资讯独立可选）：`docs/openclaw-digest.md`、`skills/digest/`。
+Apple 提醒事项/备忘录 → gotit 日计划：`docs/openclaw-apple-plan.md`、`skills/apple-plan/`。
 
 ## 日常怎么用
 
@@ -126,8 +128,10 @@ cd web && npm install && npm run dev   # :5173
 | 验证闭环 + 确定性 gate + Critic | 完成 |
 | 笔记 / claim / 计划 / 简历深挖 | 完成 |
 | REST ↔ MCP + harness gate | 完成 |
-| OpenClaw 微信早晚简报（RSS + 晚报 `gotit_today`） | 完成 |
-| OpenClaw→gotit 写回 + 设置「动态」观测（画像概览） | 完成 |
+| OpenClaw 微信早晚计划触达（资讯独立可选） | 完成（P1c） |
+| OpenClaw→gotit 写回 + 设置「计划推送」「动态」 | 完成 |
+| Apple 计划桥（提醒事项/备忘录 → gotit 日计划） | 完成（P1d） |
+| 掌握图谱（失败事件、易混边、全屏「图谱」） | 完成 |
 | Agent 真调 MCP 工具 | 下一步 |
 | 按 agent 绑不同模型 | 下一步 |
 | 工作流回合写入同一 thread | 下一步 |

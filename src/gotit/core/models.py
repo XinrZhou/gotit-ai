@@ -196,6 +196,43 @@ class ShellDigestItem(BaseModel):
     label: str | None = None
 
 
+class DigestFeed(BaseModel):
+    """One configurable RSS / YouTube Atom source for digest news."""
+
+    id: str
+    label: str
+    url: str
+    enabled: bool = True
+
+
+class DigestPrefs(BaseModel):
+    """User prefs for OpenClaw plan/news digests (gotit is source of truth)."""
+
+    timezone: str = "Asia/Shanghai"
+    item_count: int = Field(default=3, ge=1, le=20)
+    morning_cron: str = "0 8 * * *"
+    evening_cron: str = "0 21 * * *"
+    news_cron: str | None = None
+    news_enabled: bool = False
+    morning_include_news: bool = False
+    evening_include_news: bool = False
+    keywords: list[str] = Field(default_factory=list)
+    feeds: list[DigestFeed] = Field(default_factory=list)
+    # Public https URL of /open/notes bridge (WeChat only auto-links https).
+    # Example: https://<tailscale-or-tunnel-host>/open/notes
+    notes_open_url: str | None = None
+
+
+class DigestCronSyncResult(BaseModel):
+    """Result of running skills/digest/install-cron.sh from gotit API."""
+
+    ok: bool
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+    detail: str | None = None
+
+
 class ProfileTopicStat(BaseModel):
     """Per-topic aggregation for obs profile v0."""
 
@@ -225,14 +262,36 @@ class GraphNode(BaseModel):
 class GraphEdge(BaseModel):
     source: str
     target: str
-    rel: Literal["has_topic", "in_project", "interest_topic"]
+    rel: Literal["has_topic", "in_project", "interest_topic", "confused_with"]
+    weight: int = 1
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphView(BaseModel):
-    """Knowledge graph v0: claim–topic–project; interest may link topic only."""
+    """Mastery / obs graph: claim–topic–project + confused_with (+ interest)."""
 
     nodes: list[GraphNode] = Field(default_factory=list)
     edges: list[GraphEdge] = Field(default_factory=list)
+
+
+class FailEventView(BaseModel):
+    id: UUID
+    claim_id: UUID
+    topic: str | None = None
+    gate_verdict: str
+    score: float | None = None
+    reason: str | None = None
+    created_at: datetime
+
+
+class BudgetSubgraphView(BaseModel):
+    """P4 budget context for one claim under examination."""
+
+    claim_id: UUID
+    confused_claim_ids: list[UUID] = Field(default_factory=list)
+    confused_labels: list[str] = Field(default_factory=list)
+    fail_reasons: list[str] = Field(default_factory=list)
+    prompt_block: str | None = None
 
 
 class PromptVersion(BaseModel):

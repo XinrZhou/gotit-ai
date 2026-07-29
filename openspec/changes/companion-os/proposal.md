@@ -15,10 +15,12 @@ gotit 已是学习验证心脏（Chat / 日计划 / examine·teach·drill），�
 | # | 能力 | 落点 |
 |---|------|------|
 | P0 | 微信频道接入 OpenClaw + 挂载现有 gotit MCP | OpenClaw |
-| P1 | 早晚简报（科技/金融等）+ 晚间挂「今日待检」 | OpenClaw cron + gotit MCP |
+| P1 | 早晚简报（初版：RSS + 晚间挂「今日待检」） | OpenClaw cron + gotit MCP |
 | P1b | **外设写回**：`shell_event` / `interest`；digest 写回；观测 / 画像 v0 / 图谱 v0 | **gotit** + digest skill |
+| P1c | **digest-v2**：早=当日计划；晚=明日计划询问；资讯独立可选；AI/YouTube 源可配；Settings「简报」 | OpenClaw + gotit prefs |
+| P1d | **Apple 计划桥**（Reminders 优先 / Notes 导入 → gotit plan）；另一 agent | OpenClaw skill → MCP |
 | P2 | 微信指挥本机 coding（改仓 / 跑测 / 回消息） | OpenClaw agent |
-| P3a | **今日只做一件事**：早推队列最高优先级 1 条 | OpenClaw + `gotit_today` |
+| P3a | **今日只做一件事**（可并入 P1c 早推优先条） | OpenClaw + `gotit_today` |
 | P3b | **失败复盘短讯**：examine 非 passed → 缺口摘要 + 预约再检 | gotit 写事件 / OpenClaw 投递 |
 | P3c | **通勤语音回讲**：微信语音 → Echo teach → 写回队列 | OpenClaw + gotit MCP |
 | P3d | **面试信息录入 + 提醒**（公司/岗位/时间/轮次/备注） | **gotit 新域** + OpenClaw cron 提醒 |
@@ -34,6 +36,6 @@ gotit 已是学习验证心脏（Chat / 日计划 / examine·teach·drill），�
 ## Verification
 
 - gotit：interview 域 + shell/obs REST/MCP 对等 + pytest；gate 相关子集绿
-- OpenClaw：微信私聊可调 `gotit_today`；cron 早晚可投递；digest tip 含 event_id
-- Web：设置「动态」能看到 OpenClaw 写回
-- 手动：录入一场面试 → D-1 / 当日提醒；今日一件事早推；挂题后收到复盘短讯
+- OpenClaw：微信私聊可调 `gotit_today`；cron 早=当日计划 / 晚=明日询问；资讯不与计划混推
+- Web：设置「动态」写回；「简报」可配源/时间/开关
+- 手动：录入一场面试 → D-1 / 当日提醒；早计划推送；挂题后收到复盘短讯；Apple 导入（P1d）

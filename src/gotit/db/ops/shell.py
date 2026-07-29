@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.models import (
+    DigestCronSyncResult,
+    DigestFeed,
+    DigestPrefs,
     GraphEdge,
     GraphNode,
     GraphView,
@@ -16,13 +20,53 @@ from gotit.core.models import (
     ProfileTopicStat,
     ProfileView,
 )
-from gotit.db.models import ClaimRow, ProjectRow
+from gotit.db.models import ClaimRow, MemoryEntryRow, ProjectRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view
 from gotit.db.ops.memory import add_memory, list_memory
 
 KIND_SHELL_EVENT = "shell_event"
 KIND_INTEREST = "interest"
 KIND_TRAJECTORY = "trajectory"
+KIND_DIGEST_PREFS = "digest_prefs"
+
+DEFAULT_DIGEST_FEEDS: list[DigestFeed] = [
+    DigestFeed(
+        id="qbitai",
+        label="量子位",
+        url="https://www.qbitai.com/category/资讯/feed",
+    ),
+    DigestFeed(
+        id="hf-blog",
+        label="Hugging Face Blog",
+        url="https://huggingface.co/blog/feed.xml",
+    ),
+    DigestFeed(
+        id="openai-news",
+        label="OpenAI News",
+        url="https://openai.com/news/rss.xml",
+    ),
+    DigestFeed(
+        id="deepmind",
+        label="Google DeepMind",
+        url="https://deepmind.google/blog/rss.xml",
+    ),
+    DigestFeed(
+        id="marktechpost",
+        label="MarkTechPost",
+        url="https://www.marktechpost.com/feed/",
+        enabled=False,
+    ),
+]
+
+
+def default_digest_prefs() -> DigestPrefs:
+    return DigestPrefs(feeds=list(DEFAULT_DIGEST_FEEDS))
+
+
+def _prefs_from_content(content: dict[str, Any]) -> DigestPrefs:
+    base = default_digest_prefs().model_dump(mode="json")
+    base.update(content or {})
+    return DigestPrefs.model_validate(base)
 
 
 async def record_shell_event(
@@ -37,8 +81,10 @@ async def record_shell_event(
     channel: str = "openclaw-weixin",
     skill: str = "digest",
     run_id: str | None = None,
+    subject: str | None = None,
+    day: str | None = None,
 ) -> MemoryEntry:
-    """Persist a digest/cron push as working-layer shell_event."""
+    """Persist a plan/news push as working-layer shell_event."""
     normalized: list[dict[str, Any]] = []
     for i, raw in enumerate(items or [], start=1):
         normalized.append(
@@ -50,10 +96,20 @@ async def record_shell_event(
                 "label": raw.get("label"),
             }
         )
+    picks = [str(x).strip() for x in (due_summary or []) if str(x).strip()]
+    sub = (subject or "").strip()
+    if not sub:
+        if picks:
+            sub = picks[0]
+        elif job == "news" and normalized and (normalized[0].get("title") or "").strip():
+            # Plan jobs must never take subject from RSS items.
+            sub = str(normalized[0]["title"]).strip()
     content: dict[str, Any] = {
         "job": job,
+        "subject": sub or None,
+        "day": (day or "").strip() or None,
         "items": normalized,
-        "due_summary": list(due_summary or []),
+        "due_summary": picks,
         "errors": list(errors or []),
         "delivery_ok": delivery_ok,
     }
@@ -127,6 +183,126 @@ async def list_shell_activity(
     return pooled[:limit]
 
 
+async def get_digest_prefs(
+    session: AsyncSession,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> DigestPrefs:
+    """Return stored digest prefs or curated AI defaults."""
+    rows = await list_memory(
+        session, user_id=user_id, kind=KIND_DIGEST_PREFS, limit=1
+    )
+    if not rows:
+        return default_digest_prefs()
+    return _prefs_from_content(dict(rows[0].content or {}))
+
+
+async def put_digest_prefs(
+    session: AsyncSession,
+    prefs: DigestPrefs,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> DigestPrefs:
+    """Upsert singleton digest_prefs (long layer)."""
+    cleaned = DigestPrefs.model_validate(prefs.model_dump(mode="json"))
+    # evening must never mix news into the plan job via prefs flag abuse in v0 —
+    # still persist the field but fetch_digest ignores it for evening body.
+    stmt = (
+        select(MemoryEntryRow)
+        .where(
+            MemoryEntryRow.user_id == user_id,
+            MemoryEntryRow.kind == KIND_DIGEST_PREFS,
+        )
+        .order_by(MemoryEntryRow.created_at.desc())
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    payload = cleaned.model_dump(mode="json")
+    if row is None:
+        entry = await add_memory(
+            session,
+            user_id=user_id,
+            layer="long",
+            kind=KIND_DIGEST_PREFS,
+            topic="digest",
+            content=payload,
+            source={"skill": "digest"},
+        )
+        return _prefs_from_content(dict(entry.content or {}))
+    row.content = payload
+    row.topic = "digest"
+    await session.flush()
+    return _prefs_from_content(dict(row.content or {}))
+
+
+def _digest_repo_root() -> Path:
+    # src/gotit/db/ops/shell.py → repo root
+    return Path(__file__).resolve().parents[4]
+
+
+def sync_digest_openclaw_cron(*, timeout_s: float = 180.0) -> DigestCronSyncResult:
+    """Run skills/digest/install-cron.sh (needs openclaw on PATH + Gateway).
+
+    Local companion OS only: API host must be the Mac that runs OpenClaw.
+    """
+    import os
+    import subprocess
+
+    root = _digest_repo_root()
+    script = root / "skills" / "digest" / "install-cron.sh"
+    if not script.is_file():
+        return DigestCronSyncResult(
+            ok=False,
+            exit_code=127,
+            detail=f"install-cron.sh not found: {script}",
+        )
+
+    try:
+        proc = subprocess.run(
+            ["bash", str(script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            env=os.environ.copy(),
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        out = exc.stdout if isinstance(exc.stdout, str) else ""
+        err = exc.stderr if isinstance(exc.stderr, str) else ""
+        return DigestCronSyncResult(
+            ok=False,
+            exit_code=124,
+            stdout=(out or "")[-4000:],
+            stderr=(err or "")[-2000:],
+            detail=f"install-cron.sh timed out after {timeout_s:.0f}s",
+        )
+    except OSError as exc:
+        return DigestCronSyncResult(
+            ok=False,
+            exit_code=127,
+            detail=f"无法启动 install-cron.sh：{exc}",
+        )
+
+    stdout = (proc.stdout or "")[-4000:]
+    stderr = (proc.stderr or "")[-2000:]
+    ok = proc.returncode == 0
+    detail = None
+    if not ok:
+        detail = (
+            (stderr.strip().splitlines() or [""])[-1]
+            or (stdout.strip().splitlines() or [""])[-1]
+            or f"exit {proc.returncode}"
+        )
+    return DigestCronSyncResult(
+        ok=ok,
+        exit_code=proc.returncode,
+        stdout=stdout,
+        stderr=stderr,
+        detail=detail,
+    )
+
+
 async def build_profile_v0(
     session: AsyncSession,
     *,
@@ -192,7 +368,10 @@ async def build_graph_v0(
     claim_limit: int = 200,
     interest_limit: int = 100,
 ) -> GraphView:
-    """claim–topic–project edges; interest may attach to topic only (no RSS nodes)."""
+    """claim–topic–project + confused_with; interest may attach to topic only."""
+    from gotit.core.mastery_graph import CONFUSED_THRESHOLD
+    from gotit.db.ops.graph import fail_counts_by_claim, list_confused_edges
+
     stmt = (
         select(ClaimRow)
         .where(ClaimRow.user_id == user_id)
@@ -212,6 +391,10 @@ async def build_graph_v0(
     interests = await list_memory(
         session, user_id=user_id, kind=KIND_INTEREST, limit=interest_limit
     )
+    fail_counts = await fail_counts_by_claim(
+        session, user_id=user_id, claim_ids=[c.id for c in claims]
+    )
+    confused = await list_confused_edges(session, user_id=user_id, min_weight=1)
 
     nodes: dict[str, GraphNode] = {}
     edges: list[GraphEdge] = []
@@ -238,7 +421,11 @@ async def build_graph_v0(
                 id=cid,
                 type="claim",
                 label=claim.text[:120],
-                meta={"status": status},
+                meta={
+                    "status": status,
+                    "fail_count": fail_counts.get(claim.id, 0),
+                    "topic": claim.topic,
+                },
             )
         )
         if claim.topic:
@@ -263,5 +450,20 @@ async def build_graph_v0(
         title = str((e.content or {}).get("title") or "interest")[:80]
         _add_node(GraphNode(id=iid, type="interest", label=title))
         edges.append(GraphEdge(source=iid, target=tid, rel="interest_topic"))
+
+    claim_ids = {c.id for c in claims}
+    for edge in confused:
+        if edge.source_claim_id not in claim_ids or edge.target_claim_id not in claim_ids:
+            continue
+        w = int(edge.weight)
+        edges.append(
+            GraphEdge(
+                source=f"claim:{edge.source_claim_id}",
+                target=f"claim:{edge.target_claim_id}",
+                rel="confused_with",
+                weight=w,
+                meta={"active": w >= CONFUSED_THRESHOLD},
+            )
+        )
 
     return GraphView(nodes=list(nodes.values()), edges=edges)

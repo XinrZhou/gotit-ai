@@ -192,12 +192,16 @@ async def start_verify(
             raise HTTPException(status_code=404, detail="claim not found")
 
         # --- examine (axiom) ---
+        from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
         from gotit.db.ops.memory import count_prior_failures, list_trajectory
 
         trajectory = await list_trajectory(
             session, user_id=user_id, topic=claim.topic, claim_id=body.claim_id
         )
         prior_failures = count_prior_failures(trajectory, claim_id=body.claim_id)
+        budget = await build_budget_subgraph(
+            session, user_id=user_id, claim_id=body.claim_id
+        )
 
         if body.examine_verdict is not None:
             examine_verdict = body.examine_verdict
@@ -218,6 +222,7 @@ async def start_verify(
                 claim_text=claim.text,
                 answer=body.answer,
                 trajectory=trajectory,
+                budget_block=budget.prompt_block,
             )
             examine_verdict = ev.verdict or "almost"
             examine_score = ev.score
@@ -290,6 +295,15 @@ async def start_verify(
             score=examine_score,
             reason=gate.reason,
         )
+        mastery = await record_verify_mastery_writeback(
+            session,
+            user_id=user_id,
+            claim_id=body.claim_id,
+            topic=claim.topic,
+            gate_verdict=gate.verdict,
+            score=examine_score,
+            reason=gate.reason,
+        )
 
         # record the verdict in the thread as an agent message
         await day_ops.add_message(
@@ -310,4 +324,5 @@ async def start_verify(
             "recheck_verdict": recheck.verdict,
             "gate": gate.model_dump(mode="json"),
             "writeback": writeback,
+            "mastery_graph": mastery,
         }

@@ -1,0 +1,105 @@
+#!/usr/bin/osascript -l JavaScript
+/**
+ * Fetch Notes matching title and/or folder. Body may be HTML.
+ * Usage:
+ *   osascript fetch_notes.jxa --title "学习计划"
+ *   osascript fetch_notes.jxa --folder "学习" --title "学习计划"
+ * Stdout JSON: {ok, notes:[{title, body, folder}]}
+ */
+function run(argv) {
+  var opts = parseArgs(argv || []);
+  try {
+    var app = Application("Notes");
+    app.includeStandardAdditions = true;
+    // Launch Notes if needed (Automation prompt).
+    try {
+      app.activate();
+    } catch (e0) {
+      /* continue */
+    }
+
+    var notes = [];
+    if (opts.folder) {
+      var folders = app.folders.whose({ name: opts.folder })();
+      if (!folders || folders.length === 0) {
+        return JSON.stringify({
+          ok: false,
+          error: "找不到备忘录文件夹「" + opts.folder + "」。",
+        });
+      }
+      collectFromFolder(folders[0], notes, opts.title);
+    } else {
+      var all = app.notes();
+      for (var i = 0; i < all.length; i++) {
+        maybePush(all[i], notes, opts.title, "");
+      }
+    }
+
+    if (notes.length === 0) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "未找到匹配的备忘录" +
+          (opts.title ? "（标题含「" + opts.title + "」）" : "") +
+          (opts.folder ? "（文件夹「" + opts.folder + "」）" : "") +
+          "。",
+      });
+    }
+    return JSON.stringify({ ok: true, notes: notes });
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "无法读取备忘录：" +
+        String(err) +
+        "。请在 系统设置 → 隐私与安全性 → 自动化 中允许终端/OpenClaw 控制「备忘录」。无需 Full Disk Access。",
+    });
+  }
+}
+
+function parseArgs(argv) {
+  var title = "";
+  var folder = "";
+  for (var i = 0; i < argv.length; i++) {
+    var a = String(argv[i]);
+    if (a === "--title" && i + 1 < argv.length) {
+      title = String(argv[++i]);
+    } else if (a === "--folder" && i + 1 < argv.length) {
+      folder = String(argv[++i]);
+    } else if (!title && a && a.indexOf("-") !== 0) {
+      title = a;
+    }
+  }
+  if (!title) title = "学习计划";
+  return { title: title, folder: folder };
+}
+
+function collectFromFolder(folder, out, titleMatch) {
+  var notes = folder.notes();
+  var fname = "";
+  try {
+    fname = String(folder.name());
+  } catch (e) {
+    fname = "";
+  }
+  for (var i = 0; i < notes.length; i++) {
+    maybePush(notes[i], out, titleMatch, fname);
+  }
+}
+
+function maybePush(note, out, titleMatch, folderName) {
+  var title = "";
+  try {
+    title = String(note.name() || "");
+  } catch (e) {
+    return;
+  }
+  if (titleMatch && title.indexOf(titleMatch) < 0) return;
+  var body = "";
+  try {
+    body = String(note.body() || "");
+  } catch (e2) {
+    body = "";
+  }
+  out.push({ title: title, body: body, folder: folderName || "" });
+}

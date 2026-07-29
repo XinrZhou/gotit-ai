@@ -81,9 +81,19 @@ from gotit.db.ops.memory import (
 from gotit.db.ops.shell import (
     build_graph_v0,
     build_profile_v0,
+    default_digest_prefs,
+    get_digest_prefs,
     list_shell_activity,
+    put_digest_prefs,
     record_interest,
     record_shell_event,
+    sync_digest_openclaw_cron,
+)
+from gotit.db.ops.graph import (
+    build_budget_subgraph,
+    fail_counts_by_claim,
+    list_confused_edges,
+    record_verify_mastery_writeback,
 )
 from gotit.db.ops.note import (
     _strip_html,
@@ -227,8 +237,17 @@ __all__ = [
     "record_shell_event",
     "record_interest",
     "list_shell_activity",
+    "get_digest_prefs",
+    "put_digest_prefs",
+    "default_digest_prefs",
+    "sync_digest_openclaw_cron",
     "build_profile_v0",
     "build_graph_v0",
+    # mastery graph
+    "record_verify_mastery_writeback",
+    "build_budget_subgraph",
+    "fail_counts_by_claim",
+    "list_confused_edges",
     # harness
     "add_harness_run",
     "add_harness_case_result",

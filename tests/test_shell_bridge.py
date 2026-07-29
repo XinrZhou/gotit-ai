@@ -15,6 +15,8 @@ async def test_shell_event_interest_activity_profile_graph(
         headers=auth_headers,
         json={
             "job": "morning",
+            "day": "2026-07-29",
+            "due_summary": ["Verify Redis TTL"],
             "items": [
                 {
                     "n": 1,
@@ -35,6 +37,8 @@ async def test_shell_event_interest_activity_profile_graph(
     assert body["layer"] == "working"
     event_id = body["id"]
     assert body["content"]["items"][0]["title"] == "Test headline"
+    assert body["content"]["subject"] == "Verify Redis TTL"
+    assert body["content"]["day"] == "2026-07-29"
 
     interest = await client.post(
         "/v1/shell/interest",
@@ -96,3 +100,61 @@ async def test_shell_event_interest_activity_profile_graph(
     assert "claim" in types
     rels = {e["rel"] for e in g["edges"]}
     assert "interest_topic" in rels
+
+
+@pytest.mark.asyncio
+async def test_digest_prefs_roundtrip(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    got = await client.get("/v1/shell/digest-prefs", headers=auth_headers)
+    assert got.status_code == 200, got.text
+    prefs = got.json()
+    assert prefs["timezone"] == "Asia/Shanghai"
+    assert isinstance(prefs["feeds"], list)
+    assert len(prefs["feeds"]) >= 1
+
+    prefs["news_enabled"] = True
+    prefs["news_cron"] = "30 12 * * *"
+    prefs["keywords"] = ["LLM", "Agent"]
+    prefs["item_count"] = 2
+    prefs["feeds"] = [
+        {
+            "id": "qbitai",
+            "label": "量子位",
+            "url": "https://www.qbitai.com/category/资讯/feed",
+            "enabled": True,
+        }
+    ]
+    put = await client.put(
+        "/v1/shell/digest-prefs", headers=auth_headers, json=prefs
+    )
+    assert put.status_code == 200, put.text
+    body = put.json()
+    assert body["news_enabled"] is True
+    assert body["news_cron"] == "30 12 * * *"
+    assert body["keywords"] == ["LLM", "Agent"]
+    assert body["feeds"][0]["id"] == "qbitai"
+
+    again = await client.get("/v1/shell/digest-prefs", headers=auth_headers)
+    assert again.json()["item_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_digest_cron_endpoint(
+    client: AsyncClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from gotit.core.models import DigestCronSyncResult
+    from gotit.db import ops as day_ops
+
+    monkeypatch.setattr(
+        day_ops,
+        "sync_digest_openclaw_cron",
+        lambda **_: DigestCronSyncResult(
+            ok=True, exit_code=0, stdout="Done.\n", stderr="", detail=None
+        ),
+    )
+    r = await client.post("/v1/shell/digest-cron/sync", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    assert body["exit_code"] == 0

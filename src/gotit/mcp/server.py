@@ -275,6 +275,53 @@ async def gotit_update_plan_item(
 
 
 @mcp.tool()
+async def gotit_delete_plan_item(
+    item_id: str | None = None,
+    day: str | None = None,
+    title: str | None = None,
+) -> dict[str, object]:
+    """Delete a plan item by id, or by day + title (casefold exact match).
+
+    After delete, also run apple-plan ``rm --title … --apply`` so Reminders
+    stay in sync (OpenClaw skill; not done inside this tool).
+    """
+    await ensure_db()
+    uid = _user_id()
+    async with session_scope() as session:
+        matched_title = (title or "").strip() or None
+        matched_day = day
+        if item_id:
+            target_id = UUID(item_id)
+        else:
+            if not day or not matched_title:
+                raise ValueError("provide item_id, or both day and title")
+            plan = await day_ops.get_plan(
+                session, date.fromisoformat(day), user_id=uid
+            )
+            needle = matched_title.casefold()
+            hits = [
+                i for i in plan.items if (i.title or "").strip().casefold() == needle
+            ]
+            if not hits:
+                raise KeyError(f"plan item not found: day={day} title={title!r}")
+            if len(hits) > 1:
+                ids = ", ".join(str(h.id) for h in hits)
+                raise ValueError(
+                    f"multiple plan items match title={title!r} on {day}; "
+                    f"pass item_id explicitly ({ids})"
+                )
+            target_id = hits[0].id
+            matched_title = hits[0].title
+        await day_ops.delete_plan_item(session, target_id, user_id=uid)
+    return {
+        "ok": True,
+        "deleted_id": str(target_id),
+        "day": matched_day,
+        "title": matched_title,
+    }
+
+
+@mcp.tool()
 async def gotit_list_notes(day: str) -> list[dict[str, object]]:
     """List notes for a day (bodies truncated to excerpts)."""
     await ensure_db()
@@ -474,8 +521,10 @@ async def gotit_record_shell_event(
     channel: str = "openclaw-weixin",
     skill: str = "digest",
     run_id: str | None = None,
+    subject: str | None = None,
+    day: str | None = None,
 ) -> dict[str, object]:
-    """Record an OpenClaw digest/cron push as kind=shell_event (obs truth)."""
+    """Record an OpenClaw plan/news push as kind=shell_event (obs truth)."""
     await ensure_db()
     async with session_scope() as session:
         entry = await day_ops.record_shell_event(
@@ -489,6 +538,8 @@ async def gotit_record_shell_event(
             channel=channel,
             skill=skill,
             run_id=run_id,
+            subject=subject,
+            day=day,
         )
     return entry.model_dump(mode="json")
 
@@ -538,6 +589,34 @@ async def gotit_list_shell_activity(
             limit=limit,
         )
     return [e.model_dump(mode="json") for e in entries]
+
+
+@mcp.tool()
+async def gotit_get_digest_prefs() -> dict[str, object]:
+    """Get OpenClaw digest prefs (plan cron + optional AI/YouTube feeds)."""
+    await ensure_db()
+    async with session_scope() as session:
+        prefs = await day_ops.get_digest_prefs(session, user_id=_user_id())
+    return prefs.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_put_digest_prefs(prefs: dict[str, object]) -> dict[str, object]:
+    """Replace digest prefs (feeds, cron strings, news switch, keywords)."""
+    from gotit.core.models import DigestPrefs
+
+    await ensure_db()
+    body = DigestPrefs.model_validate(prefs)
+    async with session_scope() as session:
+        saved = await day_ops.put_digest_prefs(session, body, user_id=_user_id())
+    return saved.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_sync_digest_cron() -> dict[str, object]:
+    """Re-register OpenClaw plan/news cron from current digest_prefs (install-cron.sh)."""
+    result = day_ops.sync_digest_openclaw_cron()
+    return result.model_dump(mode="json")
 
 
 @mcp.tool()
@@ -1169,6 +1248,7 @@ async def gotit_start_verify(
         if claim is None or claim.user_id != user_id:
             return {"error": "claim not found"}
 
+        from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
         from gotit.db.ops.memory import (
             append_trajectory,
             count_prior_failures,
@@ -1179,6 +1259,7 @@ async def gotit_start_verify(
             session, user_id=user_id, topic=claim.topic, claim_id=cid
         )
         prior_failures = count_prior_failures(trajectory, claim_id=cid)
+        budget = await build_budget_subgraph(session, user_id=user_id, claim_id=cid)
 
         if examine_verdict is not None:
             ex_verdict = examine_verdict
@@ -1196,6 +1277,7 @@ async def gotit_start_verify(
             ev = await run_axiom(
                 agent, reader, claim_text=claim.text,
                 answer=answer, trajectory=trajectory,
+                budget_block=budget.prompt_block,
             )
             ex_verdict = ev.verdict or "almost"
             ex_score = ev.score
@@ -1240,6 +1322,15 @@ async def gotit_start_verify(
             verdict=ex_verdict, gate_verdict=gate.verdict,
             score=ex_score, reason=gate.reason,
         )
+        mastery = await record_verify_mastery_writeback(
+            session,
+            user_id=user_id,
+            claim_id=cid,
+            topic=claim.topic,
+            gate_verdict=gate.verdict,
+            score=ex_score,
+            reason=gate.reason,
+        )
         await day_ops.add_message(
             session, thread_id=tid, role="agent", agent_name="gate",
             text=f"验证完成：{gate.reason}",
@@ -1250,6 +1341,7 @@ async def gotit_start_verify(
             "recheck_verdict": recheck.verdict,
             "gate": gate.model_dump(mode="json"),
             "writeback": writeback,
+            "mastery_graph": mastery,
         }
 
 

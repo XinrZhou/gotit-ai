@@ -1,0 +1,211 @@
+.fsRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.fsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  padding: 14px 16px 12px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+  padding: 0 14px 14px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fsTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.focusToggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+
+.focusBtn,
+.focusActive {
+  border: none;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.focusBtn {
+  background: transparent;
+  color: var(--muted);
+}
+
+.focusBtn:hover {
+  color: var(--ink);
+}
+
+.focusActive {
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 400;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.refresh,
+.closeFs {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.refresh:hover,
+.closeFs:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.closeFs {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: -0.01em;
+}
+
+.canvasWrap {
+  flex: 1;
+  min-height: 280px;
+  border-radius: 16px;
+  background: #f5f5f7;
+  overflow: hidden;
+  position: relative;
+  border: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.fsRoot .canvasWrap {
+  min-height: 0;
+  border-radius: 18px;
+}
+
+.empty {
+  margin: 0;
+  padding: 40px 18px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.legend {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: -0.01em;
+}
+
+.detail {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  max-width: min(42em, 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.fsRoot .footer {
+  position: relative;
+}
+
+.fsRoot .detail {
+  position: absolute;
+  left: 16px;
+  bottom: 8px;
+  right: auto;
+  z-index: 2;
+  max-width: min(420px, calc(100% - 32px));
+}
+
+.detailType {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.detailLabel {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.detailMeta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}

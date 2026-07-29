@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""OpenClaw digest helper: RSS briefs + optional gotit_today excerpt.
+"""OpenClaw digest helper: plan touchpoints + optional AI/YouTube RSS.
 
 Usage:
-  python skills/digest/fetch_digest.py morning
-  python skills/digest/fetch_digest.py evening
+  python skills/digest/fetch_digest.py morning   # today's plan
+  python skills/digest/fetch_digest.py evening   # tomorrow plan Q&A
+  python skills/digest/fetch_digest.py news      # RSS only (never mixes plan)
 
 Prefer: uv run --directory <gotit-ai> python skills/digest/fetch_digest.py evening
-so evening mode can import gotit.db when REST is unset.
 """
 
 from __future__ import annotations
@@ -19,14 +19,16 @@ import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-USER_AGENT = "GotitDigest/0.1 (+https://github.com/gotit-ai; OpenClaw skill)"
+USER_AGENT = "GotitDigest/0.2 (+https://github.com/gotit-ai; OpenClaw skill)"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")
 TIMEOUT_S = 12
+OPEN_PLAN_STATUSES = {"planned", "in_progress", "deferred"}
+DONE_PLAN_STATUSES = {"verified", "done", "passed", "cancelled", "canceled", "skipped", "failed"}
 
 
 def _load_config(path: Path) -> dict:
@@ -100,7 +102,6 @@ def _parse_feed(data: bytes, feed_id: str, label: str) -> list[dict]:
         raise ValueError(f"XML parse error: {exc}") from exc
 
     items: list[dict] = []
-    # RSS 2.0
     for item in root.iter():
         if _local_name(item.tag) != "item":
             continue
@@ -123,7 +124,6 @@ def _parse_feed(data: bytes, feed_id: str, label: str) -> list[dict]:
     if items:
         return items
 
-    # Atom
     for entry in root.iter():
         if _local_name(entry.tag) != "entry":
             continue
@@ -158,7 +158,11 @@ def _parse_feed(data: bytes, feed_id: str, label: str) -> list[dict]:
 def collect_items(cfg: dict) -> tuple[list[dict], list[str]]:
     errors: list[str] = []
     buckets: list[list[dict]] = []
+    keywords = [k.strip().casefold() for k in (cfg.get("keywords") or []) if str(k).strip()]
+
     for feed in cfg.get("feeds") or []:
+        if feed.get("enabled") is False:
+            continue
         url = feed.get("url") or ""
         fid = feed.get("id") or url
         label = feed.get("label") or fid
@@ -176,7 +180,16 @@ def collect_items(cfg: dict) -> tuple[list[dict], list[str]]:
         if not parsed:
             errors.append(f"{label}: no items")
             continue
-        # newest first within feed
+        if keywords:
+            parsed = [
+                x
+                for x in parsed
+                if any(k in (x.get("title") or "").casefold() for k in keywords)
+            ]
+            if not parsed:
+                errors.append(f"{label}: no keyword match")
+                continue
+
         def _sort_key(x: dict) -> datetime:
             pub = x["published"]
             if pub is None:
@@ -188,10 +201,9 @@ def collect_items(cfg: dict) -> tuple[list[dict], list[str]]:
         parsed.sort(key=_sort_key, reverse=True)
         buckets.append(parsed)
 
-    # Round-robin across healthy feeds for diversity
     picked: list[dict] = []
     seen_titles: set[str] = set()
-    limit = int(cfg.get("item_count") or 5)
+    limit = int(cfg.get("item_count") or 3)
     idx = 0
     while len(picked) < limit and buckets:
         progressed = False
@@ -216,7 +228,7 @@ def collect_items(cfg: dict) -> tuple[list[dict], list[str]]:
 def format_news(items: list[dict], errors: list[str], *, heading: str, now: datetime) -> str:
     lines = [heading, f"时间 {now.strftime('%Y-%m-%d %H:%M')}（Asia/Shanghai）", ""]
     if not items:
-        lines.append("资讯抓取失败，今日无摘要。")
+        lines.append("资讯抓取失败或无匹配条目。")
     else:
         for i, item in enumerate(items, 1):
             lines.append(f"{i}. 【{item['label']}】{item['title']}")
@@ -233,94 +245,213 @@ def format_news(items: list[dict], errors: list[str], *, heading: str, now: date
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _today_via_rest(api_url: str) -> dict | None:
-    base = api_url.rstrip("/")
-    # Prefer env key; never hardcode secrets in repo.
+def _plan_via_rest(api_url: str, day: date) -> dict | None:
     import os
 
+    base = api_url.rstrip("/")
     key = os.environ.get("GOTIT_API_KEY", "").strip()
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
-    req = urllib.request.Request(f"{base}/v1/today", headers=headers)
+    req = urllib.request.Request(
+        f"{base}/v1/days/{day.isoformat()}/plan", headers=headers
+    )
     with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _today_via_db() -> dict | None:
-    """Load gotit_today through domain ops (same as MCP)."""
+def _plan_via_db(day: date) -> dict | None:
     import asyncio
 
     async def _run() -> dict:
-        from gotit.db.ops import get_today
+        from gotit.db.ops import get_plan
         from gotit.db.runtime import ensure_db
         from gotit.db.session import session_scope
 
         await ensure_db()
         async with session_scope() as session:
-            view = await get_today(session)
+            view = await get_plan(session, day)
         return view.model_dump(mode="json")
 
     return asyncio.run(_run())
 
 
-def load_today(cfg: dict) -> tuple[dict | None, str | None]:
+def _prefs_via_db() -> dict | None:
+    import asyncio
+
+    async def _run() -> dict:
+        from gotit.db.ops import get_digest_prefs
+        from gotit.db.runtime import ensure_db
+        from gotit.db.session import session_scope
+
+        await ensure_db()
+        async with session_scope() as session:
+            prefs = await get_digest_prefs(session)
+        return prefs.model_dump(mode="json")
+
+    return asyncio.run(_run())
+
+
+def _prefs_via_rest(api_url: str) -> dict | None:
+    import os
+
+    base = api_url.rstrip("/")
+    key = os.environ.get("GOTIT_API_KEY", "").strip()
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(f"{base}/v1/shell/digest-prefs", headers=headers)
+    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def merge_prefs(file_cfg: dict) -> dict:
+    """Prefer gotit digest_prefs when reachable; else file config."""
+    gotit = file_cfg.get("gotit") or {}
+    api_url = (gotit.get("api_url") or "").strip()
+    remote: dict | None = None
+    try:
+        remote = _prefs_via_rest(api_url) if api_url else _prefs_via_db()
+    except Exception:  # noqa: BLE001
+        remote = None
+    if not remote:
+        return dict(file_cfg)
+    merged = dict(file_cfg)
+    for key in (
+        "timezone",
+        "item_count",
+        "morning_cron",
+        "evening_cron",
+        "news_cron",
+        "news_enabled",
+        "morning_include_news",
+        "evening_include_news",
+        "keywords",
+        "feeds",
+        "notes_open_url",
+    ):
+        if key in remote and remote[key] is not None:
+            merged[key] = remote[key]
+    return merged
+
+
+def load_plan(cfg: dict, day: date) -> tuple[dict | None, str | None]:
     gotit = cfg.get("gotit") or {}
     api_url = (gotit.get("api_url") or "").strip()
     if api_url:
         try:
-            return _today_via_rest(api_url), None
-        except Exception as exc:  # noqa: BLE001 — surface to digest text
-            return None, f"REST /v1/today 失败: {exc}"
+            return _plan_via_rest(api_url, day), None
+        except Exception as exc:  # noqa: BLE001
+            return None, f"REST plan 失败: {exc}"
     try:
-        return _today_via_db(), None
+        return _plan_via_db(day), None
     except Exception as exc:  # noqa: BLE001
-        return None, f"db gotit_today 失败: {exc}"
+        return None, f"db get_plan 失败: {exc}"
 
 
-def format_due(today: dict | None, err: str | None) -> tuple[str, list[str]]:
-    lines = ["【今日待检】"]
+def _open_titles(plan: dict | None) -> list[str]:
+    if not plan:
+        return []
     picks: list[str] = []
-    if err:
-        lines.append(f"无法读取 gotit_today：{err}")
-        lines.append("（请确认 Postgres / uv 环境；或在 config.json 设 gotit.api_url）")
-        return "\n".join(lines), picks
-
-    assert today is not None
-    day = today.get("date") or ""
-    lines[0] = f"【今日待检 · {day}】"
-
-    due = list(today.get("due_claims") or [])
-    plan_items = list((today.get("plan") or {}).get("items") or [])
-
     seen: set[str] = set()
-
-    def _add(text: str) -> bool:
-        key = text.casefold()
-        if not text or key in seen:
-            return False
+    for it in plan.get("items") or []:
+        status = (it.get("status") or "").lower()
+        if status in DONE_PLAN_STATUSES:
+            continue
+        if status in {"verified", "failed"}:
+            continue
+        title = (it.get("title") or "").strip()
+        key = title.casefold()
+        if not title or key in seen:
+            continue
         seen.add(key)
-        picks.append(text)
-        return True
+        picks.append(title)
+    return picks
 
-    for c in due:
-        _add((c.get("text") or "").strip())
-        if len(picks) >= 3:
-            break
-    if len(picks) < 3:
-        for it in plan_items:
-            status = (it.get("status") or "").lower()
-            if status in {"done", "passed", "cancelled", "canceled", "skipped"}:
-                continue
-            _add((it.get("title") or "").strip())
-            if len(picks) >= 3:
-                break
 
+# WeChat collapses pure empty lines; keep a fullwidth-space line as spacer.
+_WX_BLANK = "\u3000"
+
+
+def format_morning_plan(
+    plan: dict | None,
+    err: str | None,
+    *,
+    now: datetime,
+    notes_open_url: str | None = None,  # unused; kept for call-site compat
+) -> tuple[str, list[str]]:
+    del notes_open_url
+    day_s = now.date().isoformat()
+    lines = [
+        "🐱 Tom 早报 · 今日计划",
+        f"{day_s} · {now.strftime('%H:%M')}",
+        _WX_BLANK,
+    ]
+    if err:
+        lines.append(f"无法读取计划：{err}")
+        return "\n".join(lines), []
+
+    picks = _open_titles(plan)
     if not picks:
-        lines.append("今日无待检。")
+        lines.append("今日暂无计划。")
+        lines.append(_WX_BLANK)
+        lines.extend(_plan_cta(which="today"))
     else:
-        for i, text in enumerate(picks, 1):
-            lines.append(f"{i}. {_truncate(text, 100)}")
+        lines.append(f"⭐ 优先：{_truncate(picks[0], 80)}")
+        if len(picks) > 1:
+            lines.append(_WX_BLANK)
+            for i, text in enumerate(picks[1:6], 1):
+                lines.append(f"{i}. {_truncate(text, 80)}")
+        lines.append(_WX_BLANK)
+        lines.append("做完走 gotit examine / 回讲。")
+    return "\n".join(lines), picks
+
+
+def _plan_cta(*, which: str) -> list[str]:
+    """Empty-plan CTA — Reminders first; WeChat-friendly spacers."""
+    if which == "today":
+        invent = "新建计划：……"
+    else:
+        invent = "新建明日计划：……"
+    return [
+        "① 打开「提醒事项」写好后，回「导入计划」",
+        "（列表「学习计划」；条目需带到期日）",
+        _WX_BLANK,
+        f"② 或直接说：{invent}",
+        "（会写入 gotit，并同步到提醒事项）",
+    ]
+
+
+def format_evening_tomorrow(
+    plan: dict | None,
+    err: str | None,
+    *,
+    tomorrow: date,
+    now: datetime,
+    notes_open_url: str | None = None,  # unused; kept for call-site compat
+) -> tuple[str, list[str]]:
+    del notes_open_url
+    lines = [
+        "🐱 Tom 晚报 · 明日计划",
+        f"{tomorrow.isoformat()} · {now.strftime('%H:%M')}",
+        _WX_BLANK,
+    ]
+    if err:
+        lines.append(f"无法读取明日计划：{err}")
+        return "\n".join(lines), []
+
+    picks = _open_titles(plan)
+    if not picks:
+        lines.append("明日暂无计划。")
+        lines.append(_WX_BLANK)
+        lines.extend(_plan_cta(which="tomorrow"))
+    else:
+        lines.append("明日安排：")
+        lines.append(_WX_BLANK)
+        for i, text in enumerate(picks[:8], 1):
+            lines.append(f"{i}. {_truncate(text, 80)}")
+        lines.append(_WX_BLANK)
+        lines.append("改 →「调整…」　OK →「保持」　提醒事项 →「导入计划」")
     return "\n".join(lines), picks
 
 
@@ -380,6 +511,8 @@ def _writeback_db(payload: dict) -> tuple[str | None, str | None]:
                 channel=str(payload.get("channel") or "openclaw-weixin"),
                 skill=str(payload.get("skill") or "digest"),
                 run_id=payload.get("run_id"),
+                subject=payload.get("subject"),
+                day=payload.get("day"),
             )
         return str(entry.id)
 
@@ -387,7 +520,6 @@ def _writeback_db(payload: dict) -> tuple[str | None, str | None]:
 
 
 def writeback_shell_event(cfg: dict, payload: dict) -> tuple[str | None, str | None]:
-    """Return (event_id, error). Prefer REST when api_url set."""
     if cfg.get("_skip_writeback"):
         return None, None
     gotit = cfg.get("gotit") or {}
@@ -401,26 +533,70 @@ def writeback_shell_event(cfg: dict, payload: dict) -> tuple[str | None, str | N
 
 
 def build_digest(cfg: dict, mode: str, now: datetime) -> str:
-    items, errors = collect_items(cfg)
-    heading = (
-        "🐱 Tom 早报 · 科技/创投摘录"
-        if mode == "morning"
-        else "🐱 Tom 晚报 · 简要回顾"
-    )
-    news = format_news(items, errors, heading=heading, now=now)
-    due_picks: list[str] = []
-    body = news
-    if mode == "evening":
-        today, err = load_today(cfg)
-        due_text, due_picks = format_due(today, err)
-        body = news + "\n" + due_text
+    news_items: list[dict] = []
+    news_errors: list[str] = []
+    plan_picks: list[str] = []
+    body = ""
+    notes_open_url = (cfg.get("notes_open_url") or "").strip() or None
+
+    if mode == "morning":
+        plan, err = load_plan(cfg, now.date())
+        body, plan_picks = format_morning_plan(
+            plan, err, now=now, notes_open_url=notes_open_url
+        )
+        if cfg.get("morning_include_news"):
+            news_items, news_errors = collect_items(cfg)
+            body = (
+                body
+                + "\n"
+                + format_news(
+                    news_items,
+                    news_errors,
+                    heading="——\n附：AI 资讯摘录",
+                    now=now,
+                )
+            )
+    elif mode == "evening":
+        # Plan-only. Never append 今日待检 or news here.
+        tomorrow = now.date() + timedelta(days=1)
+        plan, err = load_plan(cfg, tomorrow)
+        body, plan_picks = format_evening_tomorrow(
+            plan,
+            err,
+            tomorrow=tomorrow,
+            now=now,
+            notes_open_url=notes_open_url,
+        )
+    elif mode == "news":
+        news_items, news_errors = collect_items(cfg)
+        body = format_news(
+            news_items,
+            news_errors,
+            heading="🐱 Tom 资讯 · AI 摘录",
+            now=now,
+        )
+    else:
+        raise ValueError(f"unknown mode: {mode}")
 
     run_id = __import__("os").environ.get("OPENCLAW_CRON_RUN_ID") or None
+    if mode == "morning":
+        day_s = now.date().isoformat()
+    elif mode == "evening":
+        day_s = (now.date() + timedelta(days=1)).isoformat()
+    else:
+        day_s = now.date().isoformat()
+    subject: str | None = None
+    if plan_picks:
+        subject = plan_picks[0]
+    elif mode == "news" and news_items:
+        subject = str(news_items[0].get("title") or "").strip() or None
     payload = {
         "job": mode,
-        "items": _items_payload(items),
-        "due_summary": due_picks,
-        "errors": errors,
+        "day": day_s,
+        "subject": subject,
+        "items": _items_payload(news_items),
+        "due_summary": plan_picks,
+        "errors": news_errors,
         "delivery_ok": None,
         "channel": "openclaw-weixin",
         "skill": "digest",
@@ -428,29 +604,36 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
     }
     event_id, wb_err = writeback_shell_event(cfg, payload)
 
-    if mode == "morning":
-        tip = "\n回「这篇有用」+ 序号，我只记一笔 interest（不做完整 ingest）。\n"
+    if mode == "news":
+        tip = f"\n{_WX_BLANK}\n回「这篇有用」+ 序号即可。\n"
+        if event_id:
+            tip += f"event_id={event_id}\n"
     else:
-        tip = "\n回「这篇有用」+ 序号 → gotit_record_interest；待检请走 gotit examine。\n"
-    if event_id:
-        tip += f"event_id={event_id}\n"
-    if wb_err:
-        tip += f"写回 gotit 失败（观测缺口）：{wb_err}\n"
-    return body + tip
+        # Plan digests: keep chat clean; event_id only on writeback failure.
+        tip = ""
+        if wb_err:
+            tip = f"\n{_WX_BLANK}\n写回失败：{wb_err}\n"
+    return body.rstrip() + tip
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Gotit OpenClaw digest")
-    parser.add_argument("mode", choices=("morning", "evening"))
+    parser = argparse.ArgumentParser(description="Gotit OpenClaw digest v2")
+    parser.add_argument("mode", choices=("morning", "evening", "news"))
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument(
         "--no-writeback",
         action="store_true",
         help="Skip gotit shell_event writeback (debug)",
     )
+    parser.add_argument(
+        "--no-remote-prefs",
+        action="store_true",
+        help="Ignore gotit digest_prefs; use file config only",
+    )
     args = parser.parse_args(argv)
 
-    cfg = _load_config(args.config)
+    file_cfg = _load_config(args.config)
+    cfg = file_cfg if args.no_remote_prefs else merge_prefs(file_cfg)
     if args.no_writeback:
         cfg = {**cfg, "_skip_writeback": True}
 

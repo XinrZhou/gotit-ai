@@ -1,0 +1,124 @@
+#!/usr/bin/osascript -l JavaScript
+/**
+ * Create/update reminders in a named list (create list if missing).
+ * Each item: {title, due:"YYYY-MM-DD", time?:"HH:MM"}
+ * Sets dueDate + remindMeDate so Mac/iPhone get notifications.
+ * Same title (casefold, incomplete) → update times instead of skip.
+ */
+function run(argv) {
+  var listName = (argv && argv[0]) ? String(argv[0]) : "学习计划";
+  var raw = (argv && argv[1]) ? String(argv[1]) : "[]";
+  var items;
+  try {
+    items = JSON.parse(raw);
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: "items JSON 无效: " + String(e) });
+  }
+  if (!items || !items.length) {
+    return JSON.stringify({
+      ok: true,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      list: listName,
+      errors: [],
+    });
+  }
+
+  try {
+    var app = Application("Reminders");
+    app.includeStandardAdditions = true;
+
+    var lists = app.lists.whose({ name: listName })();
+    var list;
+    if (!lists || lists.length === 0) {
+      list = app.List({ name: listName });
+      app.lists.push(list);
+      lists = app.lists.whose({ name: listName })();
+      list = lists[0];
+    } else {
+      list = lists[0];
+    }
+
+    var byTitle = {};
+    var reminders = list.reminders();
+    for (var i = 0; i < reminders.length; i++) {
+      var r = reminders[i];
+      try {
+        if (r.completed()) continue;
+      } catch (e0) {}
+      var t = "";
+      try {
+        t = String(r.name() || "").trim().toLowerCase();
+      } catch (e1) {}
+      if (t) byTitle[t] = r;
+    }
+
+    var created = 0;
+    var updated = 0;
+    var skipped = 0;
+    var errors = [];
+
+    for (var j = 0; j < items.length; j++) {
+      var it = items[j] || {};
+      var title = String(it.title || "").trim();
+      var due = String(it.due || "").trim();
+      var time = String(it.time || "09:00").trim();
+      if (!title) {
+        skipped++;
+        continue;
+      }
+      if (!due || !/^\d{4}-\d{2}-\d{2}$/.test(due)) {
+        errors.push(title + ": 缺少到期日");
+        continue;
+      }
+      if (!/^\d{2}:\d{2}$/.test(time)) {
+        time = "09:00";
+      }
+
+      var when = new Date(due + "T" + time + ":00");
+      var key = title.toLowerCase();
+      try {
+        if (byTitle[key]) {
+          var existing = byTitle[key];
+          existing.dueDate = when;
+          try {
+            existing.remindMeDate = when;
+          } catch (eRemind) {
+            /* some OS versions — dueDate alone still shows on Mac */
+          }
+          updated++;
+        } else {
+          var props = { name: title, dueDate: when };
+          try {
+            props.remindMeDate = when;
+          } catch (e2) {}
+          var rem = app.Reminder(props);
+          list.reminders.push(rem);
+          byTitle[key] = rem;
+          created++;
+        }
+      } catch (err) {
+        errors.push(title + ": " + String(err));
+      }
+    }
+
+    return JSON.stringify({
+      ok: errors.length === 0,
+      created: created,
+      updated: updated,
+      skipped: skipped,
+      list: listName,
+      errors: errors,
+      error: errors.length ? errors.join("; ") : undefined,
+    });
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "无法写入提醒事项：" +
+        String(err) +
+        "。请在 系统设置 → 隐私与安全性 → 提醒事项 中允许终端/OpenClaw。",
+    });
+  }
+}

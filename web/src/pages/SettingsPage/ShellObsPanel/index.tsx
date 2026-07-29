@@ -4,13 +4,14 @@ import { useStore } from "../../../store";
 import type { MemoryEntry } from "../../../types";
 import styles from "./index.module.scss";
 
-type Category = "all" | "morning" | "evening" | "interest";
+type Category = "all" | "morning" | "evening" | "news" | "interest";
 type TimePreset = "all" | "today" | "7d" | "30d" | "custom";
 
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: "all", label: "全部" },
-  { id: "morning", label: "早间简报" },
-  { id: "evening", label: "晚间简报" },
+  { id: "morning", label: "今日计划" },
+  { id: "evening", label: "明日计划" },
+  { id: "news", label: "资讯" },
   { id: "interest", label: "标记有用" },
 ];
 
@@ -22,9 +23,11 @@ const TIME_PRESETS: { id: TimePreset; label: string }[] = [
   { id: "custom", label: "自定义" },
 ];
 
+/** Content kind (what the push is about) — not “早/晚 cron” jargon. */
 const JOB_LABEL: Record<string, string> = {
-  morning: "早间简报",
-  evening: "晚间简报",
+  morning: "今日计划",
+  evening: "明日计划",
+  news: "资讯",
 };
 
 function pad2(n: number) {
@@ -50,23 +53,78 @@ function fmtShort(iso: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
+function truncate(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function planSubjects(content: Record<string, unknown>): string[] {
+  return Array.isArray(content.due_summary)
+    ? (content.due_summary as unknown[]).map(String).map((s) => s.trim()).filter(Boolean)
+    : [];
+}
+
 function activityCategory(e: MemoryEntry): Category | "other" {
   if (e.kind === "interest") return "interest";
   if (e.kind === "shell_event") {
-    const job = String(e.content?.job ?? "");
-    if (job === "morning" || job === "evening") return job;
+    const c = e.content ?? {};
+    const job = String(c.job ?? "");
+    const plans = planSubjects(c);
+    const items = digestItems(c);
+    // Legacy / morning_include_news: job=morning|evening but only RSS in items
+    // → surface under 资讯, not 今日/明日计划.
+    if (
+      (job === "morning" || job === "evening") &&
+      plans.length === 0 &&
+      items.length > 0
+    ) {
+      return "news";
+    }
+    if (job === "morning" || job === "evening" || job === "news") return job;
   }
   return "other";
 }
 
-function activityTitle(e: MemoryEntry): string {
+function activitySubject(e: MemoryEntry): string | null {
   const c = e.content ?? {};
-  if (e.kind === "shell_event") {
-    const job = String(c.job ?? "");
-    return JOB_LABEL[job] ?? (job ? `简报 · ${job}` : "简报推送");
+  const job = String(c.job ?? "");
+  const plans = planSubjects(c);
+  const items = digestItems(c);
+  const newsTitles = new Set(items.map((it) => it.title).filter(Boolean));
+  const explicit = typeof c.subject === "string" ? c.subject.trim() : "";
+
+  if (job === "morning" || job === "evening") {
+    if (plans.length) return plans[0];
+    // Ignore subject wrongly copied from an RSS headline.
+    if (explicit && !newsTitles.has(explicit)) return explicit;
+    // News-only morning writeback: show headline when categorized as 资讯.
+    if (plans.length === 0 && items.length > 0 && items[0].title) {
+      return items[0].title;
+    }
+    return null;
   }
+  if (job === "news" || e.kind === "interest") {
+    if (explicit) return explicit;
+    if (items.length && items[0].title) return items[0].title;
+    const t = String(c.title ?? "").trim();
+    return t || null;
+  }
+  if (explicit) return explicit;
+  if (plans.length) return plans[0];
+  if (items.length && items[0].title) return items[0].title;
+  return null;
+}
+
+function activityTitle(e: MemoryEntry): string {
+  const subject = activitySubject(e);
+  if (subject) return truncate(subject, 48);
   if (e.kind === "interest") return "标记有用";
-  return e.kind;
+  const cat = activityCategory(e);
+  if (cat === "morning" || cat === "evening") return "暂无计划";
+  if (cat === "news") return "暂无资讯";
+  const job = String(e.content?.job ?? "");
+  return JOB_LABEL[job] ?? (job ? `推送 · ${job}` : "推送");
 }
 
 function digestItems(content: Record<string, unknown>) {
@@ -89,24 +147,44 @@ function digestItems(content: Record<string, unknown>) {
 function activitySummary(e: MemoryEntry): string {
   const c = e.content ?? {};
   if (e.kind === "shell_event") {
+    const job = String(c.job ?? "");
+    const cat = activityCategory(e);
+    const jobLabel =
+      cat === "news"
+        ? JOB_LABEL.news
+        : JOB_LABEL[job] ?? (job ? `推送 · ${job}` : "推送");
+    const day = typeof c.day === "string" && c.day.trim() ? c.day.trim() : "";
+    const dayShort = day ? fmtShort(day) : "";
+    const plans = planSubjects(c);
     const items = digestItems(c);
-    const due = Array.isArray(c.due_summary)
-      ? (c.due_summary as unknown[]).map(String).filter(Boolean)
-      : [];
     const errN = Array.isArray(c.errors) ? c.errors.length : 0;
     const parts: string[] = [];
-    if (items.length) {
-      parts.push(items.slice(0, 3).map((it) => it.title || it.label).join("；"));
-      if (items.length > 3) parts[0] += ` 等 ${items.length} 条`;
-    } else {
-      parts.push("无条目");
+    parts.push(dayShort ? `${jobLabel} · ${dayShort}` : jobLabel);
+    if (plans.length > 1) {
+      parts.push(
+        plans.slice(1, 4).join("；") + (plans.length > 4 ? ` 等 ${plans.length} 条` : ""),
+      );
+    } else if ((cat === "news" || job === "news") && items.length) {
+      const rest = items.slice(subjectOffset(e), 3);
+      if (rest.length) {
+        parts.push(
+          rest.map((it) => it.title || it.label).join("；") +
+            (items.length > 3 ? ` 等 ${items.length} 条` : ""),
+        );
+      } else if (items.length > 1) {
+        parts.push(`共 ${items.length} 条`);
+      }
     }
-    if (due.length) parts.push(`待检 ${due.length}`);
     if (errN) parts.push(`${errN} 源失败`);
     return parts.join(" · ");
   }
-  if (e.kind === "interest") return String(c.title ?? "一条资讯");
+  if (e.kind === "interest") return "标记有用";
   return "";
+}
+
+function subjectOffset(e: MemoryEntry): number {
+  // If title already shows first news item, start rest from 1.
+  return activitySubject(e) ? 1 : 0;
 }
 
 function daysInMonth(year: number, month: number) {
@@ -177,6 +255,45 @@ function MonthGrid({
   );
 }
 
+function timeBounds(
+  timePreset: TimePreset,
+  customRange: Range,
+): { fromBound: Date | null; toBound: Date | null } {
+  const now = new Date();
+  if (timePreset === "today") {
+    return { fromBound: startOfDay(now), toBound: endOfDay(now) };
+  }
+  if (timePreset === "7d") {
+    return {
+      fromBound: startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)),
+      toBound: endOfDay(now),
+    };
+  }
+  if (timePreset === "30d") {
+    return {
+      fromBound: startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)),
+      toBound: endOfDay(now),
+    };
+  }
+  if (timePreset === "custom" && customRange.from && customRange.to) {
+    return {
+      fromBound: startOfDay(parseLocalISO(customRange.from)),
+      toBound: endOfDay(parseLocalISO(customRange.to)),
+    };
+  }
+  return { fromBound: null, toBound: null };
+}
+
+function inTimeRange(
+  e: MemoryEntry,
+  fromBound: Date | null,
+  toBound: Date | null,
+): boolean {
+  if (!fromBound || !toBound || !e.created_at) return true;
+  const t = new Date(e.created_at);
+  return t >= fromBound && t <= toBound;
+}
+
 export function ShellObsPanel() {
   const { setError } = useStore();
   const [activity, setActivity] = useState<MemoryEntry[]>([]);
@@ -232,29 +349,11 @@ export function ShellObsPanel() {
   };
 
   const filtered = useMemo(() => {
-    const now = new Date();
-    let fromBound: Date | null = null;
-    let toBound: Date | null = null;
-    if (timePreset === "today") {
-      fromBound = startOfDay(now);
-      toBound = endOfDay(now);
-    } else if (timePreset === "7d") {
-      fromBound = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
-      toBound = endOfDay(now);
-    } else if (timePreset === "30d") {
-      fromBound = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29));
-      toBound = endOfDay(now);
-    } else if (timePreset === "custom" && customRange.from && customRange.to) {
-      fromBound = startOfDay(parseLocalISO(customRange.from));
-      toBound = endOfDay(parseLocalISO(customRange.to));
-    }
-
+    const { fromBound, toBound } = timeBounds(timePreset, customRange);
     return [...activity]
       .filter((e) => {
         if (category !== "all" && activityCategory(e) !== category) return false;
-        if (!fromBound || !toBound || !e.created_at) return true;
-        const t = new Date(e.created_at);
-        return t >= fromBound && t <= toBound;
+        return inTimeRange(e, fromBound, toBound);
       })
       .sort((a, b) => {
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -262,6 +361,23 @@ export function ShellObsPanel() {
         return tb - ta;
       });
   }, [activity, category, timePreset, customRange]);
+
+  const visibleCategories = useMemo(() => {
+    const { fromBound, toBound } = timeBounds(timePreset, customRange);
+    const present = new Set<Category>();
+    for (const e of activity) {
+      if (!inTimeRange(e, fromBound, toBound)) continue;
+      const cat = activityCategory(e);
+      if (cat !== "other") present.add(cat);
+    }
+    return CATEGORIES.filter((c) => c.id === "all" || present.has(c.id));
+  }, [activity, timePreset, customRange]);
+
+  useEffect(() => {
+    if (!visibleCategories.some((c) => c.id === category)) {
+      setCategory("all");
+    }
+  }, [visibleCategories, category]);
 
   const timeLabel = (() => {
     if (timePreset === "custom" && customRange.from && customRange.to) {
@@ -272,14 +388,21 @@ export function ShellObsPanel() {
 
   if (selected) {
     const c = selected.content ?? {};
+    const job = String(c.job ?? "");
+    const cat = activityCategory(selected);
+    const jobLabel =
+      cat === "news"
+        ? JOB_LABEL.news
+        : JOB_LABEL[job] ?? (job ? `推送 · ${job}` : "推送");
+    const day = typeof c.day === "string" && c.day.trim() ? c.day.trim() : "";
     const items = digestItems(c);
-    const due = Array.isArray(c.due_summary)
-      ? (c.due_summary as unknown[]).map(String).filter(Boolean)
-      : [];
+    const due = planSubjects(c);
     const errors = Array.isArray(c.errors)
       ? (c.errors as unknown[]).map(String).filter(Boolean)
       : [];
     const link = typeof c.link === "string" ? c.link : null;
+    const planLabel =
+      job === "evening" ? "明日计划" : job === "morning" ? "今日计划" : "计划";
 
     return (
       <div className={styles.panel}>
@@ -295,47 +418,54 @@ export function ShellObsPanel() {
         <div className={styles.detailCard}>
           <h3 className={styles.detailTitle}>{activityTitle(selected)}</h3>
           <p className={styles.detailMeta}>
-            {selected.created_at ? new Date(selected.created_at).toLocaleString() : ""}
+            {[jobLabel, day, selected.created_at ? new Date(selected.created_at).toLocaleString() : ""]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
 
           {selected.kind === "shell_event" ? (
             <>
-              {items.length > 0 ? (
-                <ol className={styles.itemList}>
-                  {items.map((it) => (
-                    <li key={it.n} className={styles.itemRow}>
-                      <span className={styles.itemIndex}>{it.n}</span>
-                      <div className={styles.itemBody}>
-                        <span className={styles.itemTitle}>
-                          {it.label ? `${it.label} · ` : ""}
-                          {it.title}
-                        </span>
-                        {it.link ? (
-                          <a
-                            className={styles.itemLink}
-                            href={it.link}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            打开链接
-                          </a>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className={styles.mutedLine}>无资讯条目</p>
-              )}
               {due.length > 0 ? (
                 <div className={styles.block}>
-                  <p className={styles.blockLabel}>今日待检</p>
+                  <p className={styles.blockLabel}>{planLabel}</p>
                   <ul className={styles.plainList}>
                     {due.map((d) => (
                       <li key={d}>{d}</li>
                     ))}
                   </ul>
                 </div>
+              ) : cat === "morning" || cat === "evening" ? (
+                <p className={styles.mutedLine}>该日暂无计划</p>
+              ) : null}
+              {items.length > 0 ? (
+                <div className={styles.block}>
+                  <p className={styles.blockLabel}>资讯</p>
+                  <ol className={styles.itemList}>
+                    {items.map((it) => (
+                      <li key={it.n} className={styles.itemRow}>
+                        <span className={styles.itemIndex}>{it.n}</span>
+                        <div className={styles.itemBody}>
+                          <span className={styles.itemTitle}>
+                            {it.label ? `${it.label} · ` : ""}
+                            {it.title}
+                          </span>
+                          {it.link ? (
+                            <a
+                              className={styles.itemLink}
+                              href={it.link}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              打开链接
+                            </a>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : job === "news" ? (
+                <p className={styles.mutedLine}>无资讯条目</p>
               ) : null}
               {errors.length > 0 ? (
                 <div className={styles.block}>
@@ -379,7 +509,7 @@ export function ShellObsPanel() {
 
       <div className={styles.toolbar}>
         <div className={styles.chips} role="tablist" aria-label="类别">
-          {CATEGORIES.map((c) => (
+          {visibleCategories.map((c) => (
             <button
               key={c.id}
               type="button"

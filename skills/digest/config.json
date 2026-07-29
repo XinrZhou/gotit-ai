@@ -1,33 +1,49 @@
 {
   "timezone": "Asia/Shanghai",
-  "item_count": 5,
+  "item_count": 3,
   "morning_cron": "0 8 * * *",
   "evening_cron": "0 21 * * *",
+  "news_cron": null,
+  "news_enabled": false,
+  "morning_include_news": false,
+  "evening_include_news": false,
+  "keywords": [],
   "feeds": [
     {
-      "id": "solidot",
-      "label": "科技·Solidot",
-      "url": "https://www.solidot.org/index.rss"
+      "id": "qbitai",
+      "label": "量子位",
+      "url": "https://www.qbitai.com/category/资讯/feed",
+      "enabled": true
     },
     {
-      "id": "36kr",
-      "label": "创投·36氪",
-      "url": "https://36kr.com/feed"
+      "id": "hf-blog",
+      "label": "Hugging Face Blog",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "enabled": true
     },
     {
-      "id": "sspai",
-      "label": "科技·少数派",
-      "url": "https://sspai.com/feed"
+      "id": "openai-news",
+      "label": "OpenAI News",
+      "url": "https://openai.com/news/rss.xml",
+      "enabled": true
     },
     {
-      "id": "verge",
-      "label": "科技·The Verge",
-      "url": "https://www.theverge.com/rss/index.xml"
+      "id": "deepmind",
+      "label": "Google DeepMind",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "enabled": true
+    },
+    {
+      "id": "marktechpost",
+      "label": "MarkTechPost",
+      "url": "https://www.marktechpost.com/feed/",
+      "enabled": false
     }
   ],
   "gotit": {
     "repo": "",
     "api_url": "",
-    "note": "repo 空=本 skill 上两级仓库根；api_url 空则 uv+db 读 today，可填 http://127.0.0.1:8787"
-  }
+    "note": "repo 空=本 skill 上两级仓库根；api_url 空则 uv+db；可填 http://127.0.0.1:8787。prefs 优先读 gotit digest_prefs。"
+  },
+  "youtube_note": "YouTube：url 用 https://www.youtube.com/feeds/videos.xml?channel_id=UC… 即可当 feed 加入"
 }

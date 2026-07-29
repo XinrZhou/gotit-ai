@@ -1,50 +1,69 @@
 ---
 name: digest
 description: >-
-  Morning/evening WeChat digests for OpenClaw: configurable RSS tech/finance
-  briefs, evening appends gotit_today due claims, writes shell_event to gotit.
-  Use for cron digests or when the user asks for 早报/晚报/资讯摘要.
+  Morning/evening WeChat digests for OpenClaw: morning = today's plan,
+  evening = tomorrow plan Q&A (never mixes news or 今日待检). Optional
+  separate news job for AI/YouTube RSS. Writes shell_event to gotit.
+  Use for cron or when the user asks for 早报/晚报/资讯摘要.
 ---
 
-# digest — 早晚简报（OpenClaw）
+# digest — 计划触达 + 可选资讯（OpenClaw）
 
 落点在 **OpenClaw**（本 skill + Gateway cron），**不是** gotit 内核。
-人设：**Tom**；时区默认 **Asia/Shanghai**（见 `config.json`）。
-推送后会写回 gotit `shell_event`（观测真源）；见 `docs/openclaw-digest.md`。
+人设：**Tom**；时区默认 **Asia/Shanghai**。
+推送后写回 gotit `shell_event`；见 `docs/openclaw-digest.md`。
 
-## 何时用
+## 语义（P1c）
 
-- 定时早报 / 晚报 cron 触发
-- 用户说「早报」「晚报」「今天有啥科技新闻」
-- 用户回「这篇有用」+ 序号 → `gotit_record_interest`（**不要** ingest→examine）
+| mode | 内容 |
+|------|------|
+| `morning` | **今日计划**（首条标优先）；默认不含资讯 |
+| `evening` | **明日计划**：有 → 问调整；无 → 问新建。**禁止**附今日待检 / 资讯 |
+| `news` | 仅 AI/YouTube RSS（独立 cron，默认关） |
 
-## 确定性脚本（推荐 cron 用）
+## 确定性脚本
 
 ```bash
 uv run python skills/digest/fetch_digest.py morning
 uv run python skills/digest/fetch_digest.py evening
-# 调试可不写回：
+uv run python skills/digest/fetch_digest.py news
 uv run python skills/digest/fetch_digest.py morning --no-writeback
 ```
 
-- **morning / evening**：RSS ≈5 条；晚间追加 `gotit_today`；脚本文末含 `event_id=…`
-- 写回：默认 db `record_shell_event`；`config.json` 的 `gotit.api_url` 非空则走 `POST /v1/shell/events`
+Prefs：优先 gotit `GET/PUT /v1/shell/digest-prefs`（Settings「计划推送」）；文件 `config.json` 为回退。
+改 cron 后用 Settings「保存并同步」或 `gotit_sync_digest_cron` / `./skills/digest/install-cron.sh`。
+
+## iPhone 用户：提醒事项 → 导入
+
+推送**不塞深链**。空计划时两条路：
+
+1. 打开手机「提醒事项」列表「学习计划」（带到期日）→ 回「导入计划」
+2. 直接对话：「新建明日计划：……」→ Claw **理解日期/时间** → 写 gotit → `push --time HH:MM --apply`
+
+- 用户回 **「导入计划」** / 「导入提醒」/ 「同步计划」
+  → **转交 `apple-plan`**：`reminders --list 学习计划`（先 dry-run 再 `--apply`）
+- 用户对话新建/调整计划后
+  → Agent 解析 day/time → `gotit_upsert_plan_item` → `apple-plan push --title … --time HH:MM --apply`
+- 用户 **删除 / 取消** 某条计划
+  → `apple-plan rm --day … --title … --apply`（或 `gotit_delete_plan_item` + `rm`）
+- iPhone 与 Mac 靠 **iCloud 提醒事项**同步
+
+计划相关回复（「调整…」「新建明日计划：…」「删除…」）→ upsert/delete + push/rm。
 
 ## 「这篇有用」
 
-用户回复「这篇有用 2」或「第 3 条有用」（结合最近简报的 `event_id`）：
+仅针对 **news** 推送。用户回「这篇有用 2」：
 
-1. 调 **`gotit_record_interest`**（或 REST `POST /v1/shell/interest`）：
-   - `event_id` = 简报里的 id
-   - `item_index` = 序号
-   - `title` / `link` / 可选 `topic`（若能从条目推断主题）
-2. 短回「已记兴趣信号」。
-3. **不要** `gotit_ingest` / `gotit_examine`。
+1. `gotit_record_interest`（event_id + item_index + title/link）
+2. 短回「已记兴趣信号」
+3. **不要** `gotit_ingest` / `gotit_examine`
 
 ## 安装 cron
 
-见 **[docs/openclaw-digest.md](../../docs/openclaw-digest.md)** 或 `./skills/digest/install-cron.sh`。
+`./skills/digest/install-cron.sh`（会读 prefs；`news_enabled` 才注册资讯 job）。
 
 ## 边界
 
-- 禁止在 `src/gotit/` 写微信适配器；RSS 主逻辑只在本 skill。
+- 禁止在 `src/gotit/` 写微信适配器
+- 晚报正文不得混入 RSS 或「今日待检」
+- Apple 备忘录/提醒事项导入 → `skills/apple-plan/`（P1d）

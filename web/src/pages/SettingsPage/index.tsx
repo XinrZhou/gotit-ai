@@ -8,15 +8,17 @@ import {
 } from "../../lib/userProfile";
 import { useStore } from "../../store";
 import type { McpConnector, SkillDetail, SkillInfo } from "../../types";
+import { DigestPrefsPanel } from "./DigestPrefsPanel";
 import { ShellObsPanel } from "./ShellObsPanel";
 import styles from "./index.module.scss";
 
-type Tab = "general" | "skills" | "connectors" | "shell";
+type Tab = "general" | "skills" | "connectors" | "digest" | "shell";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "资料" },
   { id: "skills", label: "Skills" },
   { id: "connectors", label: "MCP" },
+  { id: "digest", label: "计划推送" },
   { id: "shell", label: "动态" },
 ];
 
@@ -318,7 +320,9 @@ export function SettingsPage() {
           ))}
         </nav>
 
-        <div className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}`}>
+        <div
+          className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}`}
+        >
           {skillSheet ? (
             <div className={styles.sheet}>
               <h4 className={styles.sheetTitle}>
@@ -474,36 +478,36 @@ export function SettingsPage() {
                 <div className={styles.group}>
                   <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
                     <div className={styles.profileRow}>
-                      <button
-                        type="button"
-                        className={styles.avatarBtn}
-                        style={
-                          draftAvatar
-                            ? undefined
-                            : { background: profileTint(previewName) }
-                        }
-                        onClick={() => avatarRef.current?.click()}
-                        title="更换头像"
-                        aria-label="更换头像"
-                      >
-                        {draftAvatar ? (
-                          <img src={draftAvatar} alt="" />
-                        ) : (
-                          <span>{profileInitials(previewName)}</span>
-                        )}
-                      </button>
-                      <input
-                        ref={avatarRef}
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void onPickAvatar(f);
-                          e.target.value = "";
-                        }}
-                      />
-                      <div className={styles.profileFields}>
+                      <div className={styles.profileLead}>
+                        <button
+                          type="button"
+                          className={styles.avatarBtn}
+                          style={
+                            draftAvatar
+                              ? undefined
+                              : { background: profileTint(previewName) }
+                          }
+                          onClick={() => avatarRef.current?.click()}
+                          title="更换头像"
+                          aria-label="更换头像"
+                        >
+                          {draftAvatar ? (
+                            <img src={draftAvatar} alt="" />
+                          ) : (
+                            <span>{profileInitials(previewName)}</span>
+                          )}
+                        </button>
+                        <input
+                          ref={avatarRef}
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) void onPickAvatar(f);
+                            e.target.value = "";
+                          }}
+                        />
                         <input
                           className={styles.nameInput}
                           value={draftName}
@@ -512,34 +516,34 @@ export function SettingsPage() {
                           aria-label="名称"
                           onChange={(e) => setDraftName(e.target.value)}
                         />
-                        <div className={styles.avatarActions}>
+                      </div>
+                      <div className={styles.avatarActions}>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => avatarRef.current?.click()}
+                        >
+                          更换
+                        </button>
+                        {draftAvatar ? (
                           <button
                             type="button"
                             className="btn-ghost"
-                            onClick={() => avatarRef.current?.click()}
+                            onClick={() => setDraftAvatar("")}
                           >
-                            更换头像
+                            使用缩写
                           </button>
-                          {draftAvatar ? (
-                            <button
-                              type="button"
-                              className="btn-ghost"
-                              onClick={() => setDraftAvatar("")}
-                            >
-                              使用缩写
-                            </button>
-                          ) : null}
-                        </div>
+                        ) : null}
+                        {profileDirty ? (
+                          <button
+                            type="button"
+                            className={`btn-ink ${styles.profileSave}`}
+                            onClick={onSaveProfile}
+                          >
+                            保存
+                          </button>
+                        ) : null}
                       </div>
-                      {profileDirty ? (
-                        <button
-                          type="button"
-                          className={`btn-ink ${styles.profileSave}`}
-                          onClick={onSaveProfile}
-                        >
-                          保存
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -584,6 +588,24 @@ export function SettingsPage() {
                       >
                         {resume ? "重新导入" : "导入"}
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className={styles.paneTitle}>Apple 计划桥</p>
+                <div className={styles.group}>
+                  <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
+                    <div className={styles.groupMain}>
+                      <span className={styles.groupLabel}>Mac 提醒事项 ↔ gotit 日计划</span>
+                      <span className={styles.groupMeta}>
+                        默认列表「学习计划」。对话建计划后 OpenClaw 会 push 到提醒事项；
+                        也可在提醒事项改完回「导入计划」。浏览器不读 Apple。
+                      </span>
+                      <span className={styles.groupMeta}>
+                        说明：docs/openclaw-apple-plan.md · skills/apple-plan/
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -777,6 +799,7 @@ export function SettingsPage() {
             </>
           ) : null}
 
+          {!sheetOpen && tab === "digest" ? <DigestPrefsPanel /> : null}
           {!sheetOpen && tab === "shell" ? <ShellObsPanel /> : null}
         </div>
       </div>

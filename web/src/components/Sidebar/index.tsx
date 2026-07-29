@@ -27,6 +27,7 @@ export function Sidebar() {
     onDeleteNotes,
     setShowCompose,
     setLibraryOpen,
+    setMasteryGraphOpen,
   } = useStore();
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,20 +87,34 @@ export function Sidebar() {
       <div className={styles.sidebarHead}>
         <div className={styles.headRow}>
           <span className={styles.libraryTitle}>资料库</span>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={() => setLibraryOpen(false)}
-            aria-label="关闭资料栏"
-          >
-            收起
-          </button>
+          <div className={styles.headActions}>
+            <button
+              type="button"
+              className={styles.graphBtn}
+              onClick={() => {
+                setLibraryOpen(false);
+                setMasteryGraphOpen(true);
+              }}
+            >
+              图谱
+            </button>
+            <button
+              type="button"
+              className={styles.closeBtn}
+              onClick={() => setLibraryOpen(false)}
+              aria-label="关闭资料栏"
+            >
+              收起
+            </button>
+          </div>
         </div>
       </div>
 
       {totallyEmpty ? (
         <div className={styles.empty}>
-          <p className={styles.emptyText}>还没资料。写一条笔记，或导入简历建项目，我来帮你出题考你。</p>
+          <p className={styles.emptyText}>
+            还没资料。写一条笔记，或导入简历建项目，我来帮你出题考你。
+          </p>
           <button
             type="button"
             className={styles.btnCompose}
@@ -152,7 +167,11 @@ export function Sidebar() {
               <button
                 key={p.id}
                 type="button"
-                className={selectedProjectId === p.id ? `${styles.projItem} ${styles.projActive}` : styles.projItem}
+                className={
+                  selectedProjectId === p.id
+                    ? `${styles.projItem} ${styles.projActive}`
+                    : styles.projItem
+                }
                 onClick={() => {
                   setSelectedProjectId(p.id);
                   setProjectPicked(true);
@@ -197,14 +216,22 @@ export function Sidebar() {
                 <div className={styles.scopeToggle}>
                   <button
                     type="button"
-                    className={noteScope === "today" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
+                    className={
+                      noteScope === "today"
+                        ? `${styles.scopeBtn} ${styles.scopeActive}`
+                        : styles.scopeBtn
+                    }
                     onClick={() => setNoteScope("today")}
                   >
                     今日
                   </button>
                   <button
                     type="button"
-                    className={noteScope === "all" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
+                    className={
+                      noteScope === "all"
+                        ? `${styles.scopeBtn} ${styles.scopeActive}`
+                        : styles.scopeBtn
+                    }
                     onClick={() => setNoteScope("all")}
                   >
                     全部
@@ -273,11 +300,15 @@ export function Sidebar() {
                         }}
                         disabled={busy}
                       >
-                        <span className={styles.noteTitle}>{note.title || "未命名"}</span>
+                        <span className={styles.noteTitle}>
+                          {note.title || "未命名"}
+                        </span>
                         {noteScope === "all" && note.day ? (
                           <span className={styles.noteDate}>{note.day.slice(5)}</span>
                         ) : null}
-                        {isReady ? <span className={styles.noteBadge}>{count}题可考</span> : null}
+                        {isReady ? (
+                          <span className={styles.noteBadge}>{count}题可考</span>
+                        ) : null}
                       </button>
                       {selecting ? null : (
                         <>
@@ -286,7 +317,9 @@ export function Sidebar() {
                             className={styles.noteMenu}
                             aria-label="更多操作"
                             disabled={busy}
-                            onClick={() => setOpenMenuId(openMenuId === note.id ? null : note.id)}
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === note.id ? null : note.id)
+                            }
                           >
                             ⋯
                           </button>
@@ -386,10 +419,19 @@ export function Sidebar() {
           onClose={() => setPendingDeleteIds(null)}
           actions={
             <>
-              <button type="button" className="btn-ghost" onClick={() => setPendingDeleteIds(null)}>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setPendingDeleteIds(null)}
+              >
                 取消
               </button>
-              <button type="button" className="btn-ink" disabled={busy} onClick={confirmBatchDelete}>
+              <button
+                type="button"
+                className="btn-ink"
+                disabled={busy}
+                onClick={confirmBatchDelete}
+              >
                 删除 {pendingDeleteIds.length} 条
               </button>
             </>

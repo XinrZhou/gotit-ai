@@ -37,7 +37,7 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0006 (… + profile: user_skills / mcp_connectors)
+alembic/versions/  0001…0007 (… + mastery: fail_events / graph_edges)
 openspec/changes/  active + archive/
 ```
 
@@ -58,23 +58,30 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
   conversation top bar; nav rail = brand + threads)
-- Library = left **drawer overlay** (does not push chat columns)
+- Library = left **drawer overlay**; 「图谱」opens **fullscreen** mastery graph
 - Composer: agents/skills behind `+` tray; quiet Apple select
-- **Settings** (nav gear): 资料 / Skills / MCP / 动态 — profile + DIY skill
-  install/view/edit + MCP connectors (no marketplace); enabled MCP → chat
-  toolsets; 动态 = OpenClaw 简报/兴趣写回（分类/时间筛选 + 详情）
+- **Settings** (nav gear): 资料 / Skills / MCP / 计划推送 / 动态 — profile + DIY skill
+  install/view/edit + MCP connectors；**计划推送** = 早/晚计划 cron + 可选 AI/YouTube 源
+  （「保存并同步」→ OpenClaw cron）；
+  动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含 Apple 计划桥导入说明
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
+  + mastery-graph writeback (`fail_events`, `confused_with` edges)
 - Notes → claims → plan; project + resume-driven drill (resume import =
   projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
+- **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; budget subgraph
+  injects into Axiom; fullscreen「图谱」(`react-force-graph-2d`); `/v1/obs/graph`
 
 ## OpenClaw shell (not in gotit core)
 
 - WeChat channel + MCP mount: `docs/openclaw-wechat.md`；skill `skills/gotit/`
-- Morning/evening digests (RSS + evening `gotit_today`): `docs/openclaw-digest.md`；
+- Plan digests（早=当日计划 / 晚=明日询问；资讯独立可选）: `docs/openclaw-digest.md`；
   skill `skills/digest/` + Gateway cron（Asia/Shanghai）
-- **Bridge writeback**: digest → `shell_event`；「有用」→ `interest`；
-  obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「动态」
+- **Bridge writeback**：digest → `shell_event`；「有用」→ `interest`；
+  prefs `/v1/shell/digest-prefs` + `POST /v1/shell/digest-cron/sync`；obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「计划推送」「动态」
+- **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（import / push / rm）；
+  MCP `gotit_delete_plan_item`；`docs/openclaw-apple-plan.md` + `skills/apple-plan/`
+  （osascript；**不**进 `src/gotit`）
 
 ## Not done yet (honest)
 
@@ -82,7 +89,7 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Workflow turns fully persisted into the same thread message stream
 - companion-os P2 coding / P3 interview reminders (see `openspec/changes/companion-os/`)
 - Broad agent-as-tool coverage beyond user MCP connectors
-- Rich profile / full KG store (v0 aggregates only)
+- Rich profile / full KG store beyond mastery confuse edges (depends_on later)
 
 ## Commands
 

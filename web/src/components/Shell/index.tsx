@@ -3,6 +3,7 @@ import { ProjectModal } from "../ProjectModal";
 import { ResumeUploadModal } from "../ResumeUploadModal";
 import { ResumeViewerModal } from "../ResumeViewerModal";
 import { DrillMaterialModal } from "../DrillMaterialModal";
+import { MasteryGraphPanel } from "../MasteryGraphPanel";
 import { Sidebar } from "../Sidebar";
 import { Toast } from "../Toast";
 import { ViewNoteModal } from "../ViewNoteModal";
@@ -12,7 +13,14 @@ import { SettingsPage } from "../../pages/SettingsPage";
 import styles from "./index.module.scss";
 
 export function Shell() {
-  const { error, flash, libraryOpen, setLibraryOpen } = useStore();
+  const {
+    error,
+    flash,
+    libraryOpen,
+    setLibraryOpen,
+    masteryGraphOpen,
+    setMasteryGraphOpen,
+  } = useStore();
 
   return (
     <div className={styles.shell}>
@@ -39,6 +47,13 @@ export function Shell() {
       </main>
 
       <Toast error={error} flash={flash} />
+
+      {masteryGraphOpen ? (
+        <MasteryGraphPanel
+          fullscreen
+          onClose={() => setMasteryGraphOpen(false)}
+        />
+      ) : null}
 
       <NoteComposeModal />
       <ViewNoteModal />

@@ -16,6 +16,7 @@ export function useShell() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   /** 资料/项目侧栏；默认收起，避免三栏空旷 */
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [masteryGraphOpen, setMasteryGraphOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userProfile, setUserProfileState] = useState<UserProfile>(() =>
     loadUserProfile(),
@@ -55,6 +56,8 @@ export function useShell() {
     setOpenMenuId,
     libraryOpen,
     setLibraryOpen,
+    masteryGraphOpen,
+    setMasteryGraphOpen,
     settingsOpen,
     setSettingsOpen,
     userProfile,

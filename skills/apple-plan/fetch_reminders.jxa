@@ -1,0 +1,77 @@
+#!/usr/bin/osascript -l JavaScript
+/**
+ * Fetch incomplete reminders from a named list as JSON.
+ * Usage: osascript fetch_reminders.jxa "学习计划"
+ * Stdout: {"ok":true,"items":[{"id":"...","title":"...","due":"YYYY-MM-DD"|null}]}
+ * On TCC denial / list missing: {"ok":false,"error":"..."}
+ */
+function run(argv) {
+  var listName = (argv && argv[0]) ? String(argv[0]) : "学习计划";
+  try {
+    var app = Application("Reminders");
+    app.includeStandardAdditions = true;
+    var lists = app.lists.whose({ name: listName })();
+    if (!lists || lists.length === 0) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          '找不到提醒事项列表「' +
+          listName +
+          '」。请在「提醒事项」中创建该列表，或改 --list / config.json。',
+      });
+    }
+    var list = lists[0];
+    var reminders = list.reminders();
+    var items = [];
+    for (var i = 0; i < reminders.length; i++) {
+      var r = reminders[i];
+      try {
+        if (r.completed()) continue;
+      } catch (e) {
+        /* ignore */
+      }
+      var title = "";
+      try {
+        title = String(r.name() || "").trim();
+      } catch (e2) {
+        title = "";
+      }
+      if (!title) continue;
+      var due = null;
+      try {
+        var d = r.dueDate();
+        if (d) {
+          due = isoDate(d);
+        }
+      } catch (e3) {
+        due = null;
+      }
+      var id = "";
+      try {
+        id = String(r.id());
+      } catch (e4) {
+        id = "";
+      }
+      items.push({ id: id, title: title, due: due });
+    }
+    return JSON.stringify({ ok: true, list: listName, items: items });
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "无法读取提醒事项：" +
+        String(err) +
+        "。请在 系统设置 → 隐私与安全性 → 提醒事项 / 自动化 中允许终端或 OpenClaw。",
+    });
+  }
+}
+
+function isoDate(d) {
+  var y = d.getFullYear();
+  var m = d.getMonth() + 1;
+  var day = d.getDate();
+  function pad(n) {
+    return n < 10 ? "0" + n : String(n);
+  }
+  return y + "-" + pad(m) + "-" + pad(day);
+}

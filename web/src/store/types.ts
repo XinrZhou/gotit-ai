@@ -47,6 +47,8 @@ export type Store = {
   setOpenMenuId: (id: string | null) => void;
   libraryOpen: boolean;
   setLibraryOpen: (open: boolean) => void;
+  masteryGraphOpen: boolean;
+  setMasteryGraphOpen: (open: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   userProfile: { name: string; avatar: string };

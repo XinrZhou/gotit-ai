@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Register / refresh OpenClaw cron jobs for gotit morning + evening digests.
+# Register / refresh OpenClaw cron jobs for gotit plan digests (+ optional news).
 # Requires: Node 22+, openclaw on PATH, Gateway running, WeChat already paired.
 set -euo pipefail
 
@@ -18,9 +18,40 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   nvm use 22 >/dev/null 2>&1 || true
 fi
 
-MORNING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('morning_cron','0 8 * * *'))")"
-EVENING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('evening_cron','0 21 * * *'))")"
-TZ_NAME="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('timezone','Asia/Shanghai'))")"
+# Prefer gotit digest_prefs when API is up; else file config.
+PREFS_JSON="$(
+  uv run --directory "$REPO_ROOT" python - <<'PY' 2>/dev/null || true
+import json
+try:
+    import asyncio
+    from gotit.db.ops import get_digest_prefs
+    from gotit.db.runtime import ensure_db
+    from gotit.db.session import session_scope
+
+    async def _run():
+        await ensure_db()
+        async with session_scope() as session:
+            return (await get_digest_prefs(session)).model_dump(mode="json")
+
+    print(json.dumps(asyncio.run(_run()), ensure_ascii=False))
+except Exception:
+    raise SystemExit(1)
+PY
+)"
+
+if [[ -n "${PREFS_JSON}" ]]; then
+  MORNING_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('morning_cron') or '0 8 * * *')")"
+  EVENING_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('evening_cron') or '0 21 * * *')")"
+  TZ_NAME="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('timezone') or 'Asia/Shanghai')")"
+  NEWS_ENABLED="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('news_enabled') else '0')")"
+  NEWS_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('news_cron') or '0 12 * * *')")"
+else
+  MORNING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('morning_cron','0 8 * * *'))")"
+  EVENING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('evening_cron','0 21 * * *'))")"
+  TZ_NAME="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('timezone','Asia/Shanghai'))")"
+  NEWS_ENABLED="$(python3 -c "import json; print('1' if json.load(open(r'$CONFIG')).get('news_enabled') else '0')")"
+  NEWS_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('news_cron') or '0 12 * * *')")"
+fi
 
 SESSIONS="${OPENCLAW_SESSIONS:-$HOME/.openclaw/agents/main/sessions/sessions.json}"
 
@@ -67,9 +98,9 @@ if [[ -n "${WEIXIN_ACCOUNT}" ]]; then
   ACCOUNT_ARGS=(--account "$WEIXIN_ACCOUNT")
 fi
 
-# Single-quoted paths inside the shell string stored by cron.
 CMD_MORNING="uv run --directory ${REPO_ROOT} python ${SKILL_DIR}/fetch_digest.py morning"
 CMD_EVENING="uv run --directory ${REPO_ROOT} python ${SKILL_DIR}/fetch_digest.py evening"
+CMD_NEWS="uv run --directory ${REPO_ROOT} python ${SKILL_DIR}/fetch_digest.py news"
 
 echo "Linking skill → ~/.openclaw/workspace/skills/digest"
 mkdir -p "$HOME/.openclaw/workspace/skills"
@@ -87,7 +118,7 @@ except Exception:
 jobs=data if isinstance(data,list) else (data.get("jobs") or data.get("items") or [])
 for j in jobs:
     name=(j.get("name") or "")
-    if name in ("gotit-morning-digest","gotit-evening-digest"):
+    if name in ("gotit-morning-digest","gotit-evening-digest","gotit-news-digest"):
         jid=j.get("id") or j.get("jobId") or ""
         if jid:
             print(jid)
@@ -99,7 +130,7 @@ while IFS= read -r id; do
   openclaw cron rm "$id" || true
 done <<< "$OLD_IDS"
 
-echo "Adding morning ($MORNING_CRON $TZ_NAME) → $WEIXIN_TO"
+echo "Adding morning plan ($MORNING_CRON $TZ_NAME) → $WEIXIN_TO"
 openclaw cron add \
   --name "gotit-morning-digest" \
   --cron "$MORNING_CRON" \
@@ -112,9 +143,9 @@ openclaw cron add \
   "${ACCOUNT_ARGS[@]}" \
   --to "$WEIXIN_TO" \
   --timeout-seconds 120 \
-  --description "Gotit morning RSS digest (Asia/Shanghai)"
+  --description "Gotit morning: today's learning plan (Asia/Shanghai)"
 
-echo "Adding evening ($EVENING_CRON $TZ_NAME) → $WEIXIN_TO"
+echo "Adding evening tomorrow-plan ($EVENING_CRON $TZ_NAME) → $WEIXIN_TO"
 openclaw cron add \
   --name "gotit-evening-digest" \
   --cron "$EVENING_CRON" \
@@ -127,7 +158,26 @@ openclaw cron add \
   "${ACCOUNT_ARGS[@]}" \
   --to "$WEIXIN_TO" \
   --timeout-seconds 180 \
-  --description "Gotit evening digest + gotit_today due claims"
+  --description "Gotit evening: tomorrow plan ask (no news / no due mix)"
+
+if [[ "$NEWS_ENABLED" == "1" ]]; then
+  echo "Adding optional news ($NEWS_CRON $TZ_NAME) → $WEIXIN_TO"
+  openclaw cron add \
+    --name "gotit-news-digest" \
+    --cron "$NEWS_CRON" \
+    --tz "$TZ_NAME" \
+    --exact \
+    --command "$CMD_NEWS" \
+    --command-cwd "$REPO_ROOT" \
+    --announce \
+    --channel "$CHANNEL" \
+    "${ACCOUNT_ARGS[@]}" \
+    --to "$WEIXIN_TO" \
+    --timeout-seconds 120 \
+    --description "Gotit optional AI/YouTube RSS news (separate from plan)"
+else
+  echo "News cron skipped (news_enabled=false). Enable in Settings「计划推送」then re-sync."
+fi
 
 echo
 echo "Done. Manual run:"

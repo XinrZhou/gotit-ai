@@ -14,7 +14,7 @@ When the user wants to **check understanding** (not just summarize):
 1. Prefer MCP tools from the `gotit` server:
    - `gotit_health` — connectivity
    - `gotit_today` — today's plan + truncated notes + due claims
-   - `gotit_get_plan` / `gotit_upsert_plan_item` / `gotit_update_plan_item`
+   - `gotit_get_plan` / `gotit_upsert_plan_item` / `gotit_update_plan_item` / `gotit_delete_plan_item`
    - `gotit_fill_today_from_queue` — pull due / not-yet / in-progress claims into today
    - `gotit_list_notes` / `gotit_add_note` / `gotit_ingest_note`
    - `gotit_ingest` — extract claims from raw material
@@ -74,11 +74,17 @@ Channels live on **OpenClaw**, not inside gotit. For WeChat (Tencent
 2. Acceptance: WeChat DM can drive `gotit_health` and `gotit_today`.
 3. Do **not** add Feishu/WeChat adapters under `src/gotit/`.
 
-## Digests (P1)
+## Digests (P1c)
 
-Morning/evening RSS + evening `gotit_today` excerpts are the **`digest`**
-OpenClaw skill (`skills/digest/`), not this gotit skill. See
-**[docs/openclaw-digest.md](../../docs/openclaw-digest.md)**.
+Morning = today's plan; evening = tomorrow plan Q&A (never mixes news or
+今日待检). Optional separate `news` RSS job. Skill: `skills/digest/`.
+See **[docs/openclaw-digest.md](../../docs/openclaw-digest.md)**.
+
+## Apple plan bridge (P1d)
+
+Import Reminders / Notes into gotit plan via **`skills/apple-plan/`**
+(osascript on Mac). See **[docs/openclaw-apple-plan.md](../../docs/openclaw-apple-plan.md)**.
+Do **not** call Apple APIs from gotit core.
 
 Shell writeback / obs (bridge):
 

@@ -60,6 +60,7 @@ def build_prompt(
     answer: str | None,
     memory: list[MemoryEntry],
     trajectory: list[MemoryEntry] | None = None,
+    budget_block: str | None = None,
 ) -> str:
     parts = [
         f"## Claim under examination\n{claim_text}",
@@ -70,6 +71,8 @@ def build_prompt(
             "## Prior attempts on this topic (learning trajectory)\n"
             + _format_memory(trajectory)
         )
+    if budget_block:
+        parts.append(budget_block)
     parts.append(f"## Conversation so far\n{_format_history(history)}")
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
@@ -90,6 +93,7 @@ async def run_axiom(
     history: list[dict[str, str]] | None = None,
     answer: str | None = None,
     trajectory: list[MemoryEntry] | None = None,
+    budget_block: str | None = None,
 ) -> ExamineVerdict:
     entries = await memory.list_memory(layer="working", limit=10)
     prompt = build_prompt(
@@ -98,6 +102,7 @@ async def run_axiom(
         answer=answer,
         memory=entries,
         trajectory=trajectory,
+        budget_block=budget_block,
     )
     result = await agent.run(prompt)
     return result.output

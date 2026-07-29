@@ -407,3 +407,52 @@ class McpConnectorRow(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+# --- Mastery graph: fail events + confused_with edges ---
+
+
+class FailEventRow(Base):
+    __tablename__ = "fail_events"
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    claim_id: Mapped[Any] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("claims.id"), index=True
+    )
+    topic: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    gate_verdict: Mapped[str] = mapped_column(String(32))
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class GraphEdgeRow(Base):
+    """Undirected mastery edges; endpoints stored in canonical UUID order."""
+
+    __tablename__ = "graph_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "source_claim_id",
+            "target_claim_id",
+            "rel",
+            name="uq_graph_edges_user_pair_rel",
+        ),
+    )
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    source_claim_id: Mapped[Any] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("claims.id"), index=True
+    )
+    target_claim_id: Mapped[Any] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("claims.id"), index=True
+    )
+    rel: Mapped[str] = mapped_column(String(32), default="confused_with")
+    weight: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

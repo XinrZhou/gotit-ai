@@ -14,7 +14,8 @@ Current active (after 2026-07-29 merge):
 | Change | Owns |
 |--------|------|
 | `chat-shell` | Chat layout drawer + conversation UX |
-| `companion-os` | OpenClaw shell, digests, bridge writeback, interview reminders |
+| `companion-os` | OpenClaw shell, digests, Apple plan bridge, bridge writeback, interview reminders |
+| `mastery-graph` | Fail events, confused_with edges, budget inject, Settings 图谱 |
 | `profile-center` | Settings: 资料 / Skills / MCP / 动态 |
 | `resume-import` | Resume parse prompt/clip + import without quiz notes |
 | `notes-batch-delete` | Library multi-select delete |

@@ -197,9 +197,16 @@ async def fill_today_from_queue(
     *,
     user_id: str = DEFAULT_USER_ID,
 ) -> DayPlanView:
+    from gotit.db.ops.graph import fail_counts_by_claim
+
     learning_day = await ensure_day(session, day, user_id=user_id)
     existing_claim_ids = {i.claim_id for i in learning_day.plan_items if i.claim_id is not None}
     due = await list_due_claims(session, day, user_id=user_id)
+    fail_counts = await fail_counts_by_claim(
+        session, user_id=user_id, claim_ids=[c.id for c in due]
+    )
+    # Soft sort: more fails first (mastery-graph hint), then stable by id.
+    due = sorted(due, key=lambda c: (-fail_counts.get(c.id, 0), str(c.id)))
     next_order = max((i.sort_order for i in learning_day.plan_items), default=-1) + 1
     for claim in due:
         if claim.id in existing_claim_ids:
