@@ -127,7 +127,7 @@ cd web && npm install && npm run dev   # :5173
 | 笔记 / claim / 计划 / 简历深挖 | 完成 |
 | REST ↔ MCP + harness gate | 完成 |
 | OpenClaw 微信早晚简报（RSS + 晚报 `gotit_today`） | 完成 |
-| OpenClaw→gotit 外设写回 + 观测（画像/图谱 v0） | 完成 |
+| OpenClaw→gotit 写回 + 设置「动态」观测（画像概览） | 完成 |
 | Agent 真调 MCP 工具 | 下一步 |
 | 按 agent 绑不同模型 | 下一步 |
 | 工作流回合写入同一 thread | 下一步 |

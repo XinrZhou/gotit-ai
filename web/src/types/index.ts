@@ -211,6 +211,11 @@ export type SkillInfo = {
   source: "builtin" | "user";
 };
 
+export type SkillDetail = SkillInfo & {
+  markdown: string;
+  editable: boolean;
+};
+
 export type McpConnector = {
   id: string;
   user_id: string;

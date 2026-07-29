@@ -123,11 +123,13 @@ from gotit.db.ops.resume import (
 )
 from gotit.db.ops.skills import (
     delete_user_skill,
+    get_skill_detail,
     install_skill,
     list_skill_catalog,
     parse_skill_markdown,
     resolve_skill_body,
     set_skill_enabled,
+    update_skill_markdown,
 )
 from gotit.db.ops.thread import (
     add_message,
@@ -254,8 +256,10 @@ __all__ = [
     "clear_ball",
     # skills / connectors (profile center)
     "list_skill_catalog",
+    "get_skill_detail",
     "resolve_skill_body",
     "install_skill",
+    "update_skill_markdown",
     "set_skill_enabled",
     "delete_user_skill",
     "parse_skill_markdown",

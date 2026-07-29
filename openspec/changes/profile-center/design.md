@@ -3,10 +3,11 @@
 ## IA
 
 ```text
-设置（Shell 级全屏/宽 Modal）
-├── 通用     简历入口
-├── 技能     已安装 · 开关 · 上传安装
-└── 连接器   已安装 · 开关 · JSON/手动添加 · 状态点
+设置（Shell 级宽 Modal；标题在侧栏）
+├── 资料     头像/称呼 · 简历入口
+├── Skills   已安装 · 开关 · 上传安装
+├── MCP      已安装 · 开关 · JSON/手动添加 · 状态点
+└── 动态     OpenClaw 写回 activity · 概览（图谱 UI 另定）
 ```
 
 入口：ChatPage navRail 底部齿轮。无 react-router。

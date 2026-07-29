@@ -66,6 +66,52 @@ Stay on one claim. No tangents.
 
 
 @pytest.mark.asyncio
+async def test_skill_get_and_update(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    md = """---
+skill: editable-skill
+notes: v1
+---
+
+## Body v1
+"""
+    r = await client.post("/v1/skills", headers=auth_headers, json={"markdown": md})
+    assert r.status_code == 200
+
+    r = await client.get("/v1/skills/editable-skill", headers=auth_headers)
+    assert r.status_code == 200
+    detail = r.json()
+    assert detail["editable"] is True
+    assert "Body v1" in detail["markdown"]
+
+    md2 = """---
+skill: editable-skill
+notes: v2
+---
+
+## Body v2
+"""
+    r = await client.patch(
+        "/v1/skills/editable-skill",
+        headers=auth_headers,
+        json={"markdown": md2},
+    )
+    assert r.status_code == 200
+    assert r.json()["notes"] == "v2"
+
+    r = await client.get("/v1/skills/editable-skill", headers=auth_headers)
+    assert "Body v2" in r.json()["markdown"]
+
+    r = await client.get("/v1/skills/debug", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["editable"] is False
+
+    r = await client.delete("/v1/skills/editable-skill", headers=auth_headers)
+    assert r.status_code == 204
+
+
+@pytest.mark.asyncio
 async def test_chat_skills_respect_catalog(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:

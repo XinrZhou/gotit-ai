@@ -35,5 +35,5 @@ gotit 已是学习验证心脏（Chat / 日计划 / examine·teach·drill），�
 
 - gotit：interview 域 + shell/obs REST/MCP 对等 + pytest；gate 相关子集绿
 - OpenClaw：微信私聊可调 `gotit_today`；cron 早晚可投递；digest tip 含 event_id
-- Web：设置「外设」能看到动态
+- Web：设置「动态」能看到 OpenClaw 写回
 - 手动：录入一场面试 → D-1 / 当日提醒；今日一件事早推；挂题后收到复盘短讯

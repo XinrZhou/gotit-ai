@@ -17,7 +17,7 @@
 
 ## 3. Web
 
-- [x] SettingsPage：三栏 UI
+- [x] SettingsPage：侧栏 资料 / Skills / MCP / 动态；Skill/MCP 查看编辑；动态人话列表
 - [x] Shell 挂载；navRail 齿轮；`settingsOpen` in useShell
 - [x] Chat tray 只列 enabled skills
 - [x] types + api 调用

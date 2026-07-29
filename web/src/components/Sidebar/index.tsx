@@ -168,7 +168,13 @@ export function Sidebar() {
 
           <div className={styles.sectionLabel}>
             <span>
-              {noteScope === "all" ? "全部资料" : "今日资料"} · {notes.length}
+              {selecting
+                ? selected.size > 0
+                  ? `已选 · ${selected.size}`
+                  : "选择资料"
+                : noteScope === "all"
+                  ? `全部资料 · ${notes.length}`
+                  : `今日资料 · ${notes.length}`}
             </span>
             <div className={styles.sectionTools}>
               {notes.length > 0 ? (
@@ -187,38 +193,38 @@ export function Sidebar() {
                   {selecting ? "取消" : "选择"}
                 </button>
               ) : null}
-              <div className={styles.scopeToggle}>
-                <button
-                  type="button"
-                  className={noteScope === "today" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
-                  onClick={() => setNoteScope("today")}
-                >
-                  今日
-                </button>
-                <button
-                  type="button"
-                  className={noteScope === "all" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
-                  onClick={() => setNoteScope("all")}
-                >
-                  全部
-                </button>
-              </div>
+              {!selecting ? (
+                <div className={styles.scopeToggle}>
+                  <button
+                    type="button"
+                    className={noteScope === "today" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
+                    onClick={() => setNoteScope("today")}
+                  >
+                    今日
+                  </button>
+                  <button
+                    type="button"
+                    className={noteScope === "all" ? `${styles.scopeBtn} ${styles.scopeActive}` : styles.scopeBtn}
+                    onClick={() => setNoteScope("all")}
+                  >
+                    全部
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
 
           {selecting && notes.length > 0 ? (
-            <div className={styles.batchBar}>
-              <button type="button" className={styles.batchQuiet} onClick={toggleAll} disabled={busy}>
-                {selected.size === notes.length ? "取消全选" : "全选"}
-              </button>
-              <button
-                type="button"
-                className={styles.batchDanger}
-                disabled={busy || selected.size === 0}
-                onClick={() => setPendingDeleteIds([...selected])}
-              >
-                删除{selected.size > 0 ? ` · ${selected.size}` : ""}
-              </button>
+            <div className={styles.selectBar}>
+              <label className={styles.selectAll}>
+                <input
+                  type="checkbox"
+                  checked={selected.size === notes.length && notes.length > 0}
+                  disabled={busy}
+                  onChange={toggleAll}
+                />
+                <span>{selected.size === notes.length ? "取消全选" : "全选"}</span>
+              </label>
             </div>
           ) : null}
 
@@ -348,16 +354,27 @@ export function Sidebar() {
             )}
           </div>
 
-          {notes.length > 0 && !selecting ? (
+          {notes.length > 0 ? (
             <div className={styles.foot}>
-              <button
-                type="button"
-                className="btn-compose"
-                disabled={busy}
-                onClick={() => setShowCompose(true)}
-              >
-                + 添加资料
-              </button>
+              {selecting ? (
+                <button
+                  type="button"
+                  className={styles.batchAction}
+                  disabled={busy || selected.size === 0}
+                  onClick={() => setPendingDeleteIds([...selected])}
+                >
+                  删除{selected.size > 0 ? ` ${selected.size} 条` : ""}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-compose"
+                  disabled={busy}
+                  onClick={() => setShowCompose(true)}
+                >
+                  + 添加资料
+                </button>
+              )}
             </div>
           ) : null}
         </>

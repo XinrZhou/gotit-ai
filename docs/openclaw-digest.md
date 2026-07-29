@@ -88,7 +88,7 @@ event_id=<uuid>
 用户回「这篇有用 N」时，OpenClaw 调 `gotit_record_interest`（或
 `POST /v1/shell/interest`），关联该 `event_id`。**不做**自动 ingest。
 
-Web：设置 → **外设** 查看 activity / 画像 v0 / 图谱 v0。
+Web：设置 → **动态** 查看早/晚简报与「标记有用」写回（概览计数；图谱 UI 暂未挂）。
 API：`GET /v1/shell/activity`、`/v1/obs/profile`、`/v1/obs/graph`。
 
 详见 OpenSpec `openspec/changes/companion-os/`（P1b 外设写回）。

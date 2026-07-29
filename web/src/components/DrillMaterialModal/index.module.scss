@@ -47,7 +47,7 @@
 
 .importErr {
   font-size: 12px;
-  color: #c00;
+  color: var(--muted);
 }
 
 .titleInput {
@@ -118,5 +118,5 @@
 }
 
 .itemDel:hover {
-  color: #c00;
+  color: var(--ink);
 }

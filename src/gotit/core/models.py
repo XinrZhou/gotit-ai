@@ -532,6 +532,13 @@ class SkillInfo(BaseModel):
     source: Literal["builtin", "user"] = "builtin"
 
 
+class SkillDetail(SkillInfo):
+    """Skill body for Settings view/edit."""
+
+    markdown: str
+    editable: bool = False
+
+
 class McpConnector(BaseModel):
     """User-configured MCP server that companion agents may call as tools."""
 

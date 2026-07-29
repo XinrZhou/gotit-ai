@@ -1,4 +1,4 @@
-"""Skills settings API — catalog, install, enable, delete."""
+"""Skills settings API — catalog, install, view/edit, enable, delete."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from gotit.api.auth import require_api_key
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
-from gotit.core.models import SkillInfo
+from gotit.core.models import SkillDetail, SkillInfo
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 
@@ -26,7 +26,12 @@ class SkillInstallBody(BaseModel):
 
 
 class SkillPatchBody(BaseModel):
-    enabled: bool
+    enabled: bool | None = None
+    markdown: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Replace user skill markdown (name in frontmatter must match)",
+    )
 
 
 @router.get(
@@ -39,6 +44,26 @@ async def list_skills(
 ) -> list[SkillInfo]:
     async with session_scope() as session:
         return await day_ops.list_skill_catalog(session, user_id=_user_id(settings))
+
+
+@router.get(
+    "/v1/skills/{name}",
+    response_model=SkillDetail,
+    dependencies=[Depends(require_api_key)],
+)
+async def get_skill(
+    name: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SkillDetail:
+    try:
+        async with session_scope() as session:
+            return await day_ops.get_skill_detail(
+                session,
+                user_id=_user_id(settings),
+                name=name,
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post(
@@ -72,16 +97,34 @@ async def patch_skill(
     body: SkillPatchBody,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SkillInfo:
+    if body.enabled is None and body.markdown is None:
+        raise HTTPException(status_code=400, detail="nothing to update")
     try:
         async with session_scope() as session:
-            return await day_ops.set_skill_enabled(
-                session,
-                user_id=_user_id(settings),
-                name=name,
-                enabled=body.enabled,
-            )
+            uid = _user_id(settings)
+            if body.markdown is not None:
+                await day_ops.update_skill_markdown(
+                    session,
+                    user_id=uid,
+                    name=name,
+                    raw_markdown=body.markdown,
+                )
+            if body.enabled is not None:
+                return await day_ops.set_skill_enabled(
+                    session,
+                    user_id=uid,
+                    name=name,
+                    enabled=body.enabled,
+                )
+            catalog = await day_ops.list_skill_catalog(session, user_id=uid)
+            for item in catalog:
+                if item.name == name:
+                    return item
+            raise KeyError(f"skill '{name}' not found")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete(

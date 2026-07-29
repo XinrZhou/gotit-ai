@@ -48,7 +48,7 @@ gotit.db.ops.shell  →  memory_entries (kind=shell_event|interest)
 | `GET /v1/obs/graph` | `gotit_obs_graph` |
 
 Digest 推送后 `record_shell_event`，tip 含 `event_id`；「这篇有用 N」→ `interest`。
-Web 设置「外设」：activity + 精简 profile + graph 计数。
+Web 设置「动态」：人话展示早/晚简报与兴趣写回 + 概览计数（图谱 UI 暂未挂）。
 
 ## gotit：面试信息（InterviewEvent）
 

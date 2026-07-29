@@ -38,7 +38,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Verify loop** | Examine → Critic recheck → deterministic gate → trajectory / SR |
 | **Notes → claims** | Ingest study material into testable claims + daily plan |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
-| **Settings** | Skills + MCP connectors for companion agents (DIY install, no store) |
+| **Settings** | 资料 / Skills / MCP / 动态 — profile, DIY skills + connectors, OpenClaw activity |
 | **OpenClaw via MCP** | Optional channel; gotit exposes the same domain ops as REST |
 | **Harness** | Snapshot cases so prompt/skill changes stay measurable |
 
@@ -132,7 +132,7 @@ Morning/evening digests (OpenClaw cron + RSS): `docs/openclaw-digest.md`,
 | Notes / claims / plan / resume drill | Done |
 | REST ↔ MCP parity + harness gate | Done |
 | OpenClaw WeChat digests (RSS + evening `gotit_today`) | Done |
-| OpenClaw→gotit shell writeback + obs (profile/graph v0) | Done |
+| OpenClaw→gotit shell writeback + Settings「动态」obs (profile overview) | Done |
 | Real agent tool-calling against MCP ops | Next |
 | Per-agent multi-model binding | Next |
 | Persist workflow turns into thread history | Next |

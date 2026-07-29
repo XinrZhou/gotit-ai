@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gotit.core.models import SkillInfo
+from gotit.core.models import SkillDetail, SkillInfo
 from gotit.core.skills import SKILLS_DIR, load_skill
 from gotit.core.skills import list_skills as list_builtin_names
 from gotit.db.models import UserSkillRow
@@ -23,6 +23,14 @@ def _builtin_notes(name: str) -> str | None:
         return None
     meta, _ = _parse_frontmatter(path.read_text(encoding="utf-8"))
     return meta.get("notes") or None
+
+
+def _format_skill_markdown(name: str, notes: str | None, body: str) -> str:
+    lines = ["---", f"skill: {name}"]
+    if notes:
+        lines.append(f"notes: {notes}")
+    lines.extend(["---", "", body.strip(), ""])
+    return "\n".join(lines)
 
 
 def parse_skill_markdown(
@@ -77,6 +85,52 @@ async def list_skill_catalog(
         )
 
     return sorted(out.values(), key=lambda s: s.name)
+
+
+async def get_skill_detail(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    name: str,
+) -> SkillDetail:
+    """Return skill markdown for Settings view/edit."""
+    catalog = await list_skill_catalog(session, user_id=user_id)
+    info = next((s for s in catalog if s.name == name), None)
+    if info is None:
+        raise KeyError(f"skill '{name}' not found")
+
+    result = await session.execute(
+        select(UserSkillRow).where(
+            UserSkillRow.user_id == user_id,
+            UserSkillRow.name == name,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is not None and row.body:
+        markdown = _format_skill_markdown(name, row.notes or info.notes, row.body)
+        return SkillDetail(
+            name=info.name,
+            notes=info.notes,
+            enabled=info.enabled,
+            source=info.source,
+            markdown=markdown,
+            editable=True,
+        )
+
+    path = SKILLS_DIR / f"{name}.md"
+    if path.is_file():
+        markdown = path.read_text(encoding="utf-8")
+    else:
+        body = load_skill(name) or ""
+        markdown = _format_skill_markdown(name, info.notes, body) if body else ""
+    return SkillDetail(
+        name=info.name,
+        notes=info.notes,
+        enabled=info.enabled,
+        source=info.source,
+        markdown=markdown,
+        editable=info.source == "user",
+    )
 
 
 async def resolve_skill_body(
@@ -139,6 +193,39 @@ async def install_skill(
         row.updated_at = now
     await session.flush()
     return SkillInfo(name=name, notes=notes, enabled=True, source="user")
+
+
+async def update_skill_markdown(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    name: str,
+    raw_markdown: str,
+) -> SkillInfo:
+    """Replace body of an existing user skill (name in frontmatter must match)."""
+    parsed_name, body, notes = parse_skill_markdown(raw_markdown, fallback_name=name)
+    if parsed_name != name:
+        raise ValueError(f"skill name in markdown must stay '{name}'")
+    result = await session.execute(
+        select(UserSkillRow).where(
+            UserSkillRow.user_id == user_id,
+            UserSkillRow.name == name,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None or not row.body or row.source != "user":
+        raise ValueError(f"skill '{name}' is not a user-editable install")
+    now = datetime.now(UTC)
+    row.body = body
+    row.notes = notes
+    row.updated_at = now
+    await session.flush()
+    return SkillInfo(
+        name=name,
+        notes=notes,
+        enabled=bool(row.enabled),
+        source="user",
+    )
 
 
 async def set_skill_enabled(

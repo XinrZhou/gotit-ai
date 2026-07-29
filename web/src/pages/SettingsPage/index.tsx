@@ -7,18 +7,43 @@ import {
   profileTint,
 } from "../../lib/userProfile";
 import { useStore } from "../../store";
-import type { McpConnector, SkillInfo } from "../../types";
+import type { McpConnector, SkillDetail, SkillInfo } from "../../types";
 import { ShellObsPanel } from "./ShellObsPanel";
 import styles from "./index.module.scss";
 
 type Tab = "general" | "skills" | "connectors" | "shell";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "general", label: "通用" },
+  { id: "general", label: "资料" },
   { id: "skills", label: "Skills" },
   { id: "connectors", label: "MCP" },
-  { id: "shell", label: "外设" },
+  { id: "shell", label: "动态" },
 ];
+
+type SkillSheet =
+  | { kind: "install" }
+  | { kind: "detail"; name: string; markdown: string; editable: boolean };
+
+type ConnSheet = "json" | "manual" | "edit" | null;
+
+function connectorConfigFields(c: McpConnector) {
+  const cfg = c.config ?? {};
+  if (c.transport === "stdio") {
+    const args = Array.isArray(cfg.args)
+      ? (cfg.args as string[]).join(" ")
+      : String(cfg.args ?? "");
+    return {
+      command: String(cfg.command ?? ""),
+      args,
+      url: "",
+    };
+  }
+  return {
+    command: "",
+    args: "",
+    url: String(cfg.url ?? ""),
+  };
+}
 
 export function SettingsPage() {
   const {
@@ -38,9 +63,10 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [draftName, setDraftName] = useState(userProfile.name);
   const [draftAvatar, setDraftAvatar] = useState(userProfile.avatar);
-  const [installOpen, setInstallOpen] = useState(false);
-  const [installMd, setInstallMd] = useState("");
-  const [connOpen, setConnOpen] = useState<"json" | "manual" | null>(null);
+  const [skillSheet, setSkillSheet] = useState<SkillSheet | null>(null);
+  const [skillMd, setSkillMd] = useState("");
+  const [connOpen, setConnOpen] = useState<ConnSheet>(null);
+  const [editingConnId, setEditingConnId] = useState<string | null>(null);
   const [jsonPaste, setJsonPaste] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualTransport, setManualTransport] = useState<"stdio" | "http" | "sse">(
@@ -51,6 +77,13 @@ export function SettingsPage() {
   const [manualUrl, setManualUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
+
+  const closeSheets = () => {
+    setSkillSheet(null);
+    setSkillMd("");
+    setConnOpen(null);
+    setEditingConnId(null);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -121,20 +154,50 @@ export function SettingsPage() {
       "已移除 Skill",
     );
 
-  const onInstallSkill = () =>
-    void run(async () => {
-      await api("/v1/skills", {
-        method: "POST",
-        body: JSON.stringify({ markdown: installMd }),
+  const onOpenSkill = async (name: string) => {
+    setBusy(true);
+    try {
+      const detail = await api<SkillDetail>(`/v1/skills/${encodeURIComponent(name)}`);
+      setSkillMd(detail.markdown);
+      setSkillSheet({
+        kind: "detail",
+        name: detail.name,
+        markdown: detail.markdown,
+        editable: detail.editable,
       });
-      setInstallMd("");
-      setInstallOpen(false);
-    }, "Skill 已安装");
+      setConnOpen(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSaveSkill = () => {
+    if (!skillSheet) return;
+    if (skillSheet.kind === "install") {
+      void run(async () => {
+        await api("/v1/skills", {
+          method: "POST",
+          body: JSON.stringify({ markdown: skillMd }),
+        });
+        closeSheets();
+      }, "Skill 已安装");
+      return;
+    }
+    void run(async () => {
+      await api(`/v1/skills/${encodeURIComponent(skillSheet.name)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ markdown: skillMd }),
+      });
+      closeSheets();
+    }, "Skill 已保存");
+  };
 
   const onFileSkill = async (file: File) => {
     const text = await file.text();
-    setInstallMd(text);
-    setInstallOpen(true);
+    setSkillMd(text);
+    setSkillSheet({ kind: "install" });
   };
 
   const onToggleConnector = (id: string, enabled: boolean) =>
@@ -159,6 +222,29 @@ export function SettingsPage() {
       "探测完成",
     );
 
+  const openConnEdit = (c: McpConnector) => {
+    const fields = connectorConfigFields(c);
+    setEditingConnId(c.id);
+    setManualName(c.name);
+    setManualTransport(c.transport);
+    setManualCommand(fields.command);
+    setManualArgs(fields.args);
+    setManualUrl(fields.url);
+    setConnOpen("edit");
+    setSkillSheet(null);
+  };
+
+  const openConnAdd = () => {
+    setEditingConnId(null);
+    setManualName("");
+    setManualTransport("stdio");
+    setManualCommand("");
+    setManualArgs("");
+    setManualUrl("");
+    setConnOpen("manual");
+    setSkillSheet(null);
+  };
+
   const onImportJson = () =>
     void run(async () => {
       const config = JSON.parse(jsonPaste) as Record<string, unknown>;
@@ -167,10 +253,10 @@ export function SettingsPage() {
         body: JSON.stringify({ config }),
       });
       setJsonPaste("");
-      setConnOpen(null);
+      closeSheets();
     }, "已导入 MCP");
 
-  const onAddManual = () =>
+  const onSaveConnector = () =>
     void run(async () => {
       const config =
         manualTransport === "stdio"
@@ -183,28 +269,40 @@ export function SettingsPage() {
               env: {},
             }
           : { url: manualUrl.trim(), headers: {} };
-      await api("/v1/connectors", {
-        method: "POST",
-        body: JSON.stringify({
-          name: manualName.trim(),
-          transport: manualTransport,
-          config,
-          enabled: true,
-        }),
-      });
-      setManualName("");
-      setManualCommand("");
-      setManualArgs("");
-      setManualUrl("");
-      setConnOpen(null);
-    }, "已添加 MCP");
+      if (editingConnId) {
+        await api(`/v1/connectors/${editingConnId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: manualName.trim(),
+            transport: manualTransport,
+            config,
+          }),
+        });
+      } else {
+        await api("/v1/connectors", {
+          method: "POST",
+          body: JSON.stringify({
+            name: manualName.trim(),
+            transport: manualTransport,
+            config,
+            enabled: true,
+          }),
+        });
+      }
+      closeSheets();
+    }, editingConnId ? "已保存 MCP" : "已添加 MCP");
 
   const previewName = draftName.trim() || "学习者";
+  const sheetOpen = skillSheet !== null || connOpen !== null;
+  const skillEditable =
+    skillSheet?.kind === "install" ||
+    (skillSheet?.kind === "detail" && skillSheet.editable);
 
   return (
-    <Modal title="设置" onClose={() => setSettingsOpen(false)} wide flush>
+    <Modal onClose={() => setSettingsOpen(false)} wide flush titleless>
       <div className={styles.settings}>
         <nav className={styles.side} aria-label="设置分类">
+          <h2 className={styles.sideTitle}>设置</h2>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -212,8 +310,7 @@ export function SettingsPage() {
               className={`${styles.tab} ${tab === t.id ? styles.tabActive : ""}`}
               onClick={() => {
                 setTab(t.id);
-                setInstallOpen(false);
-                setConnOpen(null);
+                closeSheets();
               }}
             >
               {t.label}
@@ -221,41 +318,46 @@ export function SettingsPage() {
           ))}
         </nav>
 
-        <div className={styles.pane}>
-          {installOpen ? (
+        <div className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}`}>
+          {skillSheet ? (
             <div className={styles.sheet}>
-              <h4 className={styles.sheetTitle}>Install Skill</h4>
-              <p className={styles.hint}>粘贴含 frontmatter 的 SKILL.md</p>
+              <h4 className={styles.sheetTitle}>
+                {skillSheet.kind === "install"
+                  ? "安装 Skill"
+                  : skillSheet.editable
+                    ? `编辑 · ${skillSheet.name}`
+                    : `查看 · ${skillSheet.name}`}
+              </h4>
               <textarea
                 className={styles.textarea}
-                rows={10}
-                value={installMd}
-                onChange={(e) => setInstallMd(e.target.value)}
+                value={skillMd}
+                readOnly={!skillEditable}
+                onChange={(e) => setSkillMd(e.target.value)}
                 placeholder={"---\nskill: my-skill\nnotes: …\n---\n\n## Skill\n…"}
               />
               <div className={styles.sheetActions}>
-                <button type="button" className="btn-ghost" onClick={() => setInstallOpen(false)}>
-                  取消
+                <button type="button" className="btn-ghost" onClick={closeSheets}>
+                  {skillEditable ? "取消" : "关闭"}
                 </button>
-                <button
-                  type="button"
-                  className="btn-ink"
-                  disabled={busy || !installMd.trim()}
-                  onClick={onInstallSkill}
-                >
-                  安装
-                </button>
+                {skillEditable ? (
+                  <button
+                    type="button"
+                    className="btn-ink"
+                    disabled={busy || !skillMd.trim()}
+                    onClick={onSaveSkill}
+                  >
+                    {skillSheet.kind === "install" ? "安装" : "保存"}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
 
           {connOpen === "json" ? (
             <div className={styles.sheet}>
-              <h4 className={styles.sheetTitle}>Paste MCP JSON</h4>
-              <p className={styles.hint}>Claude / Cursor 风格的 mcpServers 配置</p>
+              <h4 className={styles.sheetTitle}>粘贴 MCP JSON</h4>
               <textarea
                 className={styles.textarea}
-                rows={10}
                 value={jsonPaste}
                 onChange={(e) => setJsonPaste(e.target.value)}
                 placeholder={
@@ -263,7 +365,7 @@ export function SettingsPage() {
                 }
               />
               <div className={styles.sheetActions}>
-                <button type="button" className="btn-ghost" onClick={() => setConnOpen(null)}>
+                <button type="button" className="btn-ghost" onClick={closeSheets}>
                   取消
                 </button>
                 <button
@@ -278,57 +380,73 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {connOpen === "manual" ? (
+          {connOpen === "manual" || connOpen === "edit" ? (
             <div className={styles.sheet}>
-              <h4 className={styles.sheetTitle}>Add MCP Server</h4>
-              <label className={styles.field}>
-                <span>Name</span>
-                <input value={manualName} onChange={(e) => setManualName(e.target.value)} />
-              </label>
-              <label className={styles.field}>
-                <span>Transport</span>
-                <select
-                  value={manualTransport}
-                  onChange={(e) =>
-                    setManualTransport(e.target.value as "stdio" | "http" | "sse")
-                  }
-                >
-                  <option value="stdio">STDIO</option>
-                  <option value="http">HTTP</option>
-                  <option value="sse">SSE</option>
-                </select>
-              </label>
-              {manualTransport === "stdio" ? (
-                <>
-                  <label className={styles.field}>
-                    <span>Command</span>
-                    <input
-                      value={manualCommand}
-                      onChange={(e) => setManualCommand(e.target.value)}
-                      placeholder="npx"
-                    />
-                  </label>
-                  <label className={styles.field}>
-                    <span>Args</span>
-                    <input
-                      value={manualArgs}
-                      onChange={(e) => setManualArgs(e.target.value)}
-                      placeholder="-y some-mcp-server"
-                    />
-                  </label>
-                </>
-              ) : (
+              <h4 className={styles.sheetTitle}>
+                {connOpen === "edit" ? "编辑 MCP" : "添加 MCP"}
+              </h4>
+              <div className={styles.sheetBody}>
                 <label className={styles.field}>
-                  <span>URL</span>
-                  <input
-                    value={manualUrl}
-                    onChange={(e) => setManualUrl(e.target.value)}
-                    placeholder="https://…"
-                  />
+                  <span>名称</span>
+                  <input value={manualName} onChange={(e) => setManualName(e.target.value)} />
                 </label>
-              )}
+                <div className={styles.field}>
+                  <span>传输</span>
+                  <div className={styles.segment} role="radiogroup" aria-label="传输">
+                    {(
+                      [
+                        { id: "stdio", label: "STDIO" },
+                        { id: "http", label: "HTTP" },
+                        { id: "sse", label: "SSE" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={manualTransport === opt.id}
+                        className={`${styles.segmentItem} ${
+                          manualTransport === opt.id ? styles.segmentActive : ""
+                        }`}
+                        onClick={() => setManualTransport(opt.id)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {manualTransport === "stdio" ? (
+                  <>
+                    <label className={styles.field}>
+                      <span>Command</span>
+                      <input
+                        value={manualCommand}
+                        onChange={(e) => setManualCommand(e.target.value)}
+                        placeholder="npx"
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Args</span>
+                      <input
+                        value={manualArgs}
+                        onChange={(e) => setManualArgs(e.target.value)}
+                        placeholder="-y some-mcp-server"
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <label className={styles.field}>
+                    <span>URL</span>
+                    <input
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                      placeholder="https://…"
+                    />
+                  </label>
+                )}
+              </div>
               <div className={styles.sheetActions}>
-                <button type="button" className="btn-ghost" onClick={() => setConnOpen(null)}>
+                <button type="button" className="btn-ghost" onClick={closeSheets}>
                   取消
                 </button>
                 <button
@@ -341,141 +459,142 @@ export function SettingsPage() {
                       ? !manualCommand.trim()
                       : !manualUrl.trim())
                   }
-                  onClick={onAddManual}
+                  onClick={onSaveConnector}
                 >
-                  添加
+                  保存
                 </button>
               </div>
             </div>
           ) : null}
 
-          {!installOpen && !connOpen && tab === "general" ? (
+          {!sheetOpen && tab === "general" ? (
             <>
-              <p className={styles.paneTitle}>资料</p>
-              <div className={styles.group}>
-                <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
-                  <div className={styles.profileRow}>
-                    <button
-                      type="button"
-                      className={styles.avatarBtn}
-                      style={
-                        draftAvatar
-                          ? undefined
-                          : { background: profileTint(previewName) }
-                      }
-                      onClick={() => avatarRef.current?.click()}
-                      title="更换头像"
-                      aria-label="更换头像"
-                    >
-                      {draftAvatar ? (
-                        <img src={draftAvatar} alt="" />
-                      ) : (
-                        <span>{profileInitials(previewName)}</span>
-                      )}
-                    </button>
-                    <input
-                      ref={avatarRef}
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void onPickAvatar(f);
-                        e.target.value = "";
-                      }}
-                    />
-                    <div className={styles.profileFields}>
-                      <input
-                        className={styles.nameInput}
-                        value={draftName}
-                        maxLength={32}
-                        placeholder="你的称呼"
-                        aria-label="名称"
-                        onChange={(e) => setDraftName(e.target.value)}
-                      />
-                      <div className={styles.avatarActions}>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          onClick={() => avatarRef.current?.click()}
-                        >
-                          更换头像
-                        </button>
+              <div>
+                <p className={styles.paneTitle}>称呼</p>
+                <div className={styles.group}>
+                  <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
+                    <div className={styles.profileRow}>
+                      <button
+                        type="button"
+                        className={styles.avatarBtn}
+                        style={
+                          draftAvatar
+                            ? undefined
+                            : { background: profileTint(previewName) }
+                        }
+                        onClick={() => avatarRef.current?.click()}
+                        title="更换头像"
+                        aria-label="更换头像"
+                      >
                         {draftAvatar ? (
+                          <img src={draftAvatar} alt="" />
+                        ) : (
+                          <span>{profileInitials(previewName)}</span>
+                        )}
+                      </button>
+                      <input
+                        ref={avatarRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void onPickAvatar(f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <div className={styles.profileFields}>
+                        <input
+                          className={styles.nameInput}
+                          value={draftName}
+                          maxLength={32}
+                          placeholder="你的称呼"
+                          aria-label="名称"
+                          onChange={(e) => setDraftName(e.target.value)}
+                        />
+                        <div className={styles.avatarActions}>
                           <button
                             type="button"
                             className="btn-ghost"
-                            onClick={() => setDraftAvatar("")}
+                            onClick={() => avatarRef.current?.click()}
                           >
-                            使用缩写
+                            更换头像
                           </button>
-                        ) : null}
+                          {draftAvatar ? (
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              onClick={() => setDraftAvatar("")}
+                            >
+                              使用缩写
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
+                      {profileDirty ? (
+                        <button
+                          type="button"
+                          className={`btn-ink ${styles.profileSave}`}
+                          onClick={onSaveProfile}
+                        >
+                          保存
+                        </button>
+                      ) : null}
                     </div>
-                    {profileDirty ? (
-                      <button
-                        type="button"
-                        className={`btn-ink ${styles.profileSave}`}
-                        onClick={onSaveProfile}
-                      >
-                        保存
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               </div>
 
-              <p className={styles.paneTitle}>简历</p>
-              <div className={styles.group}>
-                <div className={styles.groupRow}>
-                  <div className={styles.groupMain}>
-                    <span className={styles.groupLabel}>
-                      {resume ? "已导入" : "未导入"}
-                    </span>
-                    <span className={styles.groupMeta}>
-                      {resume
-                        ? "可查看或重新导入，用于项目深挖"
-                        : "导入后可用于项目深挖"}
-                    </span>
-                  </div>
-                  <div className={styles.row}>
-                    {resume ? (
+              <div>
+                <p className={styles.paneTitle}>简历</p>
+                <div className={styles.group}>
+                  <div className={styles.groupRow}>
+                    <div className={styles.groupMain}>
+                      <span className={styles.groupLabel}>
+                        {resume ? "已导入" : "未导入"}
+                      </span>
+                      <span className={styles.groupMeta}>
+                        {resume
+                          ? "可查看或重新导入，用于项目深挖"
+                          : "导入后可用于项目深挖"}
+                      </span>
+                    </div>
+                    <div className={styles.row}>
+                      {resume ? (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          disabled={busy}
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            setShowResumeViewer(true);
+                          }}
+                        >
+                          查看
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="btn-ghost"
                         disabled={busy}
                         onClick={() => {
                           setSettingsOpen(false);
-                          setShowResumeViewer(true);
+                          setShowResumeModal(true);
                         }}
                       >
-                        查看
+                        {resume ? "重新导入" : "导入"}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        setSettingsOpen(false);
-                        setShowResumeModal(true);
-                      }}
-                    >
-                      {resume ? "重新导入" : "导入"}
-                    </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </>
           ) : null}
 
-          {!installOpen && !connOpen && tab === "skills" ? (
+          {!sheetOpen && tab === "skills" ? (
             <>
               <div className={styles.sectionHead}>
-                <div>
-                  <p className={styles.paneTitle}>Installed</p>
-                  <p className={styles.hint}>上传 SKILL.md，无市场</p>
-                </div>
+                <p className={styles.paneTitle}>已安装</p>
                 <div className={styles.row}>
                   <input
                     ref={fileRef}
@@ -494,15 +613,18 @@ export function SettingsPage() {
                     disabled={busy}
                     onClick={() => fileRef.current?.click()}
                   >
-                    Upload
+                    上传
                   </button>
                   <button
                     type="button"
                     className="btn-ink"
                     disabled={busy}
-                    onClick={() => setInstallOpen(true)}
+                    onClick={() => {
+                      setSkillMd("");
+                      setSkillSheet({ kind: "install" });
+                    }}
                   >
-                    Paste
+                    粘贴
                   </button>
                 </div>
               </div>
@@ -513,20 +635,30 @@ export function SettingsPage() {
                       <div className={styles.listMain}>
                         <span className={styles.listName}>{s.name}</span>
                         <span className={styles.listMeta}>
-                          {s.source === "builtin" ? "builtin" : "user"}
+                          {s.source === "builtin" ? "内置" : "自定义"}
                           {s.notes ? ` · ${s.notes}` : ""}
                         </span>
                       </div>
                       <div className={styles.listActions}>
-                        <label className={styles.toggle}>
-                          <input
-                            type="checkbox"
-                            checked={s.enabled}
-                            disabled={busy}
-                            onChange={(e) => onToggleSkill(s.name, e.target.checked)}
-                          />
-                          <span>{s.enabled ? "On" : "Off"}</span>
-                        </label>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          disabled={busy}
+                          onClick={() => void onOpenSkill(s.name)}
+                        >
+                          {s.source === "user" ? "编辑" : "查看"}
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={s.enabled}
+                          aria-label={s.enabled ? `关闭 ${s.name}` : `启用 ${s.name}`}
+                          className={`${styles.switch} ${s.enabled ? styles.switchOn : ""}`}
+                          disabled={busy}
+                          onClick={() => onToggleSkill(s.name, !s.enabled)}
+                        >
+                          <span className={styles.switchKnob} />
+                        </button>
                         {s.source === "user" ? (
                           <button
                             type="button"
@@ -541,36 +673,36 @@ export function SettingsPage() {
                     </li>
                   ))}
                   {skills.length === 0 ? (
-                    <li className={styles.empty}>No skills yet</li>
+                    <li className={styles.empty}>暂无 Skill</li>
                   ) : null}
                 </ul>
               </div>
             </>
           ) : null}
 
-          {!installOpen && !connOpen && tab === "connectors" ? (
+          {!sheetOpen && tab === "connectors" ? (
             <>
               <div className={styles.sectionHead}>
-                <div>
-                  <p className={styles.paneTitle}>Servers</p>
-                  <p className={styles.hint}>挂给搭子当工具</p>
-                </div>
+                <p className={styles.paneTitle}>服务器</p>
                 <div className={styles.row}>
                   <button
                     type="button"
                     className="btn-ghost"
                     disabled={busy}
-                    onClick={() => setConnOpen("json")}
+                    onClick={() => {
+                      setJsonPaste("");
+                      setConnOpen("json");
+                    }}
                   >
-                    Paste JSON
+                    粘贴 JSON
                   </button>
                   <button
                     type="button"
                     className="btn-ink"
                     disabled={busy}
-                    onClick={() => setConnOpen("manual")}
+                    onClick={openConnAdd}
                   >
-                    Add
+                    添加
                   </button>
                 </div>
               </div>
@@ -599,22 +731,32 @@ export function SettingsPage() {
                         </span>
                       </div>
                       <div className={styles.listActions}>
-                        <label className={styles.toggle}>
-                          <input
-                            type="checkbox"
-                            checked={c.enabled}
-                            disabled={busy}
-                            onChange={(e) => onToggleConnector(c.id, e.target.checked)}
-                          />
-                          <span>{c.enabled ? "On" : "Off"}</span>
-                        </label>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          disabled={busy}
+                          onClick={() => openConnEdit(c)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={c.enabled}
+                          aria-label={c.enabled ? `关闭 ${c.name}` : `启用 ${c.name}`}
+                          className={`${styles.switch} ${c.enabled ? styles.switchOn : ""}`}
+                          disabled={busy}
+                          onClick={() => onToggleConnector(c.id, !c.enabled)}
+                        >
+                          <span className={styles.switchKnob} />
+                        </button>
                         <button
                           type="button"
                           className="btn-ghost"
                           disabled={busy}
                           onClick={() => onProbe(c.id)}
                         >
-                          Probe
+                          探测
                         </button>
                         <button
                           type="button"
@@ -628,14 +770,14 @@ export function SettingsPage() {
                     </li>
                   ))}
                   {connectors.length === 0 ? (
-                    <li className={styles.empty}>No MCP servers</li>
+                    <li className={styles.empty}>暂无 MCP</li>
                   ) : null}
                 </ul>
               </div>
             </>
           ) : null}
 
-          {!installOpen && !connOpen && tab === "shell" ? <ShellObsPanel /> : null}
+          {!sheetOpen && tab === "shell" ? <ShellObsPanel /> : null}
         </div>
       </div>
     </Modal>

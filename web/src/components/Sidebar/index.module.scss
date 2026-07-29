@@ -81,47 +81,60 @@
   color: var(--ink);
 }
 
-.batchBar {
+.selectBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 16px 8px;
+  padding: 0 16px 6px;
   flex-shrink: 0;
 }
 
-.batchQuiet {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
   padding: 4px 6px;
   border-radius: 6px;
   cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.batchQuiet:hover {
+.selectAll:hover {
   color: var(--ink);
   background: var(--fill);
 }
 
-.batchDanger {
-  border: none;
-  background: transparent;
-  color: var(--danger);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: 6px;
+.selectAll input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ink);
   cursor: pointer;
 }
 
-.batchDanger:hover:not(:disabled) {
-  background: rgba(255, 59, 48, 0.08);
+.batchAction {
+  width: 100%;
+  height: 40px;
+  border: none;
+  background: var(--fill);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
-.batchDanger:disabled {
-  opacity: 0.35;
+.batchAction:hover:not(:disabled) {
+  background: var(--line);
+}
+
+.batchAction:disabled {
+  opacity: 0.4;
   cursor: default;
 }
 
@@ -139,21 +152,16 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-left: 4px;
+  margin-left: 8px;
   cursor: pointer;
 }
 
 .noteCheck input {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   accent-color: var(--ink);
   cursor: pointer;
 }
-
-.noteItemSelected {
-  background: var(--fill);
-}
-
 
 .sectionAdd {
   width: 22px;
@@ -325,9 +333,18 @@
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   padding: 0 4px 0 0;
   border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.noteItem:hover {
+  background: var(--fill);
+}
+
+.noteItemSelected {
+  background: var(--fill);
 }
 
 .noteItemDim {
@@ -380,14 +397,13 @@
   font-size: 13.5px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.12s ease;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .noteMain:hover {
-  background: var(--fill);
+  background: transparent;
 }
 
 .noteTitle {
@@ -465,11 +481,12 @@
 }
 
 .menuDanger {
-  color: var(--danger);
+  color: var(--muted);
 }
 
 .menuDanger:hover {
-  background: rgba(255, 59, 48, 0.08);
+  color: var(--ink);
+  background: var(--fill);
 }
 
 .foot {

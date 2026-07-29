@@ -277,23 +277,25 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 8px 12px;
+  padding: 10px 8px;
   border-top: 1px solid var(--line);
 }
 
 .profileBtn {
   flex: 1;
   min-width: 0;
+  height: 36px;
   display: flex;
   align-items: center;
   gap: 10px;
   border: none;
   background: transparent;
   color: var(--ink);
-  padding: 6px 8px;
+  padding: 0 8px;
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
+  line-height: 1;
   transition: background 0.15s ease;
 }
 
@@ -311,6 +313,7 @@
   justify-content: center;
   font-size: 11px;
   font-weight: 500;
+  line-height: 1;
   color: var(--ink);
   letter-spacing: -0.02em;
   overflow: hidden;
@@ -327,6 +330,7 @@
 .profileName {
   font-size: 13px;
   font-weight: 400;
+  line-height: 1;
   letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -335,8 +339,8 @@
 
 .settingsBtn {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -346,6 +350,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
@@ -358,6 +363,7 @@
   width: 16px;
   height: 16px;
   display: block;
+  flex-shrink: 0;
 }
 
 .threadItemRow {
@@ -888,7 +894,7 @@
 
 .sendError {
   font-size: 12.5px;
-  color: var(--danger);
+  color: var(--muted);
   line-height: 1.45;
 }
 
@@ -1062,8 +1068,10 @@
 .navRailCompact .navFooter {
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 10px 12px;
+  padding: 10px;
+  min-height: 0;
 }
 
 .navRailCompact .profileName {
@@ -1072,8 +1080,8 @@
 
 .navRailCompact .profileBtn {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   justify-content: center;
 }

@@ -22,7 +22,7 @@
 - [x] core models：Shell* / ProfileView / GraphView
 - [x] REST routes + MCP tools（对等）
 - [x] digest：写回 shell_event + tip 含 event_id；SKILL「有用」→ interest
-- [x] Web Settings「外设」只读观测
+- [x] Web Settings「动态」只读观测（activity + 概览；图谱 UI 另定）
 - [x] pytest (`tests/test_shell_bridge.py`)
 - [x] docs：SYSTEM / openclaw-digest / gotit SKILL
 
@@ -60,4 +60,4 @@
 
 - [ ] `uv run pytest`（interview + shell + 相关）
 - [ ] `./scripts/gate.sh` 或约定子集
-- [ ] 手动清单：微信 today / 早一件事 / 挂题短讯 / 面试提醒 / 外设观测各跑通一次
+- [ ] 手动清单：微信 today / 早一件事 / 挂题短讯 / 面试提醒 / 动态观测各跑通一次

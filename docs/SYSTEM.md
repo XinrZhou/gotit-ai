@@ -60,8 +60,9 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   conversation top bar; nav rail = brand + threads)
 - Library = left **drawer overlay** (does not push chat columns)
 - Composer: agents/skills behind `+` tray; quiet Apple select
-- **Settings** (nav gear): 通用 / 技能 / 连接器 — DIY skill install + MCP
-  connectors for companion agents (no marketplace); enabled MCP → chat toolsets
+- **Settings** (nav gear): 资料 / Skills / MCP / 动态 — profile + DIY skill
+  install/view/edit + MCP connectors (no marketplace); enabled MCP → chat
+  toolsets; 动态 = OpenClaw 简报/兴趣写回（分类/时间筛选 + 详情）
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
 - Notes → claims → plan; project + resume-driven drill (resume import =
   projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
@@ -73,7 +74,7 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Morning/evening digests (RSS + evening `gotit_today`): `docs/openclaw-digest.md`；
   skill `skills/digest/` + Gateway cron（Asia/Shanghai）
 - **Bridge writeback**: digest → `shell_event`；「有用」→ `interest`；
-  obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「外设」
+  obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「动态」
 
 ## Not done yet (honest)
 

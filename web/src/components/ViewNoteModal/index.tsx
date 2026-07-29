@@ -12,7 +12,7 @@ export function ViewNoteModal() {
         <>
           <button
             type="button"
-            className="btn-danger"
+            className={`btn-ghost${viewNote.claim_ids.length === 0 ? " btn-start" : ""}`}
             disabled={busy}
             onClick={() => onDeleteNote(viewNote.id)}
           >

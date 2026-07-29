@@ -435,9 +435,6 @@ export function ChatPage() {
               </button>
             </div>
           ))}
-          {threads.length === 0 ? (
-            <span className={styles.threadItemSub}>还没有对话</span>
-          ) : null}
         </div>
 
         <div className={styles.navFooter}>
