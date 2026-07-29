@@ -1,0 +1,69 @@
+---
+description: Backend src/gotit package layout and subdomain boundaries
+alwaysApply: true
+---
+
+# Backend structure
+
+## Top-level packages (`src/gotit/`)
+
+- `core/` — domain layer, **framework-free** (no `fastapi`/`mcp`/`starlette`
+  imports). `core/agents/`, `core/resume/`, `core/loop.py`, `core/models.py`.
+- `db/` — SQLAlchemy async adapters: `models.py` (ORM), `session.py`,
+  `runtime.py`, and `ops/` (domain operations).
+- `api/` — FastAPI: `main.py`, `settings.py`, `auth.py`, `deps.py`,
+  `routes/` (route package).
+- `mcp/` — MCP tool surface (`server.py`). Thin: calls `db.ops` + `core`,
+  never duplicates domain logic.
+- `harness/` — dev/gate case sets.
+- `prompts/` — prompt loader.
+
+Iron law: **REST and MCP share the same domain operations** (`db.ops`) and
+schemas (`core.models`). Never put verification logic in `api/` or `mcp/`.
+
+## `db/ops/` — subdomain modules
+
+One module per subdomain; each owns its rows + view helpers.
+
+| module | owns |
+|---|---|
+| `_common.py` | constants (`DEFAULT_USER_ID`, `EXCERPT_LEN`) + shared view helpers (`_excerpt`, `_plan_item_view`, `_note_view`, `_claim_view`) |
+| `day.py` | learning-day, plan CRUD, due-claims, `fill_today_from_queue`, `get_today`, chat messages |
+| `note.py` | notes CRUD, `stub_extract_claim`, `_strip_html`, `ingest_note`, `curate_claims`, note/project claim listing |
+| `claim.py` | examine writeback (`apply_examine_result/verdict`), `list_topic_claims_today`, `list_project_claims` |
+| `project.py` | project CRUD + `project_progress` |
+| `resume.py` | resume upsert/get/apply |
+| `drill.py` | drill materials + sessions |
+| `prompt.py` | prompt register/get/list |
+| `memory.py` | memory add/list |
+| `harness.py` | harness run/case persistence |
+
+`__init__.py` is a **barrel** that re-exports every public name (plus
+`_strip_html`, used by routes), so callers do `from gotit.db import ops as
+day_ops` and never import a submodule directly.
+
+### Circular-import rule
+
+The only cycle is `day ↔ note`. Break it by importing **one direction at
+module top** (`day` imports `note.list_notes`) and the reverse via **local
+imports inside functions** (`note` locally imports `day.ensure_day`). Any new
+cross-subdomain call that would form a cycle must follow this pattern; prefer
+pushing the shared primitive into `_common` instead.
+
+## `api/routes/` — one router per subdomain
+
+Each route module declares `router = APIRouter()` and its own Pydantic
+request/response models. `routes/__init__.py` aggregates via
+`router.include_router(...)` and exposes `router`, so `main.py` keeps
+`from gotit.api.routes import router`.
+
+Shared helpers live in `routes/_common.py`: `_user_id`, `_resume_ext`,
+`active_prompt`, `_run_sage`, and resume constants shared across modules.
+
+## When adding a feature
+
+1. Pick the subdomain module in `db/ops/` (or add one + barrel re-export).
+2. Add the route in the matching `api/routes/` module (or add one + register in
+   `__init__`).
+3. Add the MCP tool in `mcp/server.py` calling the same `db.ops` function.
+4. Keep `core` framework-free; new domain types go in `core/models.py`.
