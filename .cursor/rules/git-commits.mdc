@@ -24,6 +24,10 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/) in **English
 - Body is **optional**. If present: 1–3 short sentences on **why / impact**, not a file checklist
 - Do **not** list every touched path, UI detail, or OpenSpec folder in the body — put that in the PR or `openspec/changes/`
 - Prefer several small commits over one mega-message when scopes differ
+- **Do not over-split.** Aim for a handful of commits per logical change
+  (typically 1–3), not one per file/submodule. A single refactor that touches
+  `core` + `api` + `web` together is one commit, not three — the scopes are
+  part of the same change. Split only when edits are genuinely unrelated.
 - Commit in batches by change — group related edits into one commit, separate unrelated edits into their own commits
 - Pass the message via HEREDOC; no Chinese in the subject
 
@@ -52,3 +56,15 @@ feat(core): add daily plan, notes, chat persistence and web workspace
 ```
 
 (Too long; reads like a changelog. Split commits or move detail to the PR.)
+
+```text
+refactor(core): split db.ops into day module
+refactor(core): split db.ops into note module
+refactor(core): split db.ops into claim module
+refactor(api): split routes health endpoint
+refactor(api): split routes ingest endpoint
+...
+```
+
+(Over-split. One cohesive `db.ops` refactor should be a single commit, not
+one per submodule. Group related edits; split only unrelated work.)
