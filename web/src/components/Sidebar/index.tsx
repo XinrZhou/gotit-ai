@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { fmtDate } from "../../format";
+import { fmtDate } from "../../lib/format";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
 

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, uploadFile } from "./api";
+import { api, uploadFile } from "../api";
 import type {
   DayNote,
   DayPlan,
@@ -25,7 +25,7 @@ import type {
   ResumeUploadResponse,
   TeachResponse,
   TopicExamineResponse,
-} from "./types";
+} from "../types";
 
 type Store = {
   day: string;

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { api } from "../../api";
-import { stripHtml } from "../../format";
+import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { DayNote, ImportTab } from "../../types";
 import { Modal } from "../Modal";

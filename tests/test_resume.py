@@ -1,6 +1,7 @@
 """Tests for resume text extraction and (stub) parse + apply."""
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -226,7 +227,8 @@ async def test_apply_resume_clear_rebuild(
     assert names == {"风控引擎"}
 
     # Resume note replaced (only 1 resume note now, for 风控引擎).
-    r = await client.get("/v1/days/2026-07-28/notes", headers=auth_headers)
+    # apply_resume creates the resume note on today's day, so query today.
+    r = await client.get(f"/v1/days/{date.today().isoformat()}/notes", headers=auth_headers)
     resume_notes = [n for n in r.json() if "resume" in (n.get("tags") or [])]
     assert len(resume_notes) == 1
     assert resume_notes[0]["title"] == "风控引擎"
