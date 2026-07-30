@@ -83,8 +83,9 @@ Channels live on **OpenClaw**, not inside gotit. For WeChat (Tencent
 
 ## Digests (P1c)
 
-Morning = today's plan; evening = tomorrow plan Q&A (never mixes news or
-今日待检). Optional separate `news` RSS job. Skill: `skills/digest/`.
+Morning = today's plan; evening = today wrap + tomorrow plan Q&A
+(never mixes news or 今日待检). Optional separate `news` RSS job.
+Skill: `skills/digest/`.
 See **[docs/openclaw-digest.md](../../docs/openclaw-digest.md)**.
 
 ## Apple plan bridge (P1d)

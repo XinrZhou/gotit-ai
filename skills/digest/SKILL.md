@@ -2,8 +2,8 @@
 name: digest
 description: >-
   Morning/evening WeChat digests for OpenClaw: morning = today's plan,
-  evening = tomorrow plan Q&A (never mixes news or 今日待检). Optional
-  separate news job for AI/YouTube RSS. Writes shell_event to gotit.
+  evening = today wrap + tomorrow plan Q&A (never mixes news or 今日待检).
+  Optional separate news job for AI/YouTube RSS. Writes shell_event to gotit.
   Use for cron or when the user asks for 早报/晚报/资讯摘要.
 ---
 
@@ -13,13 +13,13 @@ description: >-
 人设：**Tom**；时区默认 **Asia/Shanghai**。
 推送后写回 gotit `shell_event`；见 `docs/openclaw-digest.md`。
 
-## 语义（P1c）
+## 语义（P1c + evening wrap）
 
 | mode | 内容 |
 |------|------|
 | `morning` | **今日计划**（先 import 提醒→gotit，再 push reconcile；空计划不写动态） |
-| `evening` | **明日计划**：有 → 问调整并 push；无 → 问新建（空不写动态）。**禁止**附今日待检 / 资讯 |
-| `news` | 仅 AI/YouTube RSS（独立 cron，默认关） |
+| `evening` | **今日复盘**（✓/○）+ **明日计划**询问（有→调整并 push；无→新建）。**禁止**附今日待检 / 资讯 |
+| `news` | 仅 AI/YouTube RSS（独立 cron，默认 **开** · 20:00；与早/晚计划分离） |
 
 ## 确定性脚本
 
@@ -65,5 +65,5 @@ Prefs：优先 gotit `GET/PUT /v1/shell/digest-prefs`（Settings「计划推送�
 ## 边界
 
 - 禁止在 `src/gotit/` 写微信适配器
-- 晚报正文不得混入 RSS 或「今日待检」
+- 晚报正文不得混入 RSS 或「今日待检」（今日复盘只读 plan_items）
 - Apple 备忘录/提醒事项导入 → `skills/apple-plan/`（P1d）

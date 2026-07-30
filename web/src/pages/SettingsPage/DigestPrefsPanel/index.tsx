@@ -31,8 +31,8 @@ const emptyPrefs = (): DigestPrefs => ({
   item_count: 3,
   morning_cron: "0 8 * * *",
   evening_cron: "0 21 * * *",
-  news_cron: "0 12 * * *",
-  news_enabled: false,
+  news_cron: "0 20 * * *",
+  news_enabled: true,
   morning_include_news: false,
   evening_include_news: false,
   keywords: [],
@@ -239,7 +239,7 @@ export function DigestPrefsPanel() {
       <header className={styles.header}>
         <h3 className={styles.sectionTitle}>计划推送</h3>
         <p className={styles.hint}>
-          早推当日计划，晚推问明日安排；资讯单独开启。改完点「保存并同步」。有计划会写入提醒事项「学习计划」。
+          早推当日计划，晚推今日复盘+明日安排；资讯默认晚上八点单独推（不与计划混发）。改完点「保存并同步」。
         </p>
       </header>
 
@@ -280,17 +280,21 @@ export function DigestPrefsPanel() {
       </section>
 
       <section className={styles.block}>
-        <h4 className={styles.blockLabel}>资讯（可选）</h4>
+        <h4 className={styles.blockLabel}>资讯（独立推送）</h4>
         <label className={styles.check}>
           <input
             type="checkbox"
             checked={prefs.news_enabled}
             onChange={(e) => {
               const on = e.target.checked;
-              setPrefs((p) => ({ ...p, news_enabled: on }));
+              setPrefs((p) => ({
+                ...p,
+                news_enabled: on,
+                news_cron: on ? (p.news_cron ?? "0 20 * * *") : p.news_cron,
+              }));
             }}
           />
-          <span>启用独立资讯推送（不与计划混推）</span>
+          <span>启用资讯推送（独立 cron，绝不并入早/晚报）</span>
         </label>
 
         {prefs.news_enabled ? (
@@ -300,13 +304,13 @@ export function DigestPrefsPanel() {
                 <span>资讯 cron</span>
                 <input
                   className={styles.mono}
-                  value={prefs.news_cron ?? "0 12 * * *"}
+                  value={prefs.news_cron ?? "0 20 * * *"}
                   onChange={(e) =>
                     setPrefs((p) => ({ ...p, news_cron: e.target.value }))
                   }
                   spellCheck={false}
                 />
-                {cronAiRow("news", "自然语言，如「每天中午十二点」")}
+                {cronAiRow("news", "自然语言，如「每天晚上八点」")}
               </div>
               <label className={styles.field}>
                 <span>条数</span>

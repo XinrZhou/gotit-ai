@@ -19,19 +19,105 @@ def _load_fd():
     return mod
 
 
-def test_evening_has_no_due_or_news_mix() -> None:
+def test_evening_wrap_plus_tomorrow() -> None:
     fd = _load_fd()
     now = datetime(2026, 7, 29, 21, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    today = date(2026, 7, 29)
     tomorrow = date(2026, 7, 30)
-    plan = {
+    today_plan = {
+        "items": [
+            {"title": "健身", "status": "verified", "due_time": "07:00"},
+            {"title": "复习 attention", "status": "planned"},
+        ]
+    }
+    tomorrow_plan = {
         "date": "2026-07-30",
         "items": [
-            {"title": "复习 attention", "status": "planned"},
+            {"title": "刷 DP", "status": "planned", "due_time": "11:00"},
             {"title": "做过的题", "status": "verified"},
         ],
     }
-    text, picks = fd.format_evening_tomorrow(plan, None, tomorrow=tomorrow, now=now)
-    assert "明日安排" in text
+    text, picks, has_today = fd.format_evening(
+        today_plan,
+        None,
+        tomorrow_plan,
+        None,
+        today=today,
+        tomorrow=tomorrow,
+        now=now,
+    )
+    assert "Tom 晚报" in text
+    assert "今日复盘" in text
+    assert "✓ 07:00 健身" in text
+    assert "○ 复习 attention" in text
+    assert "明日计划（2026-07-30）" in text
+    assert "11:00 刷 DP" in text
+    assert "做过的题" not in text
+    assert "今日待检" not in text
+    assert "早报" not in text
+    assert picks == ["刷 DP"]
+    assert has_today is True
+
+
+def test_evening_today_only_empty_tomorrow() -> None:
+    fd = _load_fd()
+    now = datetime(2026, 7, 30, 21, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    text, picks, has_today = fd.format_evening(
+        {"items": [{"title": "早上7点 健身", "status": "planned", "due_time": "07:00"}]},
+        None,
+        {"items": []},
+        None,
+        today=date(2026, 7, 30),
+        tomorrow=date(2026, 7, 31),
+        now=now,
+    )
+    assert "今日复盘" in text
+    assert "○ 07:00 早上7点 健身" in text
+    assert "明日暂无计划" in text
+    assert "新建明日计划" in text
+    assert "今日待检" not in text
+    assert picks == []
+    assert has_today is True
+
+
+def test_evening_both_empty() -> None:
+    fd = _load_fd()
+    now = datetime(2026, 7, 29, 21, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    text, picks, has_today = fd.format_evening(
+        {"items": []},
+        None,
+        {"items": []},
+        None,
+        today=date(2026, 7, 29),
+        tomorrow=date(2026, 7, 30),
+        now=now,
+    )
+    assert "今日无计划" in text
+    assert "明日暂无计划" in text
+    assert "①" in text and "②" in text
+    assert "提醒事项" in text
+    assert "备忘录" not in text
+    assert picks == []
+    assert has_today is False
+
+
+def test_evening_has_no_due_or_news_mix() -> None:
+    fd = _load_fd()
+    now = datetime(2026, 7, 29, 21, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    text, picks, _ = fd.format_evening(
+        {"items": []},
+        None,
+        {
+            "items": [
+                {"title": "复习 attention", "status": "planned"},
+                {"title": "做过的题", "status": "verified"},
+            ]
+        },
+        None,
+        today=date(2026, 7, 29),
+        tomorrow=date(2026, 7, 30),
+        now=now,
+    )
     assert "复习 attention" in text
     assert "做过的题" not in text
     assert "今日待检" not in text
@@ -66,21 +152,6 @@ def test_morning_empty_plan_copy() -> None:
     assert "新建计划" in text
     assert "备忘录" not in text
     assert "\u3000" in text
-    assert picks == []
-
-
-def test_evening_empty_cta_structure() -> None:
-    fd = _load_fd()
-    now = datetime(2026, 7, 29, 21, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
-    tomorrow = date(2026, 7, 30)
-    text, picks = fd.format_evening_tomorrow(
-        {"items": []}, None, tomorrow=tomorrow, now=now
-    )
-    assert "明日暂无计划" in text
-    assert "①" in text and "②" in text
-    assert "提醒事项" in text
-    assert "新建明日计划" in text
-    assert "备忘录" not in text
     assert picks == []
 
 

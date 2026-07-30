@@ -112,7 +112,8 @@ cd web && npm install && npm run dev
 ```
 
 See `skills/gotit/SKILL.md`. WeChat channel: `docs/openclaw-wechat.md`.
-Morning = today's plan; evening = tomorrow plan Q&A (news separate, optional):
+Morning = today's plan; evening = today wrap + tomorrow plan Q&A;
+news = separate 20:00 RSS job by default (news separate, optional off):
 `docs/openclaw-digest.md`, `skills/digest/`.
 Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 `skills/apple-plan/`.
@@ -135,7 +136,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | Verify loop + deterministic gate + Critic | Done |
 | Notes / claims / plan / resume drill | Done |
 | REST ↔ MCP parity + harness gate | Done |
-| OpenClaw WeChat digests (morning plan / evening tomorrow / optional news) | Done (P1c) |
+| OpenClaw WeChat digests (morning plan / evening wrap+tomorrow / optional news) | Done (P1c) |
 | OpenClaw→gotit shell writeback + Settings「计划推送」「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
 | Mastery graph (fail events, confused_with, fullscreen from chat top bar) | Done |

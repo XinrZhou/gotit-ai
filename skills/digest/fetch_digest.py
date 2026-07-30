@@ -3,7 +3,7 @@
 
 Usage:
   python skills/digest/fetch_digest.py morning   # today's plan
-  python skills/digest/fetch_digest.py evening   # tomorrow plan Q&A
+  python skills/digest/fetch_digest.py evening   # today wrap + tomorrow plan
   python skills/digest/fetch_digest.py news      # RSS only (never mixes plan)
 
 Prefer: uv run --directory <gotit-ai> python skills/digest/fetch_digest.py evening
@@ -349,6 +349,14 @@ def load_plan(cfg: dict, day: date) -> tuple[dict | None, str | None]:
         return None, f"db get_plan 失败: {exc}"
 
 
+def _item_label(it: dict) -> str:
+    title = (it.get("title") or "").strip()
+    due = (it.get("due_time") or "").strip()
+    if due and title:
+        return f"{due} {title}"
+    return title
+
+
 def _open_titles(plan: dict | None) -> list[str]:
     if not plan:
         return []
@@ -367,6 +375,52 @@ def _open_titles(plan: dict | None) -> list[str]:
         seen.add(key)
         picks.append(title)
     return picks
+
+
+def _open_labels(plan: dict | None) -> list[str]:
+    """Open plan items with optional due_time prefix (for display)."""
+    if not plan:
+        return []
+    picks: list[str] = []
+    seen: set[str] = set()
+    for it in plan.get("items") or []:
+        status = (it.get("status") or "").lower()
+        if status in DONE_PLAN_STATUSES:
+            continue
+        if status in {"verified", "failed"}:
+            continue
+        label = _item_label(it)
+        key = label.casefold()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        picks.append(label)
+    return picks
+
+
+def _partition_plan_labels(plan: dict | None) -> tuple[list[str], list[str]]:
+    """Return (done_labels, open_labels) for today's wrap."""
+    done: list[str] = []
+    open_: list[str] = []
+    seen_done: set[str] = set()
+    seen_open: set[str] = set()
+    if not plan:
+        return [], []
+    for it in plan.get("items") or []:
+        label = _item_label(it)
+        if not label:
+            continue
+        status = (it.get("status") or "").lower()
+        key = label.casefold()
+        if status in DONE_PLAN_STATUSES:
+            if key not in seen_done:
+                seen_done.add(key)
+                done.append(label)
+        else:
+            if key not in seen_open:
+                seen_open.add(key)
+                open_.append(label)
+    return done, open_
 
 
 # WeChat collapses pure empty lines; keep a fullwidth-space line as spacer.
@@ -392,15 +446,16 @@ def format_morning_plan(
         return "\n".join(lines), []
 
     picks = _open_titles(plan)
+    labels = _open_labels(plan)
     if not picks:
         lines.append("今日暂无计划。")
         lines.append(_WX_BLANK)
         lines.extend(_plan_cta(which="today"))
     else:
-        lines.append(f"⭐ 优先：{_truncate(picks[0], 80)}")
-        if len(picks) > 1:
+        lines.append(f"⭐ 优先：{_truncate(labels[0] if labels else picks[0], 80)}")
+        if len(labels) > 1:
             lines.append(_WX_BLANK)
-            for i, text in enumerate(picks[1:6], 1):
+            for i, text in enumerate(labels[1:6], 1):
                 lines.append(f"{i}. {_truncate(text, 80)}")
         lines.append(_WX_BLANK)
         lines.append("已同步到提醒事项「学习计划」。做完走 gotit examine / 回讲。")
@@ -422,38 +477,65 @@ def _plan_cta(*, which: str) -> list[str]:
     ]
 
 
-def format_evening_tomorrow(
-    plan: dict | None,
-    err: str | None,
+def format_evening(
+    today_plan: dict | None,
+    today_err: str | None,
+    tomorrow_plan: dict | None,
+    tomorrow_err: str | None,
     *,
+    today: date,
     tomorrow: date,
     now: datetime,
-    notes_open_url: str | None = None,  # unused; kept for call-site compat
-) -> tuple[str, list[str]]:
-    del notes_open_url
-    lines = [
-        "🐱 Tom 晚报 · 明日计划",
-        f"{tomorrow.isoformat()} · {now.strftime('%H:%M')}",
-        _WX_BLANK,
-    ]
-    if err:
-        lines.append(f"无法读取明日计划：{err}")
-        return "\n".join(lines), []
+) -> tuple[str, list[str], bool]:
+    """Evening = today wrap + tomorrow Q&A.
 
-    picks = _open_titles(plan)
-    if not picks:
-        lines.append("明日暂无计划。")
-        lines.append(_WX_BLANK)
-        lines.extend(_plan_cta(which="tomorrow"))
+    Returns ``(body, tomorrow_open_titles, has_today_substance)``.
+    Never mixes RSS or 「今日待检」.
+    """
+    lines = [
+        "🐱 Tom 晚报",
+        f"{today.isoformat()} · {now.strftime('%H:%M')}",
+        _WX_BLANK,
+        "今日复盘",
+    ]
+    has_today = False
+    if today_err:
+        lines.append(f"无法读取今日计划：{today_err}")
     else:
-        lines.append("明日安排：")
-        lines.append(_WX_BLANK)
-        for i, text in enumerate(picks[:8], 1):
-            lines.append(f"{i}. {_truncate(text, 80)}")
-        lines.append(_WX_BLANK)
-        lines.append("改 →「调整…」　OK →「保持」")
-        lines.append("已同步到提醒事项「学习计划」。")
-    return "\n".join(lines), picks
+        done, open_ = _partition_plan_labels(today_plan)
+        has_today = bool(done or open_)
+        if not has_today:
+            lines.append("今日无计划。")
+        else:
+            for text in done[:8]:
+                lines.append(f"✓ {_truncate(text, 80)}")
+            for text in open_[:8]:
+                lines.append(f"○ {_truncate(text, 80)}")
+            if done and not open_:
+                lines.append("今日计划已收工。")
+            elif open_:
+                lines.append("未完成的做完走 gotit examine / 回讲。")
+
+    lines.append(_WX_BLANK)
+    lines.append(f"明日计划（{tomorrow.isoformat()}）")
+    picks: list[str] = []
+    if tomorrow_err:
+        lines.append(f"无法读取明日计划：{tomorrow_err}")
+    else:
+        picks = _open_titles(tomorrow_plan)
+        labels = _open_labels(tomorrow_plan)
+        if not picks:
+            lines.append("明日暂无计划。")
+            lines.append(_WX_BLANK)
+            lines.extend(_plan_cta(which="tomorrow"))
+        else:
+            lines.append(_WX_BLANK)
+            for i, text in enumerate(labels[:8], 1):
+                lines.append(f"{i}. {_truncate(text, 80)}")
+            lines.append(_WX_BLANK)
+            lines.append("改 →「调整…」　OK →「保持」")
+            lines.append("已同步到提醒事项「学习计划」。")
+    return "\n".join(lines), picks, has_today
 
 
 def _items_payload(items: list[dict]) -> list[dict]:
@@ -562,6 +644,8 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
     notes_open_url = (cfg.get("notes_open_url") or "").strip() or None
     reminder_err: str | None = None
     plan_err: str | None = None
+    has_today_substance = False
+    today_titles: list[str] = []
 
     if mode == "morning":
         # Soft bi-di: phone edits → gotit first, then gotit truth → Reminders.
@@ -577,17 +661,28 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
         if not cfg.get("_skip_reminders"):
             reminder_err = push_plan_to_reminders(plan_day)
     elif mode == "evening":
-        plan_day = now.date() + timedelta(days=1)
-        plan, plan_err = load_plan(cfg, plan_day)
-        body, plan_picks = format_evening_tomorrow(
-            plan,
-            plan_err,
-            tomorrow=plan_day,
+        today = now.date()
+        tomorrow = today + timedelta(days=1)
+        today_plan, today_err = load_plan(cfg, today)
+        tomorrow_plan, tomorrow_err = load_plan(cfg, tomorrow)
+        plan_err = tomorrow_err or today_err
+        body, plan_picks, has_today_substance = format_evening(
+            today_plan,
+            today_err,
+            tomorrow_plan,
+            tomorrow_err,
+            today=today,
+            tomorrow=tomorrow,
             now=now,
-            notes_open_url=notes_open_url,
         )
+        if today_plan and not today_err:
+            today_titles = [
+                (it.get("title") or "").strip()
+                for it in (today_plan.get("items") or [])
+                if (it.get("title") or "").strip()
+            ]
         if plan_picks and not cfg.get("_skip_reminders"):
-            reminder_err = push_plan_to_reminders(plan_day)
+            reminder_err = push_plan_to_reminders(tomorrow)
     elif mode == "news":
         news_items, news_errors = collect_items(cfg)
         body = format_news(
@@ -603,12 +698,14 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
     if mode == "morning":
         day_s = now.date().isoformat()
     elif mode == "evening":
-        day_s = (now.date() + timedelta(days=1)).isoformat()
+        day_s = now.date().isoformat()  # wrap day (today)
     else:
         day_s = now.date().isoformat()
     subject: str | None = None
     if plan_picks:
         subject = plan_picks[0]
+    elif today_titles:
+        subject = today_titles[0]
     elif mode == "news" and news_items:
         subject = str(news_items[0].get("title") or "").strip() or None
     errors = list(news_errors)
@@ -618,8 +715,17 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
     # Skip empty plan digests in「动态」(still deliver WeChat body).
     skip_writeback = bool(cfg.get("_skip_writeback"))
     if (
-        mode in {"morning", "evening"}
+        mode == "morning"
         and not plan_picks
+        and not plan_err
+        and not reminder_err
+        and not cfg.get("_force_writeback")
+    ):
+        skip_writeback = True
+    if (
+        mode == "evening"
+        and not plan_picks
+        and not has_today_substance
         and not plan_err
         and not reminder_err
         and not cfg.get("_force_writeback")
@@ -631,7 +737,7 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
         "day": day_s,
         "subject": subject,
         "items": _items_payload(news_items),
-        "due_summary": plan_picks,
+        "due_summary": plan_picks or today_titles[:8],
         "errors": errors,
         "delivery_ok": None,
         "channel": "openclaw-weixin",

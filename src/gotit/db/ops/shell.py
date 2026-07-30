@@ -210,6 +210,8 @@ async def put_digest_prefs(
     cleaned = cleaned.model_copy(
         update={"evening_include_news": False, "morning_include_news": False}
     )
+    if cleaned.news_enabled and not (cleaned.news_cron or "").strip():
+        cleaned = cleaned.model_copy(update={"news_cron": "0 20 * * *"})
     stmt = (
         select(MemoryEntryRow)
         .where(

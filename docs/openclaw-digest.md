@@ -5,12 +5,13 @@ gotit **不**抓新闻、不跑 cron。编排在 OpenClaw。
 | Job | 默认 | 正文 |
 |-----|------|------|
 | `morning` | 08:00 | **今日计划**（仅计划；不同资讯） |
-| `evening` | 21:00 | **明日计划**询问（有→调整；无→新建）。**不含**今日待检、**不含**资讯 |
-| `news` | 默认关 | 仅 AI/YouTube RSS |
+| `evening` | 21:00 | **今日复盘**（plan ✓/○）+ **明日计划**询问。**不含**今日待检、**不含**资讯 |
+| `news` | 默认 **开** · 20:00 | 仅 AI/YouTube RSS |
 
 有计划时早/晚推送会顺带 `apple-plan push` 到提醒事项「学习计划」。
 
 相关：[`docs/openclaw-wechat.md`](openclaw-wechat.md)、`skills/digest/`。Apple 导入见 P1d（另一 agent）。
+
 
 ## 本机进度
 
@@ -53,7 +54,7 @@ uv run python skills/digest/fetch_digest.py evening
 uv run python skills/digest/fetch_digest.py news --no-writeback
 ```
 
-晚报**不应**出现「今日待检」或 RSS 列表。
+晚报应含 **今日复盘** + 明日计划；**不应**出现「今日待检」或 RSS 列表。
 
 ## 4. 注册 cron
 
@@ -70,6 +71,7 @@ uv run python skills/digest/fetch_digest.py news --no-writeback
 ## 写回
 
 `shell_event` + 文末 `event_id=`。资讯「这篇有用 N」→ `gotit_record_interest`。计划回复 → `gotit_upsert_plan_item`。
+晚报 `day` = 推送当日（复盘日）；明日有 open 计划时仍 push 提醒。
 
 ## 边界
 

@@ -121,8 +121,8 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 ## OpenClaw shell (not in gotit core)
 
 - WeChat channel + MCP mount: `docs/openclaw-wechat.md`；skill `skills/gotit/`
-- Plan digests（早=当日计划 / 晚=明日询问；资讯独立可选）: `docs/openclaw-digest.md`；
-  skill `skills/digest/` + Gateway cron（Asia/Shanghai）
+- Plan digests（早=当日计划 / 晚=今日复盘+明日询问；资讯独立默认开·20:00）:
+  `docs/openclaw-digest.md`；skill `skills/digest/` + Gateway cron（Asia/Shanghai）
 - **Bridge writeback**：digest → `shell_event`；「有用」→ `interest`；
   prefs `/v1/shell/digest-prefs` + `POST /v1/shell/digest-cron/sync`；obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「计划推送」「动态」
 - **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（`due_time`；upsert/delete

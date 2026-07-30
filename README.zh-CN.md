@@ -109,7 +109,7 @@ cd web && npm install && npm run dev   # :5173
 ```
 
 详见 `skills/gotit/SKILL.md`。微信通道：`docs/openclaw-wechat.md`。
-早晚计划触达（早=当日计划 / 晚=明日询问；资讯独立可选）：`docs/openclaw-digest.md`、`skills/digest/`。
+早晚计划触达（早=当日计划 / 晚=今日复盘+明日询问；资讯默认晚 20:00 独立推）：`docs/openclaw-digest.md`、`skills/digest/`。
 Apple 提醒事项/备忘录 → gotit 日计划：`docs/openclaw-apple-plan.md`、`skills/apple-plan/`。
 
 ## 日常怎么用

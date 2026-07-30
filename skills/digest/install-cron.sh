@@ -44,13 +44,13 @@ if [[ -n "${PREFS_JSON}" ]]; then
   EVENING_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('evening_cron') or '0 21 * * *')")"
   TZ_NAME="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('timezone') or 'Asia/Shanghai')")"
   NEWS_ENABLED="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('news_enabled') else '0')")"
-  NEWS_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('news_cron') or '0 12 * * *')")"
+  NEWS_CRON="$(printf '%s' "$PREFS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('news_cron') or '0 20 * * *')")"
 else
   MORNING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('morning_cron','0 8 * * *'))")"
   EVENING_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('evening_cron','0 21 * * *'))")"
   TZ_NAME="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('timezone','Asia/Shanghai'))")"
   NEWS_ENABLED="$(python3 -c "import json; print('1' if json.load(open(r'$CONFIG')).get('news_enabled') else '0')")"
-  NEWS_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('news_cron') or '0 12 * * *')")"
+  NEWS_CRON="$(python3 -c "import json; print(json.load(open(r'$CONFIG')).get('news_cron') or '0 20 * * *')")"
 fi
 
 SESSIONS="${OPENCLAW_SESSIONS:-$HOME/.openclaw/agents/main/sessions/sessions.json}"
