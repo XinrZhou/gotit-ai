@@ -17,18 +17,11 @@ from pydantic import BaseModel, Field
 
 from gotit.api.auth import require_api_key
 from gotit.api.chat_orchestrator import post_message_chain
-from gotit.api.deps import (
-    SessionMemoryReader,
-    SessionPromptReader,
-    get_critic_model,
-    get_model,
-    resolve_critic_binding,
-)
+from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.api.verify_finalize import finalize_examine_with_gate
 from gotit.core.agents.axiom import build_axiom_agent, run_axiom
-from gotit.core.agents.critic import build_critic_agent, run_critic, stub_critic
-from gotit.core.loop import VerifyWorkflow
 from gotit.core.models import AgentReply, Message, Thread
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
@@ -194,17 +187,12 @@ async def start_verify(
             raise HTTPException(status_code=404, detail="claim not found")
 
         # --- examine (axiom) ---
-        from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
-        from gotit.db.ops.memory import (
-            build_failure_lesson_block,
-            count_prior_failures,
-            list_trajectory,
-        )
+        from gotit.db.ops.graph import build_budget_subgraph
+        from gotit.db.ops.memory import build_failure_lesson_block, list_trajectory
 
         trajectory = await list_trajectory(
             session, user_id=user_id, topic=claim.topic, claim_id=body.claim_id
         )
-        prior_failures = count_prior_failures(trajectory, claim_id=body.claim_id)
         budget = await build_budget_subgraph(
             session, user_id=user_id, claim_id=body.claim_id
         )
@@ -242,107 +230,42 @@ async def start_verify(
             examine_score = ev.score
             examine_evidence = ev.evidence
 
-        ball = VerifyWorkflow.start(thread_id, body.claim_id)
-        ball = VerifyWorkflow.on_examine(
-            ball, verdict=examine_verdict, score=examine_score, evidence=examine_evidence
-        )
-        await day_ops.set_ball(
-            session,
-            thread_id=thread_id,
-            holder=ball.holder,
-            stage=ball.stage,
-            context=ball.context,
-        )
-
-        # --- recheck (critic; optional per-identity / CRITIC_* model) ---
-        critic_identity = await day_ops.get_identity(session, "critic")
-        critic_cfg = critic_identity.llm_config if critic_identity else None
-        critic_binding = resolve_critic_binding(critic_cfg, settings=settings)
-        if not critic_binding.api_key:
-            recheck = stub_critic(examine_verdict=examine_verdict)
-        else:
-            cprompt = await SessionPromptReader(session).get_active_prompt("critic")
-            csystem = cprompt.system_prompt if cprompt else ""
-            creader = SessionMemoryReader(session, user_id=user_id)
-            cagent = build_critic_agent(
-                get_critic_model(critic_cfg, settings=settings),
-                system_prompt=csystem,
-            )
-            recheck = await run_critic(
-                cagent,
-                creader,
+        try:
+            finalized = await finalize_examine_with_gate(
+                session,
+                claim_id=body.claim_id,
                 claim_text=claim.text,
+                topic=claim.topic,
                 examine_verdict=examine_verdict,
                 examine_score=examine_score,
                 examine_evidence=examine_evidence,
                 learner_answer=body.answer,
-            )
-
-        ball = VerifyWorkflow.on_recheck(ball, verdict=recheck.verdict)
-        await day_ops.set_ball(
-            session,
-            thread_id=thread_id,
-            holder=ball.holder,
-            stage=ball.stage,
-            context=ball.context,
-        )
-
-        # --- gate (deterministic, no LLM) ---
-        gate = VerifyWorkflow.gate(ball)
-        try:
-            writeback = await day_ops.apply_examine_verdict(
-                session,
-                body.claim_id,
-                verdict=gate.verdict,
                 user_id=user_id,
-                prior_failures=prior_failures,
+                settings=settings,
+                thread_id=thread_id,
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        await day_ops.clear_ball(session, thread_id)
-
-        # record this outcome as a trajectory entry for the learning curve
-        from gotit.db.ops.memory import append_trajectory
-
-        await append_trajectory(
-            session,
-            user_id=user_id,
-            claim_id=body.claim_id,
-            topic=claim.topic,
-            verdict=examine_verdict,
-            gate_verdict=gate.verdict,
-            score=examine_score,
-            reason=gate.reason,
-        )
-        mastery = await record_verify_mastery_writeback(
-            session,
-            user_id=user_id,
-            claim_id=body.claim_id,
-            topic=claim.topic,
-            gate_verdict=gate.verdict,
-            score=examine_score,
-            reason=gate.reason,
-        )
-
-        # record the verdict in the thread as an agent message
+        gate = finalized["gate"]
         await day_ops.add_message(
             session,
             thread_id=thread_id,
             role="agent",
             agent_name="gate",
-            text=f"验证完成：{gate.reason}",
+            text=f"验证完成：{gate['reason']}",
             metadata={
                 "claim_id": str(body.claim_id),
-                "examine_verdict": examine_verdict,
-                "recheck_verdict": recheck.verdict,
-                "gate_verdict": gate.verdict,
+                "examine_verdict": finalized["examine_verdict"],
+                "recheck_verdict": finalized["recheck_verdict"],
+                "gate_verdict": finalized["gate_verdict"],
+                "verdict": finalized["gate_verdict"],
             },
         )
         return {
-            "examine_verdict": examine_verdict,
-            "recheck_verdict": recheck.verdict,
-            "gate": gate.model_dump(mode="json"),
-            "writeback": writeback,
-            "mastery_graph": mastery,
+            "examine_verdict": finalized["examine_verdict"],
+            "recheck_verdict": finalized["recheck_verdict"],
+            "gate": gate,
+            "writeback": finalized["writeback"],
+            "mastery_graph": finalized["mastery_graph"],
         }

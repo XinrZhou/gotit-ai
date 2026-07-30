@@ -1,4 +1,5 @@
 import type {
+  Claim,
   DayNote,
   DayPlan,
   DrillMaterial,
@@ -11,6 +12,7 @@ import type {
   ResumeDocument,
   ResumeRecord,
   ResumeUploadResponse,
+  VerifyPath,
 } from "../types";
 
 export type ChatTurn = {
@@ -18,6 +20,7 @@ export type ChatTurn = {
   text: string;
   verdict?: MasteryVerdict | null;
   session_done?: boolean;
+  verify?: VerifyPath | null;
 };
 
 export type Run = (
@@ -30,10 +33,17 @@ export type Store = {
   setDay: (d: string) => void;
   plan: DayPlan | null;
   notes: DayNote[];
+  dueClaims: Claim[];
   noteScope: "today" | "all";
   setNoteScope: (s: "today" | "all") => void;
   projects: Project[];
-  items: { id: string; title: string; topic: string | null; status: string }[];
+  items: {
+    id: string;
+    title: string;
+    topic: string | null;
+    status: string;
+    claim_id: string | null;
+  }[];
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string | null) => void;
   projectPicked: boolean;
@@ -74,16 +84,20 @@ export type Store = {
   setShowProjectModal: (b: boolean) => void;
   editingProject: Project | null;
   onOpenEditProject: (p: Project) => void;
+  onDeleteProject: (p: Project) => void;
   saveProject: (
     editing: Project | null,
     fields: { name: string; role: string; goal: string; tech_stack: string[] },
   ) => void;
   examineNote: DayNote | null;
+  examineClaimId: string | null;
+  examineLabel: string;
   examineChat: ChatTurn[];
   examineAnswer: string;
   setExamineAnswer: (s: string) => void;
   examineSessionDone: boolean;
   onExamineStart: (note: DayNote) => void;
+  onExamineStartClaim: (claim: Claim) => void;
   onExamineAnswer: () => void;
   teachTopic: string;
   setTeachTopic: (s: string) => void;

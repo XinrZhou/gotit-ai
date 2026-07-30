@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../store";
+import type { Project } from "../../types";
 import { Modal } from "../Modal";
 import styles from "./index.module.scss";
+
+function projMenuId(id: string) {
+  return `p:${id}`;
+}
 
 export function Sidebar() {
   const {
@@ -12,12 +17,12 @@ export function Sidebar() {
     projects,
     selectedProjectId,
     setSelectedProjectId,
-    projectPicked,
     setProjectPicked,
     setMode,
     resume,
     setShowResumeModal,
     onOpenEditProject,
+    onDeleteProject,
     openMenuId,
     setOpenMenuId,
     onOpenNote,
@@ -27,19 +32,21 @@ export function Sidebar() {
     onDeleteNotes,
     setShowCompose,
     setLibraryOpen,
-    setMasteryGraphOpen,
   } = useStore();
 
-  const listRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const totallyEmpty = projects.length === 0 && notes.length === 0;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!openMenuId) return;
     const onDown = (e: MouseEvent) => {
-      if (listRef.current && !listRef.current.contains(e.target as Node)) {
+      if (bodyRef.current && !bodyRef.current.contains(e.target as Node)) {
         setOpenMenuId(null);
       }
     };
@@ -82,336 +89,357 @@ export function Sidebar() {
     exitSelect();
   }
 
+  function confirmDeleteProject() {
+    if (!pendingDeleteProject) return;
+    const p = pendingDeleteProject;
+    setPendingDeleteProject(null);
+    onDeleteProject(p);
+  }
+
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.sidebarHead}>
-        <div className={styles.headRow}>
-          <span className={styles.libraryTitle}>资料库</span>
-          <div className={styles.headActions}>
-            <button
-              type="button"
-              className={styles.graphBtn}
-              onClick={() => {
-                setLibraryOpen(false);
-                setMasteryGraphOpen(true);
-              }}
-            >
-              图谱
-            </button>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              onClick={() => setLibraryOpen(false)}
-              aria-label="关闭资料栏"
-            >
-              收起
-            </button>
-          </div>
-        </div>
-      </div>
+      <header className={styles.sidebarHead}>
+        <h2 className={styles.libraryTitle}>资料库</h2>
+        <button
+          type="button"
+          className={styles.closeBtn}
+          onClick={() => setLibraryOpen(false)}
+          aria-label="关闭资料栏"
+        >
+          关闭
+        </button>
+      </header>
 
-      {totallyEmpty ? (
-        <div className={styles.empty}>
-          <p className={styles.emptyText}>
-            还没资料。写一条笔记，或导入简历建项目，我来帮你出题考你。
-          </p>
-          <button
-            type="button"
-            className={styles.btnCompose}
-            disabled={busy}
-            onClick={() => setShowCompose(true)}
-          >
-            + 添加资料
-          </button>
-          <button
-            type="button"
-            className={styles.btnQuiet}
-            disabled={busy}
-            onClick={() => setShowResumeModal(true)}
-          >
-            {resume ? "重新导入简历" : "导入简历"}
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className={styles.sectionLabel}>
-            <span>项目 · {projects.length}</span>
+      <div className={styles.body} ref={bodyRef}>
+        {totallyEmpty ? (
+          <div className={styles.empty}>
+            <p className={styles.emptyText}>还没资料。写一条，或导入简历建项目。</p>
             <button
               type="button"
-              className={styles.sectionAdd}
-              onClick={() => setShowResumeModal(true)}
+              className={styles.btnCompose}
               disabled={busy}
-              title={resume ? "重新导入简历" : "导入简历"}
-              aria-label={resume ? "重新导入简历" : "导入简历"}
+              onClick={() => setShowCompose(true)}
             >
-              +
+              + 添加资料
             </button>
-          </div>
-          <div className={styles.projectList}>
             <button
               type="button"
-              className={
-                projectPicked && selectedProjectId === null
-                  ? `${styles.projItem} ${styles.projActive}`
-                  : styles.projItem
-              }
-              onClick={() => {
-                setSelectedProjectId(null);
-                setProjectPicked(true);
-                setMode("drill");
-              }}
+              className={styles.btnQuiet}
+              disabled={busy}
+              onClick={() => setShowResumeModal(true)}
             >
-              <span className={styles.projName}>全部</span>
+              {resume ? "重新导入简历" : "导入简历"}
             </button>
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className={
-                  selectedProjectId === p.id
-                    ? `${styles.projItem} ${styles.projActive}`
-                    : styles.projItem
-                }
-                onClick={() => {
-                  setSelectedProjectId(p.id);
-                  setProjectPicked(true);
-                  setMode("drill");
-                }}
-                onDoubleClick={() => onOpenEditProject(p)}
-                title="双击编辑"
-              >
-                <span className={styles.projName}>{p.name}</span>
-              </button>
-            ))}
           </div>
-
-          <div className={styles.sectionLabel}>
-            <span>
-              {selecting
-                ? selected.size > 0
-                  ? `已选 · ${selected.size}`
-                  : "选择资料"
-                : noteScope === "all"
-                  ? `全部资料 · ${notes.length}`
-                  : `今日资料 · ${notes.length}`}
-            </span>
-            <div className={styles.sectionTools}>
-              {notes.length > 0 ? (
+        ) : (
+          <>
+            <section className={styles.section}>
+              <div className={styles.sectionLabel}>
+                <span>项目</span>
+                <span className={styles.sectionMeta}>{projects.length}</span>
                 <button
                   type="button"
-                  className={styles.sectionTool}
+                  className={styles.sectionAdd}
+                  onClick={() => setShowResumeModal(true)}
                   disabled={busy}
-                  onClick={() => {
-                    if (selecting) exitSelect();
-                    else {
-                      setOpenMenuId(null);
-                      setSelecting(true);
-                    }
-                  }}
+                  title={resume ? "重新导入简历" : "导入简历"}
+                  aria-label={resume ? "重新导入简历" : "导入简历"}
                 >
-                  {selecting ? "取消" : "选择"}
-                </button>
-              ) : null}
-              {!selecting ? (
-                <div className={styles.scopeToggle}>
-                  <button
-                    type="button"
-                    className={
-                      noteScope === "today"
-                        ? `${styles.scopeBtn} ${styles.scopeActive}`
-                        : styles.scopeBtn
-                    }
-                    onClick={() => setNoteScope("today")}
-                  >
-                    今日
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      noteScope === "all"
-                        ? `${styles.scopeBtn} ${styles.scopeActive}`
-                        : styles.scopeBtn
-                    }
-                    onClick={() => setNoteScope("all")}
-                  >
-                    全部
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {selecting && notes.length > 0 ? (
-            <div className={styles.selectBar}>
-              <label className={styles.selectAll}>
-                <input
-                  type="checkbox"
-                  checked={selected.size === notes.length && notes.length > 0}
-                  disabled={busy}
-                  onChange={toggleAll}
-                />
-                <span>{selected.size === notes.length ? "取消全选" : "全选"}</span>
-              </label>
-            </div>
-          ) : null}
-
-          <div className={styles.notesList} ref={listRef}>
-            {notes.length === 0 ? (
-              <div className={styles.empty}>
-                <p className={styles.emptyText}>还没资料。写一条，我来帮你出题考你。</p>
-                <button
-                  type="button"
-                  className={styles.btnCompose}
-                  disabled={busy}
-                  onClick={() => setShowCompose(true)}
-                >
-                  + 添加资料
+                  +
                 </button>
               </div>
-            ) : (
-              (() => {
-                const ready = notes.filter((n) => n.claim_ids.length > 0);
-                const pending = notes.filter((n) => n.claim_ids.length === 0);
-                const renderNote = (note: (typeof notes)[number]) => {
-                  const count = note.claim_ids.length;
-                  const isReady = count > 0;
-                  const checked = selected.has(note.id);
+              <div className={styles.projectList}>
+                {projects.map((p) => {
+                  const mid = projMenuId(p.id);
+                  const active = selectedProjectId === p.id;
                   return (
                     <div
-                      key={note.id}
-                      className={`${styles.noteItem} ${checked ? styles.noteItemSelected : ""}`}
+                      key={p.id}
+                      className={`${styles.projRow} ${active ? styles.projRowActive : ""}`}
                     >
-                      {selecting ? (
-                        <label className={styles.noteCheck}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={busy}
-                            onChange={() => toggleOne(note.id)}
-                          />
-                        </label>
-                      ) : null}
                       <button
                         type="button"
-                        className={styles.noteMain}
+                        className={
+                          active
+                            ? `${styles.projMain} ${styles.projActive}`
+                            : styles.projMain
+                        }
                         onClick={() => {
-                          if (selecting) toggleOne(note.id);
-                          else onOpenNote(note.id);
+                          setSelectedProjectId(p.id);
+                          setProjectPicked(true);
+                          setMode("drill");
                         }}
-                        disabled={busy}
+                        title={p.name}
                       >
-                        <span className={styles.noteTitle}>
-                          {note.title || "未命名"}
-                        </span>
-                        {noteScope === "all" && note.day ? (
-                          <span className={styles.noteDate}>{note.day.slice(5)}</span>
-                        ) : null}
-                        {isReady ? (
-                          <span className={styles.noteBadge}>{count}题可考</span>
-                        ) : null}
+                        <span className={styles.projName}>{p.name}</span>
                       </button>
-                      {selecting ? null : (
-                        <>
+                      <button
+                        type="button"
+                        className={styles.rowMenu}
+                        aria-label={`${p.name} 更多操作`}
+                        disabled={busy}
+                        onClick={() =>
+                          setOpenMenuId(openMenuId === mid ? null : mid)
+                        }
+                      >
+                        ⋯
+                      </button>
+                      {openMenuId === mid ? (
+                        <div className={styles.menuPop}>
                           <button
                             type="button"
-                            className={styles.noteMenu}
-                            aria-label="更多操作"
-                            disabled={busy}
-                            onClick={() =>
-                              setOpenMenuId(openMenuId === note.id ? null : note.id)
-                            }
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              onOpenEditProject(p);
+                            }}
                           >
-                            ⋯
+                            编辑
                           </button>
-                          {openMenuId === note.id ? (
-                            <div className={styles.menuPop}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenMenuId(null);
-                                  onOpenNote(note.id);
-                                }}
-                              >
-                                查看
-                              </button>
-                              {isReady ? null : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    onIngestNote(note.id);
-                                  }}
-                                >
-                                  出题
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className={styles.menuDanger}
-                                onClick={() => {
-                                  setOpenMenuId(null);
-                                  onDeleteNote(note.id);
-                                }}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          ) : null}
-                        </>
-                      )}
+                          <button
+                            type="button"
+                            className={styles.menuDanger}
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              setPendingDeleteProject(p);
+                            }}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   );
-                };
-                return (
-                  <>
-                    {ready.map(renderNote)}
-                    {pending.length > 0 ? (
-                      <div className={styles.listDivider}>
-                        <span>还没出题 · {pending.length}</span>
-                        {!selecting ? (
+                })}
+              </div>
+            </section>
+
+            <section className={`${styles.section} ${styles.sectionGrow}`}>
+              <div className={styles.sectionLabel}>
+                <span>
+                  {selecting
+                    ? selected.size > 0
+                      ? `已选`
+                      : "选择资料"
+                    : noteScope === "all"
+                      ? "全部资料"
+                      : "今日资料"}
+                </span>
+                {!selecting ? (
+                  <span className={styles.sectionMeta}>{notes.length}</span>
+                ) : selected.size > 0 ? (
+                  <span className={styles.sectionMeta}>{selected.size}</span>
+                ) : null}
+                <div className={styles.sectionTools}>
+                  {notes.length > 0 ? (
+                    <button
+                      type="button"
+                      className={styles.sectionTool}
+                      disabled={busy}
+                      onClick={() => {
+                        if (selecting) exitSelect();
+                        else {
+                          setOpenMenuId(null);
+                          setSelecting(true);
+                        }
+                      }}
+                    >
+                      {selecting ? "取消" : "选择"}
+                    </button>
+                  ) : null}
+                  {!selecting ? (
+                    <div className={styles.scopeToggle}>
+                      <button
+                        type="button"
+                        className={
+                          noteScope === "today"
+                            ? `${styles.scopeBtn} ${styles.scopeActive}`
+                            : styles.scopeBtn
+                        }
+                        onClick={() => setNoteScope("today")}
+                      >
+                        今日
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          noteScope === "all"
+                            ? `${styles.scopeBtn} ${styles.scopeActive}`
+                            : styles.scopeBtn
+                        }
+                        onClick={() => setNoteScope("all")}
+                      >
+                        全部
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {selecting && notes.length > 0 ? (
+                <div className={styles.selectBar}>
+                  <label className={styles.selectAll}>
+                    <input
+                      type="checkbox"
+                      checked={selected.size === notes.length && notes.length > 0}
+                      disabled={busy}
+                      onChange={toggleAll}
+                    />
+                    <span>{selected.size === notes.length ? "取消全选" : "全选"}</span>
+                  </label>
+                </div>
+              ) : null}
+
+              <div className={styles.notesList}>
+                {notes.length === 0 ? null : (
+                  (() => {
+                    const ready = notes.filter((n) => n.claim_ids.length > 0);
+                    const pending = notes.filter((n) => n.claim_ids.length === 0);
+                    const renderNote = (note: (typeof notes)[number]) => {
+                      const count = note.claim_ids.length;
+                      const isReady = count > 0;
+                      const checked = selected.has(note.id);
+                      return (
+                        <div
+                          key={note.id}
+                          className={`${styles.noteItem} ${checked ? styles.noteItemSelected : ""}`}
+                        >
+                          {selecting ? (
+                            <label className={styles.noteCheck}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={busy}
+                                onChange={() => toggleOne(note.id)}
+                              />
+                            </label>
+                          ) : null}
                           <button
                             type="button"
-                            className={styles.dividerAction}
+                            className={styles.noteMain}
+                            onClick={() => {
+                              if (selecting) toggleOne(note.id);
+                              else onOpenNote(note.id);
+                            }}
                             disabled={busy}
-                            onClick={onIngestAll}
                           >
-                            一键出题
+                            <span className={styles.noteTitle}>
+                              {note.title || "未命名"}
+                            </span>
+                            {noteScope === "all" && note.day ? (
+                              <span className={styles.noteDate}>
+                                {note.day.slice(5)}
+                              </span>
+                            ) : null}
+                            {isReady ? (
+                              <span className={styles.noteBadge}>{count}</span>
+                            ) : null}
                           </button>
+                          {selecting ? null : (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.rowMenu}
+                                aria-label="更多操作"
+                                disabled={busy}
+                                onClick={() =>
+                                  setOpenMenuId(
+                                    openMenuId === note.id ? null : note.id,
+                                  )
+                                }
+                              >
+                                ⋯
+                              </button>
+                              {openMenuId === note.id ? (
+                                <div className={styles.menuPop}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      onOpenNote(note.id);
+                                    }}
+                                  >
+                                    查看
+                                  </button>
+                                  {isReady ? null : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        onIngestNote(note.id);
+                                      }}
+                                    >
+                                      出题
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className={styles.menuDanger}
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      onDeleteNote(note.id);
+                                    }}
+                                  >
+                                    删除
+                                  </button>
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      );
+                    };
+                    return (
+                      <>
+                        {ready.map(renderNote)}
+                        {pending.length > 0 ? (
+                          <div className={styles.listDivider}>
+                            <span>还没出题 · {pending.length}</span>
+                            {!selecting ? (
+                              <button
+                                type="button"
+                                className={styles.dividerAction}
+                                disabled={busy}
+                                onClick={onIngestAll}
+                              >
+                                一键出题
+                              </button>
+                            ) : null}
+                          </div>
                         ) : null}
-                      </div>
-                    ) : null}
-                    {pending.map(renderNote)}
-                  </>
-                );
-              })()
-            )}
-          </div>
+                        {pending.map(renderNote)}
+                      </>
+                    );
+                  })()
+                )}
+              </div>
+            </section>
+          </>
+        )}
+      </div>
 
-          {notes.length > 0 ? (
-            <div className={styles.foot}>
-              {selecting ? (
-                <button
-                  type="button"
-                  className={styles.batchAction}
-                  disabled={busy || selected.size === 0}
-                  onClick={() => setPendingDeleteIds([...selected])}
-                >
-                  删除{selected.size > 0 ? ` ${selected.size} 条` : ""}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-compose"
-                  disabled={busy}
-                  onClick={() => setShowCompose(true)}
-                >
-                  + 添加资料
-                </button>
-              )}
-            </div>
-          ) : null}
-        </>
-      )}
+      {!totallyEmpty ? (
+        <div className={styles.foot}>
+          {selecting ? (
+            <button
+              type="button"
+              className={styles.batchAction}
+              disabled={busy || selected.size === 0}
+              onClick={() => setPendingDeleteIds([...selected])}
+            >
+              删除{selected.size > 0 ? ` ${selected.size} 条` : ""}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.btnCompose}
+              disabled={busy}
+              onClick={() => setShowCompose(true)}
+            >
+              + 添加资料
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {pendingDeleteIds ? (
         <Modal
@@ -439,6 +467,36 @@ export function Sidebar() {
         >
           <p className={styles.deleteCopy}>
             确定删除选中的 {pendingDeleteIds.length} 条资料？删除后无法恢复。
+          </p>
+        </Modal>
+      ) : null}
+
+      {pendingDeleteProject ? (
+        <Modal
+          title="删除项目"
+          onClose={() => setPendingDeleteProject(null)}
+          actions={
+            <>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setPendingDeleteProject(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-ink"
+                disabled={busy}
+                onClick={confirmDeleteProject}
+              >
+                删除
+              </button>
+            </>
+          }
+        >
+          <p className={styles.deleteCopy}>
+            确定删除「{pendingDeleteProject.name}」？将从资料库列表中移除。
           </p>
         </Modal>
       ) : null}

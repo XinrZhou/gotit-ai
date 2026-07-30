@@ -87,6 +87,25 @@ async def update_project(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+@router.delete(
+    "/v1/projects/{project_id}",
+    response_model=Project,
+    dependencies=[Depends(require_api_key)],
+)
+async def delete_project(
+    project_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Project:
+    """Archive (soft-delete) so the project leaves the default library list."""
+    async with session_scope() as session:
+        try:
+            return await day_ops.archive_project(
+                session, project_id, user_id=_user_id(settings)
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.get(
     "/v1/projects/{project_id}/progress",
     response_model=ProjectProgress,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type {
+  Claim,
   DayNote,
   DayPlan,
   DrillMaterial,
@@ -9,12 +10,20 @@ import type {
   ResumeRecord,
 } from "../types";
 
-/** Shared day snapshot: plan/notes/projects/resume/drill lists + refresh. */
+type TodaySnap = {
+  date: string;
+  plan: DayPlan;
+  notes: DayNote[];
+  due_claims: Claim[];
+};
+
+/** Shared day snapshot: plan/notes/due claims/projects/resume/drill + refresh. */
 export function useWorkspace(setError: (s: string) => void) {
   const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
   const [plan, setPlan] = useState<DayPlan | null>(null);
   const [dayNotes, setDayNotes] = useState<DayNote[]>([]);
   const [allNotes, setAllNotes] = useState<DayNote[]>([]);
+  const [dueClaims, setDueClaims] = useState<Claim[]>([]);
   const [noteScope, setNoteScope] = useState<"today" | "all">("today");
   const [projects, setProjects] = useState<Project[]>([]);
   const [resume, setResume] = useState<ResumeRecord | null>(null);
@@ -30,8 +39,7 @@ export function useWorkspace(setError: (s: string) => void) {
   const refresh = useCallback(async () => {
     setError("");
     const fetches: Promise<unknown>[] = [
-      api<DayPlan>(`/v1/days/${day}/plan`),
-      api<DayNote[]>(`/v1/days/${day}/notes`),
+      api<TodaySnap>(`/v1/today?day=${encodeURIComponent(day)}`),
       api<Project[]>(`/v1/projects`),
       api<ResumeRecord | null>(`/v1/resumes`),
       api<DrillMaterial[]>(`/v1/drill/materials`),
@@ -41,13 +49,15 @@ export function useWorkspace(setError: (s: string) => void) {
       fetches.push(api<DayNote[]>(`/v1/notes`));
     }
     const results = await Promise.all(fetches);
-    setPlan(results[0] as DayPlan);
-    setDayNotes(results[1] as DayNote[]);
-    setProjects(results[2] as Project[]);
-    setResume(results[3] as ResumeRecord | null);
-    setDrillMaterials(results[4] as DrillMaterial[]);
-    setDrillSessions(results[5] as DrillSession[]);
-    if (results[6]) setAllNotes(results[6] as DayNote[]);
+    const today = results[0] as TodaySnap;
+    setPlan(today.plan);
+    setDayNotes(today.notes);
+    setDueClaims(today.due_claims ?? []);
+    setProjects(results[1] as Project[]);
+    setResume(results[2] as ResumeRecord | null);
+    setDrillMaterials(results[3] as DrillMaterial[]);
+    setDrillSessions(results[4] as DrillSession[]);
+    if (results[5]) setAllNotes(results[5] as DayNote[]);
   }, [day, noteScope, setError]);
 
   useEffect(() => {
@@ -59,6 +69,7 @@ export function useWorkspace(setError: (s: string) => void) {
     setDay,
     plan,
     notes,
+    dueClaims,
     noteScope,
     setNoteScope,
     projects,
@@ -67,6 +78,7 @@ export function useWorkspace(setError: (s: string) => void) {
       title: string;
       topic: string | null;
       status: string;
+      claim_id: string | null;
     }[],
     resume,
     drillMaterials,

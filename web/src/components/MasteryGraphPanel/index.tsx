@@ -2,6 +2,7 @@ import { forceCollide, forceLink, forceManyBody, forceCenter, forceX, forceY } f
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { api } from "../../api";
+import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { GraphEdge, GraphNode, GraphView } from "../../types";
 import styles from "./index.module.scss";
@@ -13,6 +14,7 @@ type FGNode = GraphNode & {
   failCount: number;
   topicKey: string;
   val: number;
+  clean: string;
 };
 type FGLink = {
   source: string | FGNode;
@@ -40,18 +42,23 @@ function topicHue(topic: string): number {
 }
 
 function nodeFill(n: FGNode): string {
-  if (n.type === "topic") return `hsl(${topicHue(n.label)} 22% 38%)`;
+  if (n.type === "topic") return `hsl(${topicHue(n.label)} 18% 42%)`;
   if (n.type === "project") return "hsl(0 0% 48%)";
   if (n.type === "interest") return "hsl(0 0% 68%)";
   const hue = n.topicKey ? topicHue(n.topicKey) : 210;
   const fails = n.failCount;
-  if (fails >= 3) return `hsl(${hue} 32% 26%)`;
-  if (fails >= 1) return `hsl(${hue} 24% 34%)`;
-  return `hsl(${hue} 10% 52%)`;
+  if (fails >= 3) return `hsl(${hue} 28% 28%)`;
+  if (fails >= 1) return `hsl(${hue} 20% 36%)`;
+  return `hsl(${hue} 8% 58%)`;
 }
 
-function shortLabel(text: string, max = 12): string {
-  const t = text.replace(/\s+/g, " ").trim();
+function cleanLabel(text: string): string {
+  return stripHtml(text).replace(/\s+/g, " ").trim();
+}
+
+function shortLabel(text: string, max = 10): string {
+  const t = cleanLabel(text);
+  if (!t) return "…";
   if (t.length <= max) return t;
   return `${t.slice(0, max)}…`;
 }
@@ -64,7 +71,6 @@ function filterWeakGraph(raw: GraphView): GraphView {
     keepClaim.add(e.source);
     keepClaim.add(e.target);
   }
-  // 没有易混边时，退回「有失败的 claim」
   if (keepClaim.size === 0) {
     for (const n of raw.nodes) {
       if (n.type === "claim" && Number(n.meta?.fail_count ?? 0) > 0) {
@@ -197,14 +203,16 @@ export function MasteryGraphPanel({
   const data = useMemo(() => {
     const nodes: FGNode[] = (graph?.nodes ?? []).map((n) => {
       const failCount = Number(n.meta?.fail_count ?? 0);
+      const clean = cleanLabel(n.label) || (n.type === "topic" ? "主题" : "命题");
       let val = 1;
-      if (n.type === "topic") val = 4;
-      else if (n.type === "claim") val = 1.2 + Math.min(3, failCount * 0.7);
+      if (n.type === "topic") val = 5;
+      else if (n.type === "claim") val = 1.4 + Math.min(3.2, failCount * 0.75);
       return {
         ...n,
-        name: n.label,
+        name: clean,
+        clean,
         failCount,
-        topicKey: String(n.meta?.topic ?? (n.type === "topic" ? n.label : "")),
+        topicKey: String(n.meta?.topic ?? (n.type === "topic" ? clean : "")),
         val,
       };
     });
@@ -222,22 +230,21 @@ export function MasteryGraphPanel({
     const fg = fgRef.current;
     if (!fg || data.nodes.length === 0) return;
 
-    // Tighter packing: short links, mild charge, strong centering.
     fg.d3Force(
       "link",
       forceLink<FGNode, FGLink>()
         .id((d) => d.id)
         .distance((l) => {
           if (l.rel === "confused_with") {
-            return l.active || l.weight >= 2 ? 38 : 46;
+            return l.active || l.weight >= 2 ? 52 : 64;
           }
-          return 56; // has_topic — keep claim near hub
+          return 78;
         })
         .strength((l) => {
           if (l.rel === "confused_with") {
-            return l.active || l.weight >= 2 ? 1.1 : 0.75;
+            return l.active || l.weight >= 2 ? 0.95 : 0.65;
           }
-          return 0.55;
+          return 0.4;
         }),
     );
     fg.d3Force(
@@ -245,26 +252,26 @@ export function MasteryGraphPanel({
       forceManyBody()
         .strength((d) => {
           const n = d as FGNode;
-          return n.type === "topic" ? -140 : -90;
+          return n.type === "topic" ? -220 : -130;
         })
-        .distanceMax(280),
+        .distanceMax(360),
     );
     fg.d3Force(
       "collide",
       forceCollide<FGNode>()
-        .radius((d) => 8 + d.val * 2.4)
-        .strength(0.9)
-        .iterations(2),
+        .radius((d) => (d.type === "topic" ? 28 : 14 + d.val * 2.2))
+        .strength(0.95)
+        .iterations(3),
     );
-    fg.d3Force("center", forceCenter(0, 0).strength(0.18));
-    fg.d3Force("x", forceX(0).strength(0.12));
-    fg.d3Force("y", forceY(0).strength(0.12));
+    fg.d3Force("center", forceCenter(0, 0).strength(0.12));
+    fg.d3Force("x", forceX(0).strength(0.08));
+    fg.d3Force("y", forceY(0).strength(0.08));
     fg.d3ReheatSimulation();
 
-    const pad = fullscreen ? 40 : 28;
+    const pad = fullscreen ? 48 : 32;
     const t1 = window.setTimeout(() => fg.zoomToFit(400, pad), 180);
     const t2 = window.setTimeout(() => fg.zoomToFit(280, pad), 700);
-    const t3 = window.setTimeout(() => fg.zoomToFit(220, Math.max(24, pad - 8)), 1200);
+    const t3 = window.setTimeout(() => fg.zoomToFit(220, Math.max(28, pad - 8)), 1200);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
@@ -272,27 +279,18 @@ export function MasteryGraphPanel({
     };
   }, [data, size.w, size.h, focus, fullscreen]);
 
-  const stats = useMemo(() => {
-    const nodes = graph?.nodes ?? [];
-    const edges = graph?.edges ?? [];
-    const confused = edges.filter((e) => e.rel === "confused_with");
-    const active = confused.filter((e) => e.meta?.active);
-    const fails = nodes
-      .filter((n) => n.type === "claim")
-      .reduce((s, n) => s + Number(n.meta?.fail_count ?? 0), 0);
-    return {
-      claims: nodes.filter((n) => n.type === "claim").length,
-      confused: confused.length,
-      active: active.length,
-      fails,
-    };
-  }, [graph]);
+  const claimCount = useMemo(
+    () => (graph?.nodes ?? []).filter((n) => n.type === "claim").length,
+    [graph],
+  );
+
+  const selectedClean = selected ? cleanLabel(selected.label) : "";
 
   const body = (
     <>
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          {fullscreen ? <h2 className={styles.fsTitle}>掌握图谱</h2> : null}
+          {fullscreen ? <h2 className={styles.fsTitle}>弱点图谱</h2> : null}
           <div className={styles.focusToggle} role="tablist" aria-label="图谱范围">
             <button
               type="button"
@@ -313,13 +311,9 @@ export function MasteryGraphPanel({
               全部
             </button>
           </div>
-          <div className={styles.stats}>
-            <span>{stats.claims} 题</span>
-            <span>{stats.fails} 次挂</span>
-            <span>
-              {stats.active}/{stats.confused} 易混
-            </span>
-          </div>
+          {!loading && claimCount > 0 ? (
+            <span className={styles.stats}>{claimCount} 题</span>
+          ) : null}
         </div>
         <div className={styles.toolbarRight}>
           <button type="button" className={styles.refresh} onClick={() => void load()}>
@@ -330,7 +324,7 @@ export function MasteryGraphPanel({
               type="button"
               className={styles.closeFs}
               onClick={onClose}
-              aria-label="关闭图谱"
+              aria-label="关闭"
             >
               关闭
             </button>
@@ -342,7 +336,7 @@ export function MasteryGraphPanel({
         {loading ? (
           <p className={styles.empty}>加载中…</p>
         ) : data.nodes.length === 0 ? (
-          <p className={styles.empty}>暂无薄弱点。考挂几次后，易混关系会出现在这里。</p>
+          <p className={styles.empty}>暂无薄弱点</p>
         ) : (
           <ForceGraph2D
             ref={fgRef as never}
@@ -351,10 +345,10 @@ export function MasteryGraphPanel({
             graphData={data}
             nodeId="id"
             nodeVal="val"
-            nodeLabel={(n) => (n as FGNode).label}
+            nodeLabel={(n) => (n as FGNode).clean}
             linkDirectionalArrowLength={0}
-            cooldownTicks={160}
-            warmupTicks={50}
+            cooldownTicks={180}
+            warmupTicks={60}
             enableNodeDrag
             backgroundColor="rgba(0,0,0,0)"
             linkCanvasObjectMode={() => "replace"}
@@ -376,15 +370,16 @@ export function MasteryGraphPanel({
               ctx.lineTo(tgt.x, tgt.y);
               if (l.rel === "confused_with") {
                 ctx.strokeStyle = active
-                  ? "rgba(29,29,31,0.72)"
-                  : "rgba(29,29,31,0.32)";
+                  ? "rgba(29,29,31,0.55)"
+                  : "rgba(29,29,31,0.22)";
                 ctx.lineWidth =
-                  (active ? Math.min(4.2, 2 + l.weight * 0.4) : 1.4) / globalScale;
+                  (active ? Math.min(3.2, 1.6 + l.weight * 0.35) : 1.2) / globalScale;
                 ctx.setLineDash([]);
               } else {
-                ctx.strokeStyle = "rgba(0,0,0,0.14)";
-                ctx.lineWidth = 1.1 / globalScale;
-                ctx.setLineDash([4 / globalScale, 4 / globalScale]);
+                // topic spokes stay nearly invisible — structure without noise
+                ctx.strokeStyle = "rgba(0,0,0,0.08)";
+                ctx.lineWidth = 0.9 / globalScale;
+                ctx.setLineDash([3 / globalScale, 5 / globalScale]);
               }
               ctx.stroke();
               ctx.setLineDash([]);
@@ -395,18 +390,18 @@ export function MasteryGraphPanel({
               const y = n.y ?? 0;
               const isSel = selected?.id === n.id;
               const isHover = hoverId === n.id;
-              const showLabel = true; // dense graph: always label
+              // Topics always labeled; claims only when focused — kills label soup.
+              const showLabel = n.type === "topic" || isSel || isHover;
 
-              let r = 5.5;
-              if (n.type === "topic") r = 10;
-              else r = 5.5 + Math.min(5.5, n.failCount * 1.15);
+              let r = 5;
+              if (n.type === "topic") r = 11;
+              else r = 5 + Math.min(5, n.failCount * 1.1);
 
               if (n.type === "topic" || isSel || isHover) {
                 ctx.beginPath();
-                ctx.arc(x, y, r + 4 / globalScale, 0, 2 * Math.PI);
-                ctx.fillStyle = isSel || isHover
-                  ? "rgba(29,29,31,0.12)"
-                  : "rgba(29,29,31,0.06)";
+                ctx.arc(x, y, r + 3.5 / globalScale, 0, 2 * Math.PI);
+                ctx.fillStyle =
+                  isSel || isHover ? "rgba(29,29,31,0.1)" : "rgba(29,29,31,0.05)";
                 ctx.fill();
               }
 
@@ -415,29 +410,29 @@ export function MasteryGraphPanel({
               ctx.fillStyle = nodeFill(n);
               ctx.fill();
               if (isSel || isHover) {
-                ctx.strokeStyle = "rgba(29,29,31,0.75)";
-                ctx.lineWidth = 1.8 / globalScale;
+                ctx.strokeStyle = "rgba(29,29,31,0.7)";
+                ctx.lineWidth = 1.6 / globalScale;
                 ctx.stroke();
               }
 
               if (showLabel) {
-                const max = n.type === "topic" ? 12 : isSel || isHover ? 28 : 16;
-                const label = shortLabel(n.label, max);
+                const max = n.type === "topic" ? 10 : 22;
+                const label = shortLabel(n.clean, max);
                 const fontSize = Math.max(
-                  11.5,
-                  Math.min(15, (n.type === "topic" ? 14 : 12.5) / Math.sqrt(globalScale)),
+                  11,
+                  Math.min(14, (n.type === "topic" ? 13 : 12) / Math.sqrt(globalScale)),
                 );
                 ctx.font = `${n.type === "topic" ? 600 : 500} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
-                const ty = y + r + 4 / globalScale;
-                ctx.lineWidth = 3.5 / globalScale;
-                ctx.strokeStyle = "rgba(245,245,247,0.92)";
+                const ty = y + r + 5 / globalScale;
+                ctx.lineWidth = 3.2 / globalScale;
+                ctx.strokeStyle = "rgba(245,245,247,0.95)";
                 ctx.strokeText(label, x, ty);
                 ctx.fillStyle =
                   n.type === "topic"
-                    ? "rgba(29,29,31,0.92)"
-                    : "rgba(50,50,55,0.94)";
+                    ? "rgba(29,29,31,0.88)"
+                    : "rgba(50,50,55,0.9)";
                 ctx.fillText(label, x, ty);
               }
             }}
@@ -445,33 +440,19 @@ export function MasteryGraphPanel({
             onNodeHover={(node) => setHoverId(node ? (node as FGNode).id : null)}
             onBackgroundClick={() => setSelected(null)}
             onEngineStop={() => {
-              fgRef.current?.zoomToFit(260, fullscreen ? 36 : 24);
+              fgRef.current?.zoomToFit(260, fullscreen ? 40 : 28);
             }}
           />
         )}
-      </div>
 
-      <div className={styles.footer}>
-        <p className={styles.legend}>
-          实线=易混 · 虚线=主题 · 点节点看全文
-          {fullscreen ? " · Esc 关闭" : null}
-        </p>
-        {selected ? (
+        {selected && selectedClean ? (
           <div className={styles.detail}>
-            <p className={styles.detailType}>
-              {selected.type === "claim"
-                ? "命题"
-                : selected.type === "topic"
-                  ? "主题"
-                  : selected.type}
-            </p>
-            <p className={styles.detailLabel}>{selected.label}</p>
+            <p className={styles.detailLabel}>{selectedClean}</p>
             {selected.type === "claim" ? (
               <p className={styles.detailMeta}>
                 失败 {Number(selected.meta?.fail_count ?? 0)} 次
-                {selected.meta?.topic ? ` · ${String(selected.meta.topic)}` : null}
-                {selected.meta?.status
-                  ? ` · ${String(selected.meta.status)}`
+                {selected.meta?.topic
+                  ? ` · ${cleanLabel(String(selected.meta.topic))}`
                   : null}
               </p>
             ) : null}
@@ -483,7 +464,7 @@ export function MasteryGraphPanel({
 
   if (fullscreen) {
     return (
-      <div className={styles.fsRoot} role="dialog" aria-modal="true" aria-label="掌握图谱">
+      <div className={styles.fsRoot} role="dialog" aria-modal="true" aria-label="弱点图谱">
         <div className={styles.fsPanel}>{body}</div>
       </div>
     );

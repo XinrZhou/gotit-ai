@@ -322,7 +322,9 @@ export function SettingsPage() {
         </nav>
 
         <div
-          className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}`}
+          className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}${
+            !sheetOpen && tab === "shell" ? ` ${styles.paneFill}` : ""
+          }`}
         >
           {skillSheet ? (
             <div className={styles.sheet}>

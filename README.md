@@ -35,7 +35,8 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded |
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
 | **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
-| **Verify loop** | Examine → Critic recheck → deterministic gate → trajectory / SR |
+| **Daily brief** | Empty chat shows owed + today's plan with one-tap 开考 |
+| **Verify loop** | Examine → Critic recheck → **deterministic gate** → trajectory / spaced review / mastery-graph (same path for chat verify and `/v1/examine`) |
 | **Notes → claims** | Ingest study material into testable claims + daily plan |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
 | **Settings** | 资料 / Skills / MCP / 计划推送 / 动态 — profile, DIY skills, plan push prefs, OpenClaw activity |
@@ -136,7 +137,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | OpenClaw WeChat digests (morning plan / evening tomorrow / optional news) | Done (P1c) |
 | OpenClaw→gotit shell writeback + Settings「计划推送」「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
-| Mastery graph (fail events, confused_with, fullscreen from Library) | Done |
+| Mastery graph (fail events, confused_with, fullscreen from chat top bar) | Done |
 | Persist workflow turns into thread history | Done |
 | Interview schedule + due reminders | Done (P3d) |
 | Failure digest / voice-teach / coding skills | Done (P3b/P3c/P2) |

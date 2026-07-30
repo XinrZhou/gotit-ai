@@ -922,6 +922,17 @@ async def gotit_update_project(
 
 
 @mcp.tool()
+async def gotit_delete_project(project_id: str) -> dict[str, object]:
+    """Archive a project (soft-delete); it leaves the default library list."""
+    await ensure_db()
+    async with session_scope() as session:
+        project = await day_ops.archive_project(
+            session, UUID(project_id), user_id=_user_id()
+        )
+    return project.model_dump(mode="json")
+
+
+@mcp.tool()
 async def gotit_project_progress(project_id: str) -> dict[str, object]:
     """Return claim mastery progress for a project."""
     await ensure_db()
@@ -937,7 +948,7 @@ async def gotit_upload_resume(file_path: str) -> dict[str, object]:
     """Upload a resume file (local path), extract text + parse to ResumeDocument.
 
     MCP stdio cannot pass multipart; OpenClaw downloads the file and passes a
-    local path. Returns {upload_id, document}.
+    local path. Returns {upload_id, file_path, document}.
     """
     await ensure_db()
     settings = get_settings()
@@ -954,26 +965,42 @@ async def gotit_upload_resume(file_path: str) -> dict[str, object]:
     resume_text = extract_text(content, content_type)
     if not settings.llm_api_key:
         out = stub_parse(upload_id=upload_id, resume_text=resume_text)
-        return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
-    system_prompt = load_resume_system_prompt()
-    agent = build_resume_parser(get_model(), system_prompt=system_prompt)
-    out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
-    return {"upload_id": str(upload_id), "document": out.document.model_dump(mode="json")}
+    else:
+        system_prompt = load_resume_system_prompt()
+        agent = build_resume_parser(get_model(), system_prompt=system_prompt)
+        out = await run_resume_parser(agent, upload_id=upload_id, resume_text=resume_text)
+    return {
+        "upload_id": str(upload_id),
+        "file_path": stored,
+        "document": out.document.model_dump(mode="json"),
+    }
 
 
 @mcp.tool()
 async def gotit_apply_resume(
-    upload_id: str, document: dict[str, object], ingest: bool = False
+    upload_id: str,
+    document: dict[str, object],
+    ingest: bool = False,
+    file_path: str | None = None,
 ) -> dict[str, object]:
     """Apply an (edited) parsed resume: clear-rebuild projects (no quiz notes)."""
     await ensure_db()
     doc = ResumeDocument.model_validate(document)
+    resolved = file_path
+    if not resolved or not Path(resolved).exists():
+        candidates = sorted(Path("uploads").glob(f"{upload_id}.*"))
+        if candidates:
+            resolved = str(candidates[0])
+        elif file_path:
+            resolved = file_path
+        else:
+            resolved = f"uploads/{upload_id}"
     async with session_scope() as session:
         return await day_ops.apply_resume(
             session,
             doc,
             upload_id=UUID(upload_id),
-            file_path=f"uploads/{upload_id}",
+            file_path=resolved,
             ingest=ingest,
             user_id=_user_id(),
         )

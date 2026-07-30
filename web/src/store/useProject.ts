@@ -24,6 +24,20 @@ export function useProject({ projects, run }: Deps) {
     setShowProjectModal(true);
   }, []);
 
+  const onDeleteProject = useCallback(
+    (p: Project) => {
+      void run(async () => {
+        await api<Project>(`/v1/projects/${p.id}`, { method: "DELETE" });
+        setSelectedProjectId((cur) => (cur === p.id ? null : cur));
+        if (editingProject?.id === p.id) {
+          setShowProjectModal(false);
+          setEditingProject(null);
+        }
+      }, "项目已删除");
+    },
+    [run, editingProject?.id],
+  );
+
   const saveProject = useCallback(
     (
       editing: Project | null,
@@ -56,6 +70,7 @@ export function useProject({ projects, run }: Deps) {
     setShowProjectModal,
     editingProject,
     onOpenEditProject,
+    onDeleteProject,
     saveProject,
   };
 }

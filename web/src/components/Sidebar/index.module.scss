@@ -9,44 +9,19 @@
 }
 
 .sidebarHead {
-  padding: 18px 18px 12px;
-  flex-shrink: 0;
-}
-
-.headRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.headActions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  padding: 18px 18px 12px;
+  flex-shrink: 0;
 }
 
 .libraryTitle {
-  font-size: 14px;
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ink);
-}
-
-.graphBtn {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  padding: 4px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.graphBtn:hover {
-  background: var(--fill);
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 
@@ -54,11 +29,13 @@
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   padding: 4px 8px;
   border-radius: 6px;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .closeBtn:hover {
@@ -66,24 +43,53 @@
   color: var(--ink);
 }
 
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sectionGrow {
+  flex: 1;
+  min-height: 0;
+}
+
 .sectionLabel {
-  padding: 20px 22px 8px;
+  padding: 14px 18px 8px;
   font-size: 11px;
   font-weight: 500;
   color: var(--faint);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+}
+
+.sectionMeta {
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .sectionTools {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sectionTool {
@@ -91,8 +97,8 @@
   background: transparent;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   text-transform: none;
   padding: 3px 6px;
   border-radius: 6px;
@@ -105,10 +111,117 @@
   color: var(--ink);
 }
 
+.sectionAdd {
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sectionAdd:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.sectionAdd:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.projectList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 12px 12px;
+}
+
+.projRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.projRow:hover {
+  background: var(--fill);
+}
+
+.projRowActive {
+  background: var(--fill);
+}
+
+.projMain {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.projMain:hover,
+.projActive {
+  color: var(--ink);
+}
+
+.projName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMenu {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-right: 4px;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.projRow:hover .rowMenu,
+.noteItem:hover .rowMenu,
+.projRow:focus-within .rowMenu,
+.noteItem:focus-within .rowMenu {
+  opacity: 1;
+}
+
+.rowMenu:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
 .selectBar {
   display: flex;
   align-items: center;
-  padding: 0 16px 6px;
+  padding: 0 14px 4px;
   flex-shrink: 0;
 }
 
@@ -139,18 +252,114 @@
   cursor: pointer;
 }
 
-.batchAction {
-  width: 100%;
-  height: 40px;
+.scopeToggle {
+  display: flex;
+  gap: 1px;
+  background: transparent;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.scopeBtn {
   border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 3px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.scopeBtn:hover {
+  color: var(--muted);
+}
+
+.scopeActive {
   background: var(--fill);
   color: var(--ink);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+}
+
+.notesList {
+  padding: 0 12px 8px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 16px 12px;
+}
+
+.emptyText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+
+.btnCompose {
+  width: 100%;
+  height: 36px;
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition: opacity 0.15s ease;
+}
+
+.btnCompose:hover {
+  opacity: 0.88;
+}
+
+.btnCompose:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btnQuiet {
+  width: 100%;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.btnQuiet:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.batchAction {
+  width: 100%;
+  height: 36px;
+  border: none;
+  background: var(--fill);
+  color: var(--ink);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
 .batchAction:hover:not(:disabled) {
@@ -176,7 +385,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-left: 8px;
+  margin-left: 4px;
   cursor: pointer;
 }
 
@@ -187,169 +396,11 @@
   cursor: pointer;
 }
 
-.sectionAdd {
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--faint);
-  font-size: 18px;
-  line-height: 1;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.sectionAdd:hover {
-  background: var(--fill);
-  color: var(--ink);
-}
-
-.sectionAdd:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.scopeToggle {
-  display: flex;
-  gap: 2px;
-  background: var(--fill);
-  border-radius: 999px;
-  padding: 2px;
-}
-
-.scopeBtn {
-  border: none;
-  background: transparent;
-  color: var(--faint);
-  font-size: 10.5px;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  letter-spacing: 0;
-  text-transform: none;
-  transition: all 0.12s ease;
-}
-
-.scopeBtn:hover {
-  color: var(--muted);
-}
-
-.scopeActive {
-  background: var(--bg);
-  color: var(--ink);
-}
-
 .noteDate {
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-}
-
-.projectList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 12px 14px;
-}
-
-.projItem {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.projItem:hover {
-  background: var(--fill);
-  color: var(--ink);
-}
-
-.projActive {
-  background: var(--fill);
-  color: var(--ink);
-  font-weight: 400;
-}
-
-.projName {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notesList {
-  padding: 0 12px 10px;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  padding: 8px 10px 4px;
-}
-
-.emptyText {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.btnCompose {
-  width: 100%;
-  height: 40px;
-  border: none;
-  background: var(--ink);
-  color: var(--bg);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.12s ease;
-}
-
-.btnCompose:hover {
-  opacity: 0.88;
-}
-
-.btnQuiet {
-  width: 100%;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 400;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.btnQuiet:hover {
-  background: var(--fill);
-  color: var(--ink);
 }
 
 .noteItem {
@@ -358,21 +409,13 @@
   width: 100%;
   align-items: center;
   gap: 2px;
-  padding: 0 4px 0 0;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   transition: background 0.15s ease;
 }
 
-.noteItem:hover {
-  background: var(--fill);
-}
-
+.noteItem:hover,
 .noteItemSelected {
   background: var(--fill);
-}
-
-.noteItemDim {
-  opacity: 0.55;
 }
 
 .listDivider {
@@ -380,24 +423,25 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 10px 4px 6px;
-  padding-top: 10px;
+  margin: 8px 4px 4px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 400;
   color: var(--faint);
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
 }
 
 .dividerAction {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
   padding: 2px 4px;
+  border-radius: 4px;
   cursor: pointer;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   transition: color 0.12s ease;
 }
 
@@ -414,20 +458,16 @@
   flex: 1;
   min-width: 0;
   text-align: left;
-  padding: 10px 10px;
+  padding: 9px 12px;
   border: none;
   background: transparent;
   color: var(--ink);
   font-size: 13.5px;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.noteMain:hover {
-  background: transparent;
 }
 
 .noteTitle {
@@ -436,66 +476,45 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 .noteBadge {
   flex-shrink: 0;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--ink);
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--fill);
-}
-
-.noteBadgeDim {
-  flex-shrink: 0;
-  font-size: 10.5px;
-  color: var(--faint);
-}
-
-.noteMenu {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-  color: var(--faint);
-  font-size: 16px;
-  line-height: 1;
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  padding: 1px 6px;
   border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-.noteMenu:hover {
-  background: var(--fill);
-  color: var(--ink);
+  background: var(--bg);
 }
 
 .menuPop {
   position: absolute;
   top: 30px;
-  right: 0;
+  right: 4px;
   z-index: 20;
-  min-width: 132px;
+  min-width: 112px;
   padding: 4px;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
 }
 
 .menuPop button {
   text-align: left;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   color: var(--ink);
   font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -514,9 +533,7 @@
 }
 
 .foot {
-  padding: 12px 16px 16px;
+  padding: 10px 14px 14px;
   border-top: 1px solid var(--line);
   flex-shrink: 0;
-  display: flex;
-  gap: 8px;
 }

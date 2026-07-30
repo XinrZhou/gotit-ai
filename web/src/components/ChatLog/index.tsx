@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { ChatMsg } from "../../types";
 import { isMasteryVerdict, VerifyVerdictChip } from "../VerifyVerdict";
+import { VerifyTrajectory } from "../VerifyTrajectory";
 import styles from "./index.module.scss";
 
 type Props = {
@@ -32,9 +33,19 @@ export function ChatLog({ messages, examinerAvatar, examinerName, empty }: Props
         return (
           <div
             key={i}
-            className={isExaminer ? `${styles.row} ${styles.examiner}` : `${styles.row} ${styles.user}`}
+            className={
+              isExaminer
+                ? `${styles.row} ${styles.examiner}`
+                : `${styles.row} ${styles.user}`
+            }
           >
-            <div className={isExaminer ? `${styles.avatar} ${styles.avatarE}` : `${styles.avatar} ${styles.avatarMe}`}>
+            <div
+              className={
+                isExaminer
+                  ? `${styles.avatar} ${styles.avatarE}`
+                  : `${styles.avatar} ${styles.avatarMe}`
+              }
+            >
               {isExaminer ? examinerAvatar : "我"}
             </div>
             <div className={styles.col}>
@@ -46,6 +57,7 @@ export function ChatLog({ messages, examinerAvatar, examinerName, empty }: Props
                   sessionDone={Boolean(m.session_done)}
                 />
               ) : null}
+              {isExaminer && m.verify ? <VerifyTrajectory path={m.verify} /> : null}
             </div>
           </div>
         );

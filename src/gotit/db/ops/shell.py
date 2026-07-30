@@ -23,6 +23,7 @@ from gotit.core.models import (
 from gotit.db.models import ClaimRow, MemoryEntryRow, ProjectRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view
 from gotit.db.ops.memory import add_memory, list_memory
+from gotit.db.ops.note import _strip_html
 
 KIND_SHELL_EVENT = "shell_event"
 KIND_INTEREST = "interest"
@@ -418,11 +419,12 @@ async def build_graph_v0(
         claim = _claim_view(row)
         cid = f"claim:{claim.id}"
         status = claim.status.value if hasattr(claim.status, "value") else str(claim.status)
+        plain = _strip_html(claim.text)[:120] or "未命名命题"
         _add_node(
             GraphNode(
                 id=cid,
                 type="claim",
-                label=claim.text[:120],
+                label=plain,
                 meta={
                     "status": status,
                     "fail_count": fail_counts.get(claim.id, 0),

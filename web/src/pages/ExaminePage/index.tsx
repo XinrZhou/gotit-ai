@@ -2,15 +2,32 @@ import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
 import { SquidwardAvatar } from "../../components/Avatars";
+import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
+import type { Claim } from "../../types";
 import styles from "./index.module.scss";
+
+type PickRow =
+  | { key: string; kind: "claim"; label: string; claim: Claim }
+  | { key: string; kind: "note"; label: string; noteId: string; count: number };
+
+function clean(raw: string): string {
+  return stripHtml(raw).replace(/\s+/g, " ").trim();
+}
+
+const MAX_PICK = 6;
 
 export function ExaminePage() {
   const {
     notes,
+    dueClaims,
+    items,
     busy,
     examineNote,
+    examineClaimId,
+    examineLabel,
     onExamineStart,
+    onExamineStartClaim,
     examineChat,
     examineAnswer,
     setExamineAnswer,
@@ -18,11 +35,9 @@ export function ExaminePage() {
     onExamineAnswer,
   } = useStore();
 
-  const noteTitle = (n: { title: string | null }) => n.title?.trim() || "未命名笔记";
-  const entries = notes.filter((n) => n.claim_ids.length > 0);
+  const inSession = Boolean(examineNote || examineClaimId);
 
-  // Session active -> chat view
-  if (examineNote) {
+  if (inSession) {
     return (
       <>
         <ChatLog
@@ -36,7 +51,7 @@ export function ExaminePage() {
             kind="textarea"
             value={examineAnswer}
             onChange={setExamineAnswer}
-            placeholder={`和章鱼哥聊「${noteTitle(examineNote)}」…`}
+            placeholder={`和章鱼哥聊「${examineLabel || "考点"}」…`}
             onSubmit={onExamineAnswer}
             submitLabel="发送"
             busy={busy}
@@ -52,40 +67,116 @@ export function ExaminePage() {
     );
   }
 
-  // No session -> pick a note to start (only notes already turned into quizzes)
+  const owedIds = new Set(dueClaims.map((c) => c.id));
+  const planClaims = items
+    .filter((i) => i.status !== "verified" && i.claim_id && !owedIds.has(i.claim_id))
+    .map((i) => ({
+      id: i.claim_id!,
+      text: i.title,
+      status: i.status,
+      topic: i.topic,
+      source_note_id: null,
+      next_review_at: null,
+    }));
+  const noteEntries = notes.filter((n) => n.claim_ids.length > 0);
+
+  const seen = new Set<string>();
+  const rows: PickRow[] = [];
+  const pushClaim = (claim: Claim) => {
+    if (rows.length >= MAX_PICK) return;
+    const label = clean(claim.text);
+    if (!label) return;
+    const norm = label.toLowerCase().slice(0, 96);
+    if (seen.has(norm)) return;
+    seen.add(norm);
+    rows.push({ key: `c-${claim.id}`, kind: "claim", label, claim });
+  };
+
+  for (const c of dueClaims) pushClaim(c);
+  for (const c of planClaims) pushClaim(c);
+
+  const noteRows: PickRow[] = [];
+  for (const n of noteEntries) {
+    const label = clean(n.title?.trim() || n.excerpt || "未命名笔记");
+    if (!label) continue;
+    const norm = `note:${label.toLowerCase().slice(0, 96)}`;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    noteRows.push({
+      key: `n-${n.id}`,
+      kind: "note",
+      label,
+      noteId: n.id,
+      count: n.claim_ids.length,
+    });
+  }
+
+  // Prefer owed/plan; fill remaining slots with notes.
+  for (const nr of noteRows) {
+    if (rows.length >= MAX_PICK) break;
+    rows.push(nr);
+  }
+
+  const leftover =
+    dueClaims.length + planClaims.length + noteEntries.length - rows.length;
+
+  if (rows.length === 0) {
+    return (
+      <div className={styles.picker}>
+        <EmptyState avatar={<SquidwardAvatar />}>
+          <strong>还没有可考的题</strong>
+          <div>在资料库把笔记出成题，或先排进今日计划</div>
+        </EmptyState>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.picker}>
-      {entries.length === 0 ? (
-        <EmptyState avatar={<SquidwardAvatar />}>
-          <strong>我准备好了！</strong>
-          <div>先把左侧笔记出成题，章鱼哥就能考你了～</div>
-        </EmptyState>
-      ) : (
-        <>
-          <div className={styles.pickerHead}>
-            <div className={styles.pickerAvatar}>
-              <SquidwardAvatar />
-            </div>
-            <div className={styles.pickerTitle}>选一条，章鱼哥开考</div>
-            <div className={styles.pickerSub}>围绕它的考点一条条问你，直接聊就行</div>
+      <div className={styles.pickerInner}>
+        <header className={styles.pickerHead}>
+          <div className={styles.pickerAvatar}>
+            <SquidwardAvatar />
           </div>
-          <div className={styles.entryList}>
-            {entries.map((n) => (
+          <div className={styles.pickerCopy}>
+            <div className={styles.pickerTitle}>选一条开考</div>
+            <div className={styles.pickerSub}>章鱼哥追问 · 过了才算</div>
+          </div>
+        </header>
+
+        <ul className={styles.list}>
+          {rows.map((r) => (
+            <li key={r.key}>
               <button
-                key={n.id}
                 type="button"
-                className={styles.entry}
+                className={styles.row}
                 disabled={busy}
-                onClick={() => onExamineStart(n)}
+                onClick={() => {
+                  if (r.kind === "claim") onExamineStartClaim(r.claim);
+                  else {
+                    const n = notes.find((x) => x.id === r.noteId);
+                    if (n) onExamineStart(n);
+                  }
+                }}
               >
-                <span className={styles.entryIcon}>📝</span>
-                <span className={styles.entryTitle}>{noteTitle(n)}</span>
-                <span className={styles.entryCount}>{n.claim_ids.length} 题</span>
+                <span className={styles.rowMain}>
+                  <span className={styles.rowTitle} title={r.label}>
+                    {r.label}
+                  </span>
+                  {r.kind === "note" ? (
+                    <span className={styles.rowMeta}>{r.count} 题</span>
+                  ) : null}
+                </span>
+                <span className={styles.rowCta}>开考</span>
               </button>
-            ))}
-          </div>
-        </>
-      )}
+            </li>
+          ))}
+        </ul>
+
+        {leftover > 0 ? (
+          <p className={styles.more}>另有 {leftover} 条，考完再回来</p>
+        ) : null}
+      </div>
     </div>
   );
 }

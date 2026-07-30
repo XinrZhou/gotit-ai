@@ -8,9 +8,12 @@ is the next question to ask the learner. When `done=true`, `verdict` is one of
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from gotit.core.agents.deps import MemoryReader
 from gotit.core.models import Claim, ExamineVerdict, MemoryEntry, TopicExamineVerdict
@@ -25,6 +28,7 @@ def build_axiom_agent(model: Any, *, system_prompt: str) -> AxiomAgent:
         output_type=ExamineVerdict,
         system_prompt=system_prompt,
         name="axiom",
+        retries=2,
     )
 
 
@@ -34,6 +38,7 @@ def build_topic_axiom_agent(model: Any, *, system_prompt: str) -> TopicAxiomAgen
         output_type=TopicExamineVerdict,
         system_prompt=system_prompt,
         name="axiom-topic",
+        retries=2,
     )
 
 
@@ -51,6 +56,70 @@ def _format_memory(memory: list[MemoryEntry]) -> str:
     if not memory:
         return "(none)"
     return "\n".join(f"- [{m.kind}] {m.topic or '-'}: {m.content}" for m in memory[:8])
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{[\s\S]*\}", raw)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _fallback_examine(*, claim_text: str) -> ExamineVerdict:
+    snippet = claim_text.strip().replace("\n", " ")
+    if len(snippet) > 72:
+        snippet = snippet[:72] + "…"
+    return ExamineVerdict(
+        done=False,
+        verdict=None,
+        follow_up=f"先用自己的话说说：「{snippet}」到底是什么意思？",
+    )
+
+
+def _fallback_topic(*, claims: list[Claim]) -> TopicExamineVerdict:
+    first = claims[0]
+    return TopicExamineVerdict(
+        current_claim_id=first.id,
+        done=False,
+        verdict=None,
+        follow_up=(
+            f"我们来测这一条：「{first.text}」。"
+            "你能用自己的话说说，它到底指什么？"
+        ),
+        session_done=False,
+    )
+
+
+def _recover_examine(body: str | None, *, claim_text: str) -> ExamineVerdict:
+    data = _extract_json_object(body or "")
+    if data is not None:
+        try:
+            return ExamineVerdict.model_validate(data)
+        except Exception:
+            pass
+    return _fallback_examine(claim_text=claim_text)
+
+
+def _recover_topic(body: str | None, *, claims: list[Claim]) -> TopicExamineVerdict:
+    data = _extract_json_object(body or "")
+    if data is not None:
+        try:
+            return TopicExamineVerdict.model_validate(data)
+        except Exception:
+            pass
+    return _fallback_topic(claims=claims)
 
 
 def build_prompt(
@@ -80,6 +149,7 @@ def build_prompt(
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
     parts.append(
+        "Respond with structured fields only (no prose outside the schema). "
         "Decide: ask the next probing question (done=false, verdict=null), or "
         "deliver a verdict (done=true, verdict in passed|almost|owe_next). "
         "Put the next question in `follow_up`; on the final turn set follow_up "
@@ -109,8 +179,11 @@ async def run_axiom(
         budget_block=budget_block,
         failure_lesson_block=failure_lesson_block,
     )
-    result = await agent.run(prompt)
-    return result.output
+    try:
+        result = await agent.run(prompt)
+        return result.output
+    except UnexpectedModelBehavior as exc:
+        return _recover_examine(getattr(exc, "body", None), claim_text=claim_text)
 
 
 def _format_claims(claims: list[Claim]) -> str:
@@ -139,6 +212,7 @@ def build_topic_prompt(
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
     parts.append(
+        "Respond with structured fields only (no prose outside the schema). "
         "You are examining the learner across multiple claims in this topic, ONE at a time. "
         "Each turn, decide:\n"
         "- Keep probing the current claim: done=false, verdict=null, current_claim_id=the "
@@ -180,8 +254,11 @@ async def run_topic_examine(
         memory=entries,
         failure_lesson_block=failure_lesson_block,
     )
-    result = await agent.run(prompt)
-    return result.output
+    try:
+        result = await agent.run(prompt)
+        return result.output
+    except UnexpectedModelBehavior as exc:
+        return _recover_topic(getattr(exc, "body", None), claims=claims)
 
 
 def stub_topic_examine(

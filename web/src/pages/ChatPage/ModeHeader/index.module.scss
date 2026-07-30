@@ -6,6 +6,7 @@
 }
 
 .back {
+  flex-shrink: 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -23,11 +24,13 @@
 .current {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
   background: var(--soft);
   border-radius: 999px;
   min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .avatar {
@@ -46,25 +49,25 @@
   display: block;
 }
 
-.copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
 .title {
   font-size: 13.5px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--ink);
-  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.sep {
+  color: var(--faint);
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .hint {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--muted);
-  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

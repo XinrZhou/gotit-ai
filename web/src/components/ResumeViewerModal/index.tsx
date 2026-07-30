@@ -6,12 +6,35 @@ import styles from "./index.module.scss";
 
 type Kind = "pdf" | "docx" | "text" | "unknown";
 
-function kindFromPath(filePath: string): Kind {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+function kindFromExt(ext: string): Kind {
   if (ext === "pdf") return "pdf";
   if (ext === "docx") return "docx";
   if (ext === "txt" || ext === "md") return "text";
   return "unknown";
+}
+
+function kindFromPath(filePath: string): Kind {
+  const base = filePath.split(/[/\\]/).pop() ?? "";
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return "unknown";
+  return kindFromExt(base.slice(dot + 1).toLowerCase());
+}
+
+function kindFromContentType(contentType: string): Kind {
+  const base = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "application/pdf") return "pdf";
+  if (base === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return "docx";
+  }
+  if (base === "text/plain" || base === "text/markdown") return "text";
+  return "unknown";
+}
+
+/** Prefer Content-Type from file endpoint (handles legacy paths without ext). */
+function resolveKind(contentType: string, filePath: string): Kind {
+  const fromCt = kindFromContentType(contentType);
+  if (fromCt !== "unknown") return fromCt;
+  return kindFromPath(filePath);
 }
 
 export function ResumeViewerModal() {
@@ -33,14 +56,17 @@ export function ResumeViewerModal() {
     setKind(kindFromPath(resume.file_path));
     (async () => {
       try {
-        const { blob } = await fetchBlob("/v1/resumes/file");
+        const { blob, contentType } = await fetchBlob("/v1/resumes/file");
         if (cancelled) return;
-        const k = kindFromPath(resume.file_path);
+        const k = resolveKind(contentType || blob.type, resume.file_path);
+        setKind(k);
         if (k === "text") {
           setText(await blob.text());
-        } else {
+        } else if (k === "pdf" || k === "docx") {
           url = URL.createObjectURL(blob);
           setObjectUrl(url);
+        } else {
+          setError("无法识别的简历文件类型。");
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "加载失败");

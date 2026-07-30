@@ -48,25 +48,44 @@ export type ProjectProgress = {
 
 export type MasteryVerdict = "passed" | "almost" | "owe_next";
 
+export type Claim = {
+  id: string;
+  text: string;
+  status: string;
+  topic: string | null;
+  source_note_id: string | null;
+  next_review_at: string | null;
+};
+
+export type VerifyPath = {
+  examine_verdict: MasteryVerdict;
+  recheck_verdict: MasteryVerdict;
+  gate_verdict: MasteryVerdict;
+  gate?: { reason?: string; verdict?: MasteryVerdict };
+};
+
 export type ChatMsg = {
   role: "examiner" | "user";
   text: string;
   /** Present when this examiner turn closed a claim. */
   verdict?: MasteryVerdict | null;
   session_done?: boolean;
+  /** Critic → gate path when this turn closed a claim. */
+  verify?: VerifyPath | null;
 };
 
 export type TopicExamineVerdict = {
-  current_claim_id: string | null;
+  current_claim_id?: string | null;
   done: boolean;
   verdict: MasteryVerdict | null;
   follow_up: string;
-  session_done: boolean;
+  session_done?: boolean;
 };
 
 export type TopicExamineResponse = {
   verdict: TopicExamineVerdict;
   writeback: { claim: { status: string }; plan_items: unknown[] } | null;
+  verify?: VerifyPath | null;
 };
 
 export type TeachVerdict = {

@@ -1,0 +1,132 @@
+.brief {
+  width: 100%;
+  min-height: 0;
+  text-align: left;
+}
+
+.home {
+  max-width: 400px;
+}
+
+.thread {
+  max-width: none;
+}
+
+.head {
+  margin-bottom: 14px;
+}
+
+.home .head {
+  text-align: center;
+}
+
+.headTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.headHint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.rowBtn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.rowBtn:hover:not(:disabled) {
+  background: var(--soft);
+}
+
+.rowBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cta {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.rowBtn:hover:not(:disabled) .cta {
+  color: var(--ink);
+}
+
+/* Same row pattern as list items — not a separate slab button. */
+.moreBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.moreBtn:hover:not(:disabled) {
+  background: var(--soft);
+}
+
+.moreBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.moreMeta {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.moreBtn:hover:not(:disabled) .moreMeta {
+  color: var(--ink);
+}

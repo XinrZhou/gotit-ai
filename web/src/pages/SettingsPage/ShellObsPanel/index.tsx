@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api";
+import { stripHtml } from "../../../lib/format";
 import { useStore } from "../../../store";
 import type { MemoryEntry } from "../../../types";
 import styles from "./index.module.scss";
@@ -15,12 +16,12 @@ const CATEGORIES: { id: Category; label: string }[] = [
   { id: "interest", label: "标记有用" },
 ];
 
-const TIME_PRESETS: { id: TimePreset; label: string }[] = [
-  { id: "all", label: "全部时间" },
-  { id: "today", label: "今天" },
-  { id: "7d", label: "近 7 天" },
-  { id: "30d", label: "近 30 天" },
-  { id: "custom", label: "自定义" },
+const TIME_PRESETS: { id: TimePreset; label: string; short: string }[] = [
+  { id: "all", label: "全部时间", short: "全部" },
+  { id: "today", label: "今天", short: "今天" },
+  { id: "7d", label: "近 7 天", short: "7 天" },
+  { id: "30d", label: "近 30 天", short: "30 天" },
+  { id: "custom", label: "自定义", short: "自定义" },
 ];
 
 /** Content kind (what the push is about) — not “早/晚 cron” jargon. */
@@ -53,15 +54,70 @@ function fmtShort(iso: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
+/** Compact relative clock for dense list rows. */
+function fmtCompactAt(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "";
+  const now = new Date();
+  const hm = `${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
+  const sod = startOfDay(now).getTime();
+  const day = startOfDay(t).getTime();
+  if (day === sod) return hm;
+  if (day === sod - 86400000) return `昨天 ${hm}`;
+  if (t.getFullYear() === now.getFullYear()) {
+    return `${t.getMonth() + 1}/${t.getDate()} ${hm}`;
+  }
+  return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()}`;
+}
+
+function categoryLabel(e: MemoryEntry): string {
+  const cat = activityCategory(e);
+  if (cat === "morning") return JOB_LABEL.morning;
+  if (cat === "evening") return JOB_LABEL.evening;
+  if (cat === "news") return JOB_LABEL.news;
+  if (cat === "interest") return "标记有用";
+  return "";
+}
+
+/** Secondary line: only non-redundant extras (more plans / news / errors). */
+function activityExtra(e: MemoryEntry): string {
+  const c = e.content ?? {};
+  if (e.kind !== "shell_event") return "";
+  const job = String(c.job ?? "");
+  const cat = activityCategory(e);
+  const plans = planSubjects(c);
+  const items = digestItems(c);
+  const errN = Array.isArray(c.errors) ? c.errors.length : 0;
+  const bits: string[] = [];
+  if (plans.length > 1) {
+    bits.push(
+      plans.slice(1, 3).join("；") + (plans.length > 3 ? ` 等 ${plans.length} 条` : ""),
+    );
+  } else if ((cat === "news" || job === "news") && items.length > 1) {
+    const rest = items.slice(subjectOffset(e), 3);
+    if (rest.length) {
+      bits.push(
+        rest.map((it) => it.title || it.label).join("；") +
+          (items.length > 3 ? ` 等 ${items.length} 条` : ""),
+      );
+    }
+  }
+  if (errN) bits.push(`${errN} 源失败`);
+  return bits.join(" · ");
+}
+
 function truncate(s: string, max: number): string {
-  const t = s.trim();
+  const t = stripHtml(s).replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
 }
 
 function planSubjects(content: Record<string, unknown>): string[] {
   return Array.isArray(content.due_summary)
-    ? (content.due_summary as unknown[]).map(String).map((s) => s.trim()).filter(Boolean)
+    ? (content.due_summary as unknown[])
+        .map(String)
+        .map((s) => stripHtml(s).replace(/\s+/g, " ").trim())
+        .filter(Boolean)
     : [];
 }
 
@@ -92,7 +148,10 @@ function activitySubject(e: MemoryEntry): string | null {
   const plans = planSubjects(c);
   const items = digestItems(c);
   const newsTitles = new Set(items.map((it) => it.title).filter(Boolean));
-  const explicit = typeof c.subject === "string" ? c.subject.trim() : "";
+  const explicit =
+    typeof c.subject === "string"
+      ? stripHtml(c.subject).replace(/\s+/g, " ").trim()
+      : "";
 
   if (job === "morning" || job === "evening") {
     if (plans.length) return plans[0];
@@ -107,7 +166,7 @@ function activitySubject(e: MemoryEntry): string | null {
   if (job === "news" || e.kind === "interest") {
     if (explicit) return explicit;
     if (items.length && items[0].title) return items[0].title;
-    const t = String(c.title ?? "").trim();
+    const t = stripHtml(String(c.title ?? "")).replace(/\s+/g, " ").trim();
     return t || null;
   }
   if (explicit) return explicit;
@@ -135,51 +194,13 @@ function digestItems(content: Record<string, unknown>) {
       const o = raw as Record<string, unknown>;
       return {
         n: Number(o.n ?? i + 1),
-        title: String(o.title ?? "").trim(),
-        label: String(o.label ?? "").trim(),
+        title: stripHtml(String(o.title ?? "")).replace(/\s+/g, " ").trim(),
+        label: stripHtml(String(o.label ?? "")).replace(/\s+/g, " ").trim(),
         link: typeof o.link === "string" ? o.link : null,
         feed_id: typeof o.feed_id === "string" ? o.feed_id : null,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null && Boolean(x.title || x.label));
-}
-
-function activitySummary(e: MemoryEntry): string {
-  const c = e.content ?? {};
-  if (e.kind === "shell_event") {
-    const job = String(c.job ?? "");
-    const cat = activityCategory(e);
-    const jobLabel =
-      cat === "news"
-        ? JOB_LABEL.news
-        : JOB_LABEL[job] ?? (job ? `推送 · ${job}` : "推送");
-    const day = typeof c.day === "string" && c.day.trim() ? c.day.trim() : "";
-    const dayShort = day ? fmtShort(day) : "";
-    const plans = planSubjects(c);
-    const items = digestItems(c);
-    const errN = Array.isArray(c.errors) ? c.errors.length : 0;
-    const parts: string[] = [];
-    parts.push(dayShort ? `${jobLabel} · ${dayShort}` : jobLabel);
-    if (plans.length > 1) {
-      parts.push(
-        plans.slice(1, 4).join("；") + (plans.length > 4 ? ` 等 ${plans.length} 条` : ""),
-      );
-    } else if ((cat === "news" || job === "news") && items.length) {
-      const rest = items.slice(subjectOffset(e), 3);
-      if (rest.length) {
-        parts.push(
-          rest.map((it) => it.title || it.label).join("；") +
-            (items.length > 3 ? ` 等 ${items.length} 条` : ""),
-        );
-      } else if (items.length > 1) {
-        parts.push(`共 ${items.length} 条`);
-      }
-    }
-    if (errN) parts.push(`${errN} 源失败`);
-    return parts.join(" · ");
-  }
-  if (e.kind === "interest") return "标记有用";
-  return "";
 }
 
 function subjectOffset(e: MemoryEntry): number {
@@ -197,13 +218,11 @@ function MonthGrid({
   year,
   month,
   range,
-  picking,
   onPick,
 }: {
   year: number;
   month: number;
   range: Range;
-  picking: "from" | "to";
   onPick: (iso: string) => void;
 }) {
   const first = new Date(year, month, 1).getDay();
@@ -241,7 +260,6 @@ function MonthGrid({
               styles.calDay,
               inRange ? styles.calInRange : "",
               isEdge ? styles.calEdge : "",
-              picking === "from" && !range.from ? styles.calHint : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -505,8 +523,6 @@ export function ShellObsPanel() {
 
   return (
     <div className={styles.panel}>
-      <h3 className={styles.sectionTitle}>动态</h3>
-
       <div className={styles.toolbar}>
         <div className={styles.chips} role="tablist" aria-label="类别">
           {visibleCategories.map((c) => (
@@ -579,66 +595,66 @@ export function ShellObsPanel() {
                         setTimeOpen(false);
                       }}
                     >
-                      {p.label}
+                      {p.short}
                     </button>
                   ))}
                 </div>
 
-                <div className={styles.timeDivider} />
+                <div className={styles.calBlock}>
+                  <div className={styles.calHead}>
+                    <button
+                      type="button"
+                      className={styles.calNav}
+                      aria-label="上个月"
+                      onClick={() =>
+                        setCalCursor((c) => {
+                          const m = c.month - 1;
+                          return m < 0
+                            ? { year: c.year - 1, month: 11 }
+                            : { year: c.year, month: m };
+                        })
+                      }
+                    >
+                      ‹
+                    </button>
+                    <span className={styles.calMonth}>
+                      {calCursor.year}年{calCursor.month + 1}月
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.calNav}
+                      aria-label="下个月"
+                      onClick={() =>
+                        setCalCursor((c) => {
+                          const m = c.month + 1;
+                          return m > 11
+                            ? { year: c.year + 1, month: 0 }
+                            : { year: c.year, month: m };
+                        })
+                      }
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <MonthGrid
+                    year={calCursor.year}
+                    month={calCursor.month}
+                    range={customRange}
+                    onPick={onPickDay}
+                  />
+                </div>
 
-                <p className={styles.calHintText}>
-                  {picking === "from" || !customRange.from
-                    ? "自定义范围 · 先选开始"
-                    : customRange.to
-                      ? `${fmtShort(customRange.from)} – ${fmtShort(customRange.to)}`
-                      : `开始 ${fmtShort(customRange.from)} · 再选结束`}
-                </p>
-                <div className={styles.calHead}>
-                  <button
-                    type="button"
-                    className={styles.calNav}
-                    aria-label="上个月"
-                    onClick={() =>
-                      setCalCursor((c) => {
-                        const m = c.month - 1;
-                        return m < 0
-                          ? { year: c.year - 1, month: 11 }
-                          : { year: c.year, month: m };
-                      })
-                    }
-                  >
-                    ‹
-                  </button>
-                  <span className={styles.calMonth}>
-                    {calCursor.year} 年 {calCursor.month + 1} 月
+                <div className={styles.calActions}>
+                  <span className={styles.calRangeHint}>
+                    {picking === "from" || !customRange.from
+                      ? "点选开始日"
+                      : customRange.to
+                        ? `${fmtShort(customRange.from)} – ${fmtShort(customRange.to)}`
+                        : `${fmtShort(customRange.from)} 起 · 再选结束`}
                   </span>
                   <button
                     type="button"
-                    className={styles.calNav}
-                    aria-label="下个月"
-                    onClick={() =>
-                      setCalCursor((c) => {
-                        const m = c.month + 1;
-                        return m > 11
-                          ? { year: c.year + 1, month: 0 }
-                          : { year: c.year, month: m };
-                      })
-                    }
-                  >
-                    ›
-                  </button>
-                </div>
-                <MonthGrid
-                  year={calCursor.year}
-                  month={calCursor.month}
-                  range={customRange}
-                  picking={picking}
-                  onPick={onPickDay}
-                />
-                <div className={styles.calActions}>
-                  <button
-                    type="button"
-                    className="btn-ghost"
+                    className={styles.calActionGhost}
                     onClick={() => {
                       setCustomRange({ from: "", to: "" });
                       setPicking("from");
@@ -649,7 +665,7 @@ export function ShellObsPanel() {
                   </button>
                   <button
                     type="button"
-                    className="btn-ink"
+                    className={styles.calActionDone}
                     disabled={!customRange.from || !customRange.to}
                     onClick={() => {
                       setTimePreset("custom");
@@ -691,25 +707,32 @@ export function ShellObsPanel() {
       </div>
 
       <ul className={styles.list}>
-        {filtered.map((e) => (
-          <li key={e.id}>
-            <button
-              type="button"
-              className={styles.row}
-              onClick={() => setSelected(e)}
-            >
-              <div className={styles.rowMain}>
-                <div className={styles.rowTop}>
+        {filtered.map((e) => {
+          const cat = categoryLabel(e);
+          const extra = activityExtra(e);
+          return (
+            <li key={e.id}>
+              <button
+                type="button"
+                className={styles.row}
+                onClick={() => setSelected(e)}
+              >
+                <div className={styles.rowBody}>
                   <span className={styles.title}>{activityTitle(e)}</span>
+                  {extra ? <span className={styles.extra}>{extra}</span> : null}
+                </div>
+                <div className={styles.rowMeta}>
+                  {cat && category === "all" ? (
+                    <span className={styles.cat}>{cat}</span>
+                  ) : null}
                   <span className={styles.time}>
-                    {e.created_at ? new Date(e.created_at).toLocaleString() : ""}
+                    {e.created_at ? fmtCompactAt(e.created_at) : ""}
                   </span>
                 </div>
-                <span className={styles.detail}>{activitySummary(e)}</span>
-              </div>
-            </button>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
         {filtered.length === 0 ? (
           <li className={styles.empty}>暂无动态</li>
         ) : null}

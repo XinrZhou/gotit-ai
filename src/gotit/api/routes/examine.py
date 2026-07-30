@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,6 +12,7 @@ from gotit.api.auth import require_api_key
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.api.verify_finalize import finalize_examine_with_gate
 from gotit.api.workflow_persist import examine_agent_text, persist_workflow_exchange
 from gotit.core.agents.axiom import (
     build_axiom_agent,
@@ -51,14 +52,24 @@ class ExamineRequest(BaseModel):
     verdict: str | None = Field(
         default=None,
         description=(
-            "Direct verdict (passed|almost|owe_next) bypassing the agent; "
-            "used for stubs/tests (single-claim mode only)."
+            "Direct examine verdict (passed|almost|owe_next) bypassing Axiom; "
+            "still runs Critic + deterministic gate (stubs/tests)."
         ),
     )
     thread_id: UUID | None = Field(
         default=None,
         description="When set, append this turn into the companion thread stream.",
     )
+
+
+def _verify_meta(finalized: dict[str, Any]) -> dict[str, object]:
+    return {
+        "examine_verdict": finalized["examine_verdict"],
+        "recheck_verdict": finalized["recheck_verdict"],
+        "gate_verdict": finalized["gate_verdict"],
+        "verdict": finalized["gate_verdict"],
+        "gate": finalized["gate"],
+    }
 
 
 async def _persist_examine(
@@ -84,6 +95,36 @@ async def _persist_examine(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
+
+
+async def _finalize_claim(
+    *,
+    claim_id: UUID,
+    examine_verdict: str,
+    user_id: str,
+    settings: Settings,
+    answer: str | None,
+    thread_id: UUID | None,
+    examine_score: float | None = None,
+    examine_evidence: str | None = None,
+) -> dict[str, Any]:
+    async with session_scope() as session:
+        claim = await session.get(ClaimRow, claim_id)
+        if claim is None or claim.user_id != user_id:
+            raise KeyError(f"claim not found: {claim_id}")
+        return await finalize_examine_with_gate(
+            session,
+            claim_id=claim_id,
+            claim_text=claim.text,
+            topic=claim.topic,
+            examine_verdict=examine_verdict,
+            examine_score=examine_score,
+            examine_evidence=examine_evidence,
+            learner_answer=answer,
+            user_id=user_id,
+            settings=settings,
+            thread_id=thread_id,
+        )
 
 
 @router.post("/v1/examine", dependencies=[Depends(require_api_key)])
@@ -138,23 +179,29 @@ async def examine(
                 failure_lesson_block=lesson_block,
             )
         writeback: dict[str, object] | None = None
+        verify: dict[str, object] | None = None
+        gate_verdict = session_verdict.verdict
         if (
             session_verdict.done
             and session_verdict.verdict is not None
             and session_verdict.current_claim_id
         ):
             try:
-                async with session_scope() as session:
-                    writeback = await day_ops.apply_examine_verdict(
-                        session,
-                        session_verdict.current_claim_id,
-                        verdict=session_verdict.verdict,
-                        user_id=user_id,
-                    )
+                finalized = await _finalize_claim(
+                    claim_id=session_verdict.current_claim_id,
+                    examine_verdict=session_verdict.verdict,
+                    user_id=user_id,
+                    settings=settings,
+                    answer=body.answer,
+                    thread_id=body.thread_id,
+                )
             except KeyError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
                 ) from exc
+            writeback = finalized["writeback"]
+            verify = _verify_meta(finalized)
+            gate_verdict = finalized["gate_verdict"]
         extra: dict[str, object] = {
             "session_done": session_verdict.session_done,
         }
@@ -164,8 +211,10 @@ async def examine(
             extra["topic"] = body.topic
         if session_verdict.current_claim_id:
             extra["claim_id"] = str(session_verdict.current_claim_id)
-        if session_verdict.verdict:
-            extra["verdict"] = session_verdict.verdict
+        if gate_verdict:
+            extra["verdict"] = gate_verdict
+        if verify:
+            extra.update(verify)
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -173,36 +222,48 @@ async def examine(
             agent_text=examine_agent_text(
                 follow_up=session_verdict.follow_up,
                 done=session_verdict.done,
-                verdict=session_verdict.verdict,
+                verdict=gate_verdict,
             ),
             extra=extra,
         )
-        return {
-            "verdict": session_verdict.model_dump(mode="json"),
+        verdict_payload = session_verdict.model_dump(mode="json")
+        if gate_verdict is not None and session_verdict.done:
+            verdict_payload["verdict"] = gate_verdict
+        out: dict[str, object] = {
+            "verdict": verdict_payload,
             "writeback": writeback,
         }
+        if verify:
+            out["verify"] = verify
+        return out
 
-    # --- Single-claim mode (legacy) ---
+    # --- Single-claim mode ---
     if body.claim_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="one of `note_id`, `topic`, or `claim_id` is required",
         )
 
-    # Direct-verdict path: bypass the agent (stub / tests / manual override).
+    # Direct examine verdict: still Critic + gate (stub critic echoes when no key).
     if body.verdict is not None:
         try:
-            async with session_scope() as session:
-                direct_writeback = await day_ops.apply_examine_verdict(
-                    session,
-                    body.claim_id,
-                    verdict=body.verdict,
-                    user_id=user_id,
-                )
+            finalized = await _finalize_claim(
+                claim_id=body.claim_id,
+                examine_verdict=body.verdict,
+                user_id=user_id,
+                settings=settings,
+                answer=body.answer,
+                thread_id=body.thread_id,
+            )
         except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+        verify = _verify_meta(finalized)
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -210,23 +271,24 @@ async def examine(
             agent_text=examine_agent_text(
                 follow_up="",
                 done=True,
-                verdict=body.verdict,
+                verdict=finalized["gate_verdict"],
             ),
             extra={
                 "claim_id": str(body.claim_id),
-                "verdict": body.verdict,
                 "session_done": True,
+                **verify,
             },
         )
         return {
             "verdict": {
                 "done": True,
-                "verdict": body.verdict,
+                "verdict": finalized["gate_verdict"],
                 "score": None,
                 "evidence": None,
                 "follow_up": "",
             },
-            "writeback": direct_writeback,
+            "writeback": finalized["writeback"],
+            "verify": verify,
         }
 
     # Agent path: multi-turn examination.
@@ -247,30 +309,51 @@ async def examine(
             system_prompt = prompt.system_prompt if prompt else ""
             reader = SessionMemoryReader(session, user_id=user_id)
             agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
+            claim_text = claim.text
             verdict = await run_axiom(
                 agent,
                 reader,
-                claim_text=claim.text,
+                claim_text=claim_text,
                 history=body.history,
                 answer=body.answer,
                 failure_lesson_block=lesson_block,
             )
     except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
 
     writeback = None
+    verify = None
+    gate_verdict = verdict.verdict
     if verdict.done and verdict.verdict is not None:
         try:
-            async with session_scope() as session:
-                writeback = await day_ops.apply_examine_verdict(
-                    session,
-                    body.claim_id,
-                    verdict=verdict.verdict,
-                    user_id=user_id,
-                )
+            finalized = await _finalize_claim(
+                claim_id=body.claim_id,
+                examine_verdict=verdict.verdict,
+                examine_score=verdict.score,
+                examine_evidence=verdict.evidence,
+                user_id=user_id,
+                settings=settings,
+                answer=body.answer,
+                thread_id=body.thread_id,
+            )
         except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+        writeback = finalized["writeback"]
+        verify = _verify_meta(finalized)
+        gate_verdict = finalized["gate_verdict"]
 
+    extra_single: dict[str, object] = {
+        "claim_id": str(body.claim_id),
+        "session_done": bool(verdict.done),
+    }
+    if gate_verdict:
+        extra_single["verdict"] = gate_verdict
+    if verify:
+        extra_single.update(verify)
     await _persist_examine(
         thread_id=body.thread_id,
         user_id=user_id,
@@ -278,12 +361,14 @@ async def examine(
         agent_text=examine_agent_text(
             follow_up=verdict.follow_up,
             done=verdict.done,
-            verdict=verdict.verdict,
+            verdict=gate_verdict,
         ),
-        extra={
-            "claim_id": str(body.claim_id),
-            **({"verdict": verdict.verdict} if verdict.verdict else {}),
-            "session_done": bool(verdict.done),
-        },
+        extra=extra_single,
     )
-    return {"verdict": verdict.model_dump(mode="json"), "writeback": writeback}
+    verdict_out = verdict.model_dump(mode="json")
+    if gate_verdict is not None and verdict.done:
+        verdict_out["verdict"] = gate_verdict
+    result: dict[str, object] = {"verdict": verdict_out, "writeback": writeback}
+    if verify:
+        result["verify"] = verify
+    return result

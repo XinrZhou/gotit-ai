@@ -120,7 +120,7 @@
   pointer-events: none;
 }
 
-.conversationTopSparse .accountBtn {
+.conversationTopSparse .topActions {
   pointer-events: auto;
 }
 
@@ -130,7 +130,38 @@
   gap: 4px;
   flex-wrap: wrap;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+}
+
+.topActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.graphTopBtn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.graphTopBtn:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.graphTopBtnActive {
+  background: var(--fill);
+  color: var(--ink);
 }
 
 .accountBtn {
@@ -140,7 +171,7 @@
   max-width: 180px;
   min-width: 0;
   height: 32px;
-  margin-left: auto;
+  margin-left: 0;
   padding: 0 10px 0 3px;
   border: none;
   border-radius: 980px;
@@ -171,18 +202,17 @@
   transition: color 0.15s ease;
 }
 
-.chatBarHint {
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: -0.01em;
-  margin-right: 6px;
-  flex-shrink: 0;
+.workflowTabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .chatBarTab {
   border: none;
-  background: transparent;
-  color: var(--muted);
+  background: var(--soft);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -192,12 +222,11 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  transition: background 0.18s ease, color 0.18s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .chatBarTab:hover {
-  background: var(--soft);
-  color: var(--ink);
+  background: var(--fill);
 }
 
 .chatBarCount {
@@ -232,23 +261,22 @@
 .libraryBtn {
   width: 100%;
   border: none;
-  background: var(--bg);
+  background: transparent;
   color: var(--ink);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  padding: 9px 12px;
-  border-radius: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  transition: background 0.18s ease, color 0.18s ease;
+  gap: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .libraryBtn:hover {
-  background: var(--soft);
+  background: var(--fill);
 }
 
 .libraryBtnActive {
@@ -263,24 +291,29 @@
   white-space: nowrap;
 }
 
-.libraryBtnHint {
+.libraryBtnCount {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
   font-size: 12px;
-  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   color: var(--faint);
 }
 
-.libraryBtnActive .libraryBtnHint {
+.libraryBtnActive .libraryBtnCount {
   color: var(--muted);
 }
 
 .libraryBtnChevron {
+  margin-left: auto;
+  flex-shrink: 0;
   font-size: 13px;
   line-height: 1;
   font-weight: 400;
+  color: var(--faint);
+}
+
+.libraryBtn:hover .libraryBtnChevron,
+.libraryBtnActive .libraryBtnChevron {
+  color: var(--muted);
 }
 
 .threadHead {
@@ -483,24 +516,24 @@
 
 .empty {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 40px 32px;
-  text-align: center;
+  padding: 28px;
   background:
     radial-gradient(ellipse 70% 50% at 50% 42%, rgba(255, 214, 102, 0.14), transparent 70%),
     radial-gradient(ellipse 50% 40% at 72% 58%, rgba(120, 180, 220, 0.1), transparent 65%),
     var(--bg);
-  animation: emptyIn 0.45s ease both;
+  animation: emptyIn 0.4s ease both;
 }
 
 @keyframes emptyIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -508,22 +541,31 @@
   }
 }
 
+.emptyStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
 .emptyCrew {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .emptyCrewAvatar {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   overflow: hidden;
   border: 2px solid var(--bg);
   background: var(--soft);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  margin-left: -12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  margin-left: -10px;
   transition: transform 0.2s ease;
 }
 
@@ -532,7 +574,7 @@
 }
 
 .emptyCrew:hover .emptyCrewAvatar {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .emptyCrewAvatar img {
@@ -542,38 +584,29 @@
   display: block;
 }
 
+.emptyIntro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  width: 100%;
+}
+
 .emptyLead {
   margin: 0;
   color: var(--ink);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
 
 .emptyHint {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--muted);
+  line-height: 1.45;
   max-width: 280px;
-  line-height: 1.5;
-}
-
-.emptyPrimary {
-  margin-top: 8px;
-  border: none;
-  background: var(--ink);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 12px 28px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.emptyPrimary:hover {
-  transform: translateY(-1px);
-  opacity: 0.92;
 }
 
 .emptyWorkflows {
@@ -581,34 +614,96 @@
   align-items: center;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px 2px;
+  gap: 6px;
   margin-top: 4px;
 }
 
-.emptyWorkflowsLabel {
-  font-size: 12.5px;
-  color: var(--muted);
-  margin-right: 4px;
+.emptyWorkflowChip {
+  border: none;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.emptyWorkflowLink {
+.emptyWorkflowChip:hover {
+  background: var(--fill);
+}
+
+.emptyChatLink {
   border: none;
   background: transparent;
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 500;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
   padding: 4px 8px;
-  border-radius: 6px;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--line);
-  transition: text-decoration-color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease;
 }
 
-.emptyWorkflowLink:hover {
+.emptyChatLink:hover {
+  color: var(--ink);
+}
+
+.threadEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+  margin: 48px auto 0;
+  text-align: center;
+}
+
+.threadEmptyLead {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.threadEmptyHint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--faint);
+  letter-spacing: -0.01em;
+}
+
+.threadEmpty .workflowTabs {
+  justify-content: center;
+}
+
+.composerWorkflows {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.composerWorkflowBtn {
+  border: none;
   background: var(--soft);
-  text-decoration-color: var(--ink);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 5px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.composerWorkflowBtn:hover {
+  background: var(--fill);
 }
 
 .stream {
@@ -1063,11 +1158,21 @@
   gap: 8px;
 }
 
+.composerTools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .toolsTray {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 2px 0 0;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
 }
 
 .composerMeta {
@@ -1121,6 +1226,92 @@
 
 .composerField:focus-within {
   border-color: var(--ink);
+}
+
+.atMenu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.atMenuEmpty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.atMenuItem {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.atMenuItem:hover,
+.atMenuItemActive {
+  background: var(--fill);
+}
+
+.atMenuItemCurrent .atMenuName {
+  font-weight: 500;
+}
+
+.atMenuAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.atMenuAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.atMenuText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.atMenuName {
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.atMenuHint {
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toolsToggle {
@@ -1237,35 +1428,44 @@
   line-height: 1.45;
 }
 
-.mentionRow {
+.mentionSection {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .mentionLabel {
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--faint);
-  margin-right: 4px;
+  letter-spacing: 0.02em;
+}
+
+.mentionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 .mentionChip {
-  position: relative;
   border: none;
   background: transparent;
   color: var(--muted);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  padding: 4px 10px 4px 4px;
-  border-radius: 980px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 10px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: background 0.18s ease, color 0.18s ease;
+  gap: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mentionChipPlain {
+  padding: 6px 12px;
 }
 
 .mentionChip:hover {
@@ -1274,8 +1474,8 @@
 }
 
 .mentionChipAvatar {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
@@ -1293,6 +1493,10 @@
   display: block;
 }
 
+.mentionChipName {
+  line-height: 1.2;
+}
+
 .mentionChipActive {
   background: var(--fill);
   color: var(--ink);
@@ -1301,32 +1505,6 @@
 .mentionChipActive:hover {
   background: var(--fill);
   color: var(--ink);
-}
-
-.mentionChip[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
-  width: max-content;
-  max-width: 220px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 11.5px;
-  line-height: 1.4;
-  white-space: normal;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 5;
-}
-
-.mentionChip[data-tip]:hover::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
 }
 
 /* Narrow: icon rail — brand mark, library, new thread, truncated list. */
@@ -1346,8 +1524,9 @@
 
 .navRailCompact .brandText,
 .navRailCompact .dayPicker,
-.navRailCompact .libraryBtnHint,
+.navRailCompact .libraryBtnCount,
 .navRailCompact .libraryBtnLabel,
+.navRailCompact .libraryBtnChevron,
 .navRailCompact .threadHeadTitle,
 .navRailCompact .newThreadLabel,
 .navRailCompact .threadItemSub,
@@ -1361,7 +1540,12 @@
   padding: 0;
   justify-content: center;
   border-radius: 10px;
-  background: var(--bg);
+  background: transparent;
+}
+
+.navRailCompact .libraryBtn:hover,
+.navRailCompact .libraryBtnActive {
+  background: var(--fill);
 }
 
 .navRailCompact .libraryBtn::before {

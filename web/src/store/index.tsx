@@ -69,6 +69,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDay: ws.setDay,
     plan: ws.plan,
     notes: ws.notes,
+    dueClaims: ws.dueClaims,
     noteScope: ws.noteScope,
     setNoteScope: ws.setNoteScope,
     projects: ws.projects,

@@ -56,13 +56,17 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 ## Shipped capabilities
 
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
+- **Daily verify brief**: empty chat / empty thread / examine picker show
+  owed (`due_claims` from `/v1/today`) + today's plan with one-tap 开考
+  (claim-id or note-id examine)
 - **Chat plan grounding**: each companion turn gets today's `plan_items` skeleton
   (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
   list (no paraphrased times/items in the opener)
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
-  conversation top bar; nav rail = brand + threads)
-- Library = left **drawer overlay**; 「图谱」opens **fullscreen** mastery graph
-- Composer: agents/skills behind `+` tray; quiet Apple select; active skill
+  conversation top bar)
+- Library = left **drawer overlay** (notes / projects only)
+- Composer: agents/skills behind `+` tray; type `@` to switch sticky
+  companion (strip token, no `@` in body); quiet Apple select; active skill
   shows as a clearable chip on the composer meta row
 - Chat reading column centered (~720px); thinking toggle is quiet text (not a
   pill); workflow bar hint + ModeHeader「正在…」context
@@ -70,21 +74,28 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   install/view/edit + MCP connectors；**计划推送** = 早/晚计划 cron + 可选 AI/YouTube 源
   （「保存并同步」→ OpenClaw cron）；
   动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含 Apple 计划桥导入说明
-- Nav rail = brand + library + threads only (no account footer)
+- Nav rail = brand + library + threads (no account footer)
+- Conversation top-right: **弱点图谱** (fullscreen mastery graph) + account /
+  Settings
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
   + mastery-graph writeback (`fail_events`, `confused_with` edges)
   + Critic may bind a distinct OpenAI-compatible model via
     `agent_identities.llm_config` (`model` / `base_url` / `api_key_env`) or
     `CRITIC_MODEL` / `CRITIC_BASE_URL` / `CRITIC_API_KEY` (fallback: global `LLM_*`)
+  + Shared finalize (`api/verify_finalize.py`) for **thread verify and `/v1/examine`**
+    claim-close (note/topic/single) — same Critic + gate + trajectory path
 - **Verify surface**: examine agent turns show quiet mastery chips（过了 / 还差点 /
   欠着下次；主题考完另标）；chip 读 `metadata.verdict`，不解析气泡文案
+  + **VerifyTrajectory** 考→核→门 step row from `examine_verdict` /
+    `recheck_verdict` / `gate_verdict`
 - **Workflow turns in thread**: examine / teach / drill optionally append to the
   active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
 - Notes → claims → plan; project + resume-driven drill (resume import =
   projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
 - **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; budget subgraph
-  injects into Axiom; fullscreen「图谱」(`react-force-graph-2d`); `/v1/obs/graph`
+  injects into Axiom; fullscreen「弱点图谱」from conversation top bar
+  (`react-force-graph-2d`); `/v1/obs/graph`
 
 ## OpenClaw shell (not in gotit core)
 
