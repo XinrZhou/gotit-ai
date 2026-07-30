@@ -385,6 +385,7 @@ def cmd_push(args: argparse.Namespace, cfg: dict) -> int:
         raise SystemExit(f"--time 须为 HH:MM，收到：{explicit_time!r}")
 
     payload: list[dict] = []
+    keep_titles: list[str] = []
     for it in items:
         status = str(it.get("status") or "").lower()
         if status in {"verified", "done", "passed", "cancelled", "canceled", "skipped"}:
@@ -394,38 +395,78 @@ def cmd_push(args: argparse.Namespace, cfg: dict) -> int:
             continue
         if only_title and title.casefold() != only_title.casefold():
             continue
-        # Prefer Agent-supplied --time; regex on title is only a fallback.
-        time_hm = explicit_time or parse_time_hint(title, default="09:00")
+        keep_titles.append(title)
+        # Prefer --time, then plan due_time, then title parse, else 09:00
+        item_time = (it.get("due_time") or "").strip()
+        if item_time and not re.fullmatch(r"\d{2}:\d{2}", item_time):
+            item_time = ""
+        time_hm = (
+            explicit_time
+            or item_time
+            or parse_time_hint(title, default="09:00")
+        )
+        src = (
+            "agent"
+            if explicit_time
+            else ("due_time" if item_time else "title-fallback")
+        )
         payload.append(
-            {"title": title, "due": day.isoformat(), "time": time_hm}
+            {"title": title, "due": day.isoformat(), "time": time_hm, "_src": src}
         )
 
     print(f"list={list_name}  day={day.isoformat()}  candidates={len(payload)}")
     for p in payload:
-        src = "agent" if explicit_time else "title-fallback"
-        print(f"  · {p['time']} ({src})  {p['title']}")
+        print(f"  · {p['time']} ({p.pop('_src', '?')})  {p['title']}")
     if not payload:
         msg = "gotit 该日无开放计划，无需写回提醒事项。"
         if only_title:
             msg = f"未找到标题匹配「{only_title}」的开放计划。"
         print(msg)
+        if bool(getattr(args, "reconcile", False)) and bool(args.apply) and not args.dry_run and not only_title:
+            # Empty plan day: still clear Reminders for that due date.
+            data = _run_jxa(
+                _SKILL_DIR / "create_reminders.jxa",
+                [
+                    list_name,
+                    "[]",
+                    json.dumps(
+                        {"reconcile": True, "due": day.isoformat(), "keep": []},
+                        ensure_ascii=False,
+                    ),
+                ],
+            )
+            print(f"reconcile deleted={data.get('deleted', 0)}")
         return 0
 
     apply = bool(args.apply) and not args.dry_run
     if not apply:
         print()
-        print("（dry-run，未写入 Reminders；加 --apply 写回；会设到期提醒通知）")
+        print("（dry-run，未写入 Reminders；加 --apply 写回；仅 dueDate，无通知）")
         return 0
 
+    reconcile = bool(getattr(args, "reconcile", False)) and not only_title
+    jxa_args = [list_name, json.dumps(payload, ensure_ascii=False)]
+    if reconcile:
+        jxa_args.append(
+            json.dumps(
+                {
+                    "reconcile": True,
+                    "due": day.isoformat(),
+                    "keep": keep_titles,
+                },
+                ensure_ascii=False,
+            )
+        )
     data = _run_jxa(
         _SKILL_DIR / "create_reminders.jxa",
-        [list_name, json.dumps(payload, ensure_ascii=False)],
+        jxa_args,
     )
     print()
     print(
         f"提醒事项「{data.get('list') or list_name}」："
         f"新建 {data.get('created', 0)}，更新 {data.get('updated', 0)}，"
         f"跳过 {data.get('skipped', 0)}"
+        + (f"，清理 {data.get('deleted', 0)}" if reconcile else "")
     )
     errs = data.get("errors") or []
     if errs:
@@ -590,7 +631,12 @@ def main(argv: list[str] | None = None) -> int:
     p_push.add_argument(
         "--time",
         default="",
-        help="HH:MM，由 Agent 从用户话里理解后传入；不填才回退解析标题",
+        help="HH:MM，由 Agent 从用户话里理解后传入；不填则用 due_time / 标题解析",
+    )
+    p_push.add_argument(
+        "--reconcile",
+        action="store_true",
+        help="写入后删除同到期日、不在 gotit 开放计划中的提醒（全天同步用）",
     )
 
     p_rm = sub.add_parser(

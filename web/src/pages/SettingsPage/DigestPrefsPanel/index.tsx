@@ -24,6 +24,8 @@ export type DigestPrefs = {
   notes_open_url: string | null;
 };
 
+type CronTarget = "morning" | "evening" | "news";
+
 const emptyPrefs = (): DigestPrefs => ({
   timezone: "Asia/Shanghai",
   item_count: 3,
@@ -38,12 +40,37 @@ const emptyPrefs = (): DigestPrefs => ({
   notes_open_url: null,
 });
 
+function buildBody(prefs: DigestPrefs, keywordsText: string): DigestPrefs {
+  return {
+    ...prefs,
+    evening_include_news: false,
+    morning_include_news: false,
+    notes_open_url: prefs.notes_open_url?.trim() || null,
+    keywords: keywordsText
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+    feeds: prefs.feeds.map((f) => ({
+      ...f,
+      id: f.id.trim() || f.label.trim() || "feed",
+      label: f.label.trim() || f.id.trim() || "feed",
+      url: f.url.trim(),
+    })),
+  };
+}
+
 export function DigestPrefsPanel() {
   const { setFlash, setError } = useStore();
   const [prefs, setPrefs] = useState<DigestPrefs>(emptyPrefs);
   const [keywordsText, setKeywordsText] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [cronHints, setCronHints] = useState<Record<CronTarget, string>>({
+    morning: "",
+    evening: "",
+    news: "",
+  });
+  const [suggestBusy, setSuggestBusy] = useState<CronTarget | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -60,60 +87,21 @@ export function DigestPrefsPanel() {
     void refresh();
   }, [refresh]);
 
+  const applySaved = (saved: DigestPrefs) => {
+    setPrefs({ ...emptyPrefs(), ...saved, feeds: saved.feeds ?? [] });
+    setKeywordsText((saved.keywords ?? []).join(", "));
+  };
+
   const save = async () => {
     setBusy(true);
     setError("");
     try {
-      const body: DigestPrefs = {
-        ...prefs,
-        evening_include_news: false,
-        notes_open_url: prefs.notes_open_url?.trim() || null,
-        keywords: keywordsText
-          .split(/[,，]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
-        feeds: prefs.feeds.map((f) => ({
-          ...f,
-          id: f.id.trim() || f.label.trim() || "feed",
-          label: f.label.trim() || f.id.trim() || "feed",
-          url: f.url.trim(),
-        })),
-      };
       const saved = await api<DigestPrefs>("/v1/shell/digest-prefs", {
         method: "PUT",
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody(prefs, keywordsText)),
       });
-      setPrefs({ ...emptyPrefs(), ...saved, feeds: saved.feeds ?? [] });
-      setKeywordsText((saved.keywords ?? []).join(", "));
+      applySaved(saved);
       setFlash("计划推送设置已保存");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const syncCron = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const r = await api<{
-        ok: boolean;
-        exit_code: number;
-        stdout: string;
-        stderr: string;
-        detail: string | null;
-      }>("/v1/shell/digest-cron/sync", { method: "POST" });
-      if (r.ok) {
-        setFlash("已同步到 OpenClaw cron");
-      } else {
-        setError(
-          r.detail ||
-            r.stderr?.trim() ||
-            r.stdout?.trim() ||
-            `同步失败（exit ${r.exit_code}）。请确认本机已装 openclaw 且 Gateway 在跑。`,
-        );
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,27 +113,11 @@ export function DigestPrefsPanel() {
     setBusy(true);
     setError("");
     try {
-      const body: DigestPrefs = {
-        ...prefs,
-        evening_include_news: false,
-        notes_open_url: prefs.notes_open_url?.trim() || null,
-        keywords: keywordsText
-          .split(/[,，]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
-        feeds: prefs.feeds.map((f) => ({
-          ...f,
-          id: f.id.trim() || f.label.trim() || "feed",
-          label: f.label.trim() || f.id.trim() || "feed",
-          url: f.url.trim(),
-        })),
-      };
       const saved = await api<DigestPrefs>("/v1/shell/digest-prefs", {
         method: "PUT",
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody(prefs, keywordsText)),
       });
-      setPrefs({ ...emptyPrefs(), ...saved, feeds: saved.feeds ?? [] });
-      setKeywordsText((saved.keywords ?? []).join(", "));
+      applySaved(saved);
       const r = await api<{
         ok: boolean;
         exit_code: number;
@@ -170,6 +142,67 @@ export function DigestPrefsPanel() {
       setBusy(false);
     }
   };
+
+  const suggestCron = async (target: CronTarget) => {
+    const text = cronHints[target].trim();
+    if (!text) {
+      setError("先写一句时间，例如「每天早上九点半」");
+      return;
+    }
+    if (target === "news" && !prefs.news_enabled) {
+      setError("请先开启独立资讯推送");
+      return;
+    }
+    setSuggestBusy(target);
+    setError("");
+    try {
+      const r = await api<{ cron: string; explanation: string | null; source: string }>(
+        "/v1/shell/digest-cron/suggest",
+        {
+          method: "POST",
+          body: JSON.stringify({ text, target }),
+        },
+      );
+      setPrefs((p) => {
+        if (target === "morning") return { ...p, morning_cron: r.cron };
+        if (target === "evening") return { ...p, evening_cron: r.cron };
+        return { ...p, news_cron: r.cron };
+      });
+      setCronHints((h) => ({ ...h, [target]: "" }));
+      setFlash(r.explanation || `已填入 ${r.cron}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSuggestBusy(null);
+    }
+  };
+
+  const cronAiRow = (target: CronTarget, placeholder: string) => (
+    <div className={styles.cronAi}>
+      <input
+        className={styles.cronAiInput}
+        value={cronHints[target]}
+        placeholder={placeholder}
+        onChange={(e) =>
+          setCronHints((h) => ({ ...h, [target]: e.target.value }))
+        }
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void suggestCron(target);
+          }
+        }}
+      />
+      <button
+        type="button"
+        className={styles.cronAiBtn}
+        disabled={suggestBusy !== null || busy}
+        onClick={() => void suggestCron(target)}
+      >
+        {suggestBusy === target ? "生成中…" : "AI 生成"}
+      </button>
+    </div>
+  );
 
   const updateFeed = (idx: number, patch: Partial<DigestFeed>) => {
     setPrefs((p) => ({
@@ -203,169 +236,168 @@ export function DigestPrefsPanel() {
 
   return (
     <div className={styles.digest}>
-      <h3 className={styles.sectionTitle}>计划推送</h3>
-      <p className={styles.hint}>
-        早推当日计划、晚推明日计划询问；资讯默认独立且关闭。改时间或开关后点「保存并同步」，会在本机重注册
-        OpenClaw cron（需 Gateway 在跑）。
-      </p>
+      <header className={styles.header}>
+        <h3 className={styles.sectionTitle}>计划推送</h3>
+        <p className={styles.hint}>
+          早推当日计划，晚推问明日安排；资讯单独开启。改完点「保存并同步」。有计划会写入提醒事项「学习计划」。
+        </p>
+      </header>
 
-      <label className={styles.field}>
-        <span>时区</span>
-        <input
-          value={prefs.timezone}
-          onChange={(e) => setPrefs((p) => ({ ...p, timezone: e.target.value }))}
-        />
-      </label>
-
-      <div className={styles.row2}>
+      <section className={styles.block}>
+        <h4 className={styles.blockLabel}>时间</h4>
         <label className={styles.field}>
-          <span>早 cron（当日计划）</span>
+          <span>时区</span>
           <input
+            value={prefs.timezone}
+            onChange={(e) => setPrefs((p) => ({ ...p, timezone: e.target.value }))}
+          />
+        </label>
+
+        <div className={styles.field}>
+          <span>早推 cron</span>
+          <input
+            className={styles.mono}
             value={prefs.morning_cron}
             onChange={(e) =>
               setPrefs((p) => ({ ...p, morning_cron: e.target.value }))
             }
+            spellCheck={false}
           />
-        </label>
-        <label className={styles.field}>
-          <span>晚 cron（明日计划）</span>
+          {cronAiRow("morning", "自然语言，如「每天早上九点半」")}
+        </div>
+        <div className={styles.field}>
+          <span>晚推 cron</span>
           <input
+            className={styles.mono}
             value={prefs.evening_cron}
             onChange={(e) =>
               setPrefs((p) => ({ ...p, evening_cron: e.target.value }))
             }
+            spellCheck={false}
           />
-        </label>
-      </div>
-
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={prefs.news_enabled}
-          onChange={(e) =>
-            setPrefs((p) => ({ ...p, news_enabled: e.target.checked }))
-          }
-        />
-        <span>启用独立资讯推送（不与计划混推）</span>
-      </label>
-
-      {prefs.news_enabled ? (
-        <div className={styles.row2}>
-          <label className={styles.field}>
-            <span>资讯 cron</span>
-            <input
-              value={prefs.news_cron ?? "0 12 * * *"}
-              onChange={(e) =>
-                setPrefs((p) => ({ ...p, news_cron: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.field}>
-            <span>条数</span>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={prefs.item_count}
-              onChange={(e) =>
-                setPrefs((p) => ({
-                  ...p,
-                  item_count: Number(e.target.value) || 3,
-                }))
-              }
-            />
-          </label>
+          {cronAiRow("evening", "自然语言，如「每天晚上九点」")}
         </div>
-      ) : null}
+      </section>
 
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={prefs.morning_include_news}
-          onChange={(e) =>
-            setPrefs((p) => ({
-              ...p,
-              morning_include_news: e.target.checked,
-            }))
-          }
-        />
-        <span>早报附带少量资讯（仍不推荐；晚报永不附带）</span>
-      </label>
+      <section className={styles.block}>
+        <h4 className={styles.blockLabel}>资讯（可选）</h4>
+        <label className={styles.check}>
+          <input
+            type="checkbox"
+            checked={prefs.news_enabled}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setPrefs((p) => ({ ...p, news_enabled: on }));
+            }}
+          />
+          <span>启用独立资讯推送（不与计划混推）</span>
+        </label>
 
-      <label className={styles.field}>
-        <span>兴趣关键词（逗号分隔，过滤资讯标题）</span>
-        <input
-          value={keywordsText}
-          placeholder="LLM, Agent, 多模态"
-          onChange={(e) => setKeywordsText(e.target.value)}
-        />
-      </label>
+        {prefs.news_enabled ? (
+          <>
+            <div className={styles.row2}>
+              <div className={styles.field}>
+                <span>资讯 cron</span>
+                <input
+                  className={styles.mono}
+                  value={prefs.news_cron ?? "0 12 * * *"}
+                  onChange={(e) =>
+                    setPrefs((p) => ({ ...p, news_cron: e.target.value }))
+                  }
+                  spellCheck={false}
+                />
+                {cronAiRow("news", "自然语言，如「每天中午十二点」")}
+              </div>
+              <label className={styles.field}>
+                <span>条数</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={prefs.item_count}
+                  onChange={(e) =>
+                    setPrefs((p) => ({
+                      ...p,
+                      item_count: Number(e.target.value) || 3,
+                    }))
+                  }
+                />
+              </label>
+            </div>
 
-      <div className={styles.feedsHead}>
-        <h4 className={styles.subTitle}>RSS / YouTube 源</h4>
-        <button type="button" className={styles.linkBtn} onClick={addFeed}>
-          添加
-        </button>
-      </div>
-      <p className={styles.hint}>
-        YouTube：填{" "}
-        <code>
-          https://www.youtube.com/feeds/videos.xml?channel_id=UC…
-        </code>
-      </p>
-
-      <ul className={styles.feedList}>
-        {prefs.feeds.map((f, idx) => (
-          <li key={`${f.id}-${idx}`} className={styles.feedCard}>
-            <label className={styles.check}>
+            <label className={styles.field}>
+              <span>兴趣关键词（逗号分隔）</span>
               <input
-                type="checkbox"
-                checked={f.enabled}
-                onChange={(e) => updateFeed(idx, { enabled: e.target.checked })}
+                value={keywordsText}
+                placeholder="LLM, Agent, 多模态"
+                onChange={(e) => setKeywordsText(e.target.value)}
               />
-              <span>启用</span>
             </label>
-            <input
-              className={styles.feedInput}
-              value={f.label}
-              placeholder="名称"
-              onChange={(e) => updateFeed(idx, { label: e.target.value })}
-            />
-            <input
-              className={styles.feedInput}
-              value={f.id}
-              placeholder="id"
-              onChange={(e) => updateFeed(idx, { id: e.target.value })}
-            />
-            <input
-              className={styles.feedInputWide}
-              value={f.url}
-              placeholder="RSS / Atom URL"
-              onChange={(e) => updateFeed(idx, { url: e.target.value })}
-            />
-            <button
-              type="button"
-              className={styles.linkBtn}
-              onClick={() => removeFeed(idx)}
-            >
-              删除
-            </button>
-          </li>
-        ))}
-      </ul>
+
+            <div className={styles.feedsHead}>
+              <span className={styles.subTitle}>RSS / YouTube 源</span>
+              <button type="button" className={styles.linkBtn} onClick={addFeed}>
+                添加
+              </button>
+            </div>
+            <p className={styles.hintTight}>
+              YouTube Atom：
+              <code>…/feeds/videos.xml?channel_id=UC…</code>
+            </p>
+
+            <ul className={styles.feedList}>
+              {prefs.feeds.map((f, idx) => (
+                <li key={`${f.id}-${idx}`} className={styles.feedCard}>
+                  <div className={styles.feedTop}>
+                    <label className={styles.check}>
+                      <input
+                        type="checkbox"
+                        checked={f.enabled}
+                        onChange={(e) =>
+                          updateFeed(idx, { enabled: e.target.checked })
+                        }
+                      />
+                      <span>启用</span>
+                    </label>
+                    <button
+                      type="button"
+                      className={styles.linkBtn}
+                      onClick={() => removeFeed(idx)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                  <div className={styles.row2}>
+                    <input
+                      className={styles.feedInput}
+                      value={f.label}
+                      placeholder="名称"
+                      onChange={(e) => updateFeed(idx, { label: e.target.value })}
+                    />
+                    <input
+                      className={styles.feedInput}
+                      value={f.id}
+                      placeholder="id"
+                      onChange={(e) => updateFeed(idx, { id: e.target.value })}
+                    />
+                  </div>
+                  <input
+                    className={styles.feedInputWide}
+                    value={f.url}
+                    placeholder="RSS / Atom URL"
+                    onChange={(e) => updateFeed(idx, { url: e.target.value })}
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </section>
 
       <div className={styles.actions}>
         <button
           type="button"
-          className={styles.secondaryBtn}
-          disabled={busy}
-          onClick={() => void syncCron()}
-        >
-          {busy ? "处理中…" : "仅同步 cron"}
-        </button>
-        <button
-          type="button"
-          className={styles.secondaryBtn}
+          className={styles.ghostBtn}
           disabled={busy}
           onClick={() => void save()}
         >

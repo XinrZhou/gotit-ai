@@ -383,7 +383,7 @@ def format_morning_plan(
     del notes_open_url
     day_s = now.date().isoformat()
     lines = [
-        "🐱 Tom 早报 · 今日计划",
+        "🐱 Tom · 今日计划",
         f"{day_s} · {now.strftime('%H:%M')}",
         _WX_BLANK,
     ]
@@ -403,7 +403,7 @@ def format_morning_plan(
             for i, text in enumerate(picks[1:6], 1):
                 lines.append(f"{i}. {_truncate(text, 80)}")
         lines.append(_WX_BLANK)
-        lines.append("做完走 gotit examine / 回讲。")
+        lines.append("已同步到提醒事项「学习计划」。做完走 gotit examine / 回讲。")
     return "\n".join(lines), picks
 
 
@@ -451,7 +451,8 @@ def format_evening_tomorrow(
         for i, text in enumerate(picks[:8], 1):
             lines.append(f"{i}. {_truncate(text, 80)}")
         lines.append(_WX_BLANK)
-        lines.append("改 →「调整…」　OK →「保持」　提醒事项 →「导入计划」")
+        lines.append("改 →「调整…」　OK →「保持」")
+        lines.append("已同步到提醒事项「学习计划」。")
     return "\n".join(lines), picks
 
 
@@ -532,41 +533,61 @@ def writeback_shell_event(cfg: dict, payload: dict) -> tuple[str | None, str | N
         return None, str(exc)
 
 
+def push_plan_to_reminders(day: date, *, dry_run: bool = False) -> str | None:
+    """gotit plan → Apple Reminders for ``day``. Returns error text or None."""
+    if dry_run:
+        return None
+    try:
+        from gotit.bridge.reminders import push_day
+
+        return push_day(day, reconcile=True)
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)
+
+
+def import_reminders_to_gotit() -> str | None:
+    try:
+        from gotit.bridge.reminders import import_reminders
+
+        return import_reminders(apply=True)
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)
+
+
 def build_digest(cfg: dict, mode: str, now: datetime) -> str:
     news_items: list[dict] = []
     news_errors: list[str] = []
     plan_picks: list[str] = []
     body = ""
     notes_open_url = (cfg.get("notes_open_url") or "").strip() or None
+    reminder_err: str | None = None
+    plan_err: str | None = None
 
     if mode == "morning":
-        plan, err = load_plan(cfg, now.date())
+        # Soft bi-di: phone edits → gotit first, then gotit truth → Reminders.
+        if not cfg.get("_skip_reminders"):
+            imp_err = import_reminders_to_gotit()
+            if imp_err:
+                news_errors.append(f"import: {imp_err}")
+        plan_day = now.date()
+        plan, plan_err = load_plan(cfg, plan_day)
         body, plan_picks = format_morning_plan(
-            plan, err, now=now, notes_open_url=notes_open_url
+            plan, plan_err, now=now, notes_open_url=notes_open_url
         )
-        if cfg.get("morning_include_news"):
-            news_items, news_errors = collect_items(cfg)
-            body = (
-                body
-                + "\n"
-                + format_news(
-                    news_items,
-                    news_errors,
-                    heading="——\n附：AI 资讯摘录",
-                    now=now,
-                )
-            )
+        if not cfg.get("_skip_reminders"):
+            reminder_err = push_plan_to_reminders(plan_day)
     elif mode == "evening":
-        # Plan-only. Never append 今日待检 or news here.
-        tomorrow = now.date() + timedelta(days=1)
-        plan, err = load_plan(cfg, tomorrow)
+        plan_day = now.date() + timedelta(days=1)
+        plan, plan_err = load_plan(cfg, plan_day)
         body, plan_picks = format_evening_tomorrow(
             plan,
-            err,
-            tomorrow=tomorrow,
+            plan_err,
+            tomorrow=plan_day,
             now=now,
             notes_open_url=notes_open_url,
         )
+        if plan_picks and not cfg.get("_skip_reminders"):
+            reminder_err = push_plan_to_reminders(plan_day)
     elif mode == "news":
         news_items, news_errors = collect_items(cfg)
         body = format_news(
@@ -590,29 +611,47 @@ def build_digest(cfg: dict, mode: str, now: datetime) -> str:
         subject = plan_picks[0]
     elif mode == "news" and news_items:
         subject = str(news_items[0].get("title") or "").strip() or None
+    errors = list(news_errors)
+    if reminder_err:
+        errors.append(f"reminders: {reminder_err}")
+
+    # Skip empty plan digests in「动态」(still deliver WeChat body).
+    skip_writeback = bool(cfg.get("_skip_writeback"))
+    if (
+        mode in {"morning", "evening"}
+        and not plan_picks
+        and not plan_err
+        and not reminder_err
+        and not cfg.get("_force_writeback")
+    ):
+        skip_writeback = True
+
     payload = {
         "job": mode,
         "day": day_s,
         "subject": subject,
         "items": _items_payload(news_items),
         "due_summary": plan_picks,
-        "errors": news_errors,
+        "errors": errors,
         "delivery_ok": None,
         "channel": "openclaw-weixin",
         "skill": "digest",
         "run_id": run_id,
     }
-    event_id, wb_err = writeback_shell_event(cfg, payload)
+    event_id, wb_err = (None, None)
+    if not skip_writeback:
+        event_id, wb_err = writeback_shell_event(cfg, payload)
 
     if mode == "news":
         tip = f"\n{_WX_BLANK}\n回「这篇有用」+ 序号即可。\n"
         if event_id:
             tip += f"event_id={event_id}\n"
     else:
-        # Plan digests: keep chat clean; event_id only on writeback failure.
         tip = ""
+        if reminder_err:
+            tip += f"\n{_WX_BLANK}\n提醒事项同步失败：{reminder_err}\n"
         if wb_err:
-            tip = f"\n{_WX_BLANK}\n写回失败：{wb_err}\n"
+            tip += f"\n{_WX_BLANK}\n写回失败：{wb_err}\n"
     return body.rstrip() + tip
 
 

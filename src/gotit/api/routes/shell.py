@@ -11,9 +11,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from gotit.api.auth import require_api_key
+from gotit.api.deps import get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.core.cron_suggest import normalize_cron, suggest_cron_from_text
 from gotit.core.models import (
+    DigestCronSuggestRequest,
+    DigestCronSuggestResult,
     DigestCronSyncResult,
     DigestPrefs,
     GraphView,
@@ -190,6 +194,63 @@ async def put_digest_prefs(
         return await day_ops.put_digest_prefs(
             session, body, user_id=_user_id(settings)
         )
+
+
+@router.post(
+    "/v1/shell/digest-cron/suggest",
+    response_model=DigestCronSuggestResult,
+    dependencies=[Depends(require_api_key)],
+)
+async def suggest_digest_cron(
+    body: DigestCronSuggestRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DigestCronSuggestResult:
+    """Turn natural language into a 5-field cron (rule first, LLM fallback)."""
+    text = body.text.strip()
+    ruled = suggest_cron_from_text(text)
+    if ruled:
+        return DigestCronSuggestResult(
+            cron=ruled,
+            explanation=f"已根据「{text}」解析",
+            source="rule",
+        )
+
+    if not settings.llm_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "无法解析该时间描述。可试「每天早上9点」或「21:30」，"
+                "或配置 LLM 后再用 AI 生成。"
+            ),
+        )
+
+    from pydantic_ai import Agent
+
+    agent: Agent[None, str] = Agent(
+        get_model(),
+        output_type=str,
+        system_prompt=(
+            "你把用户的中文或英文时间描述转成标准 5 段 cron（minute hour day month weekday）。"
+            "只输出一行 cron，例如 `0 9 * * *`，不要解释、不要 markdown。"
+            "默认每天重复（day/month/weekday 用 *）。无法确定时输出空字符串。"
+        ),
+        name="cron_suggest",
+    )
+    result = await agent.run(
+        f"目标用途：{body.target}（morning=早推计划 / evening=晚推计划 / news=资讯）\n"
+        f"用户说：{text}"
+    )
+    cron = normalize_cron(str(result.output or ""))
+    if not cron:
+        raise HTTPException(
+            status_code=400,
+            detail="AI 未能生成有效 cron，请改写为更明确的时间（如「每天晚上 9 点」）。",
+        )
+    return DigestCronSuggestResult(
+        cron=cron,
+        explanation=f"AI 根据「{text}」生成",
+        source="llm",
+    )
 
 
 @router.post(

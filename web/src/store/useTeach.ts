@@ -6,9 +6,10 @@ import type { ChatTurn } from "./types";
 type Deps = {
   setBusy: (b: boolean) => void;
   setError: (s: string) => void;
+  workflowThreadId: string | null;
 };
 
-export function useTeach({ setBusy, setError }: Deps) {
+export function useTeach({ setBusy, setError, workflowThreadId }: Deps) {
   const [teachTopic, setTeachTopic] = useState("");
   const [teachAnswer, setTeachAnswer] = useState("");
   const [teachChat, setTeachChat] = useState<ChatTurn[]>([]);
@@ -22,7 +23,10 @@ export function useTeach({ setBusy, setError }: Deps) {
       try {
         const res = await api<TeachResponse>("/v1/teach", {
           method: "POST",
-          body: JSON.stringify({ topic: teachTopic.trim() }),
+          body: JSON.stringify({
+            topic: teachTopic.trim(),
+            ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
+          }),
         });
         const v = res.verdict;
         if (v.done) {
@@ -39,7 +43,7 @@ export function useTeach({ setBusy, setError }: Deps) {
         setBusy(false);
       }
     })();
-  }, [teachTopic, setBusy, setError]);
+  }, [teachTopic, setBusy, setError, workflowThreadId]);
 
   const onTeachAnswer = useCallback(() => {
     if (!teachAnswer.trim() || teachDone) return;
@@ -56,6 +60,7 @@ export function useTeach({ setBusy, setError }: Deps) {
             topic: teachTopic.trim(),
             answer: userText,
             history,
+            ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
           }),
         });
         const v = res.verdict;
@@ -79,7 +84,15 @@ export function useTeach({ setBusy, setError }: Deps) {
         setBusy(false);
       }
     })();
-  }, [teachTopic, teachAnswer, teachChat, teachDone, setBusy, setError]);
+  }, [
+    teachTopic,
+    teachAnswer,
+    teachChat,
+    teachDone,
+    setBusy,
+    setError,
+    workflowThreadId,
+  ]);
 
   return {
     teachTopic,

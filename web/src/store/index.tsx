@@ -44,11 +44,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     refresh: ws.refresh,
     setBusy: shell.setBusy,
     setError: shell.setError,
+    workflowThreadId: shell.workflowThreadId,
   });
 
   const teach = useTeach({
     setBusy: shell.setBusy,
     setError: shell.setError,
+    workflowThreadId: shell.workflowThreadId,
   });
 
   const drill = useDrill({
@@ -59,6 +61,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBusy: shell.setBusy,
     setError: shell.setError,
     setProjectPicked: project.setProjectPicked,
+    workflowThreadId: shell.workflowThreadId,
   });
 
   const value: Store = {
@@ -91,6 +94,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setMasteryGraphOpen: shell.setMasteryGraphOpen,
     settingsOpen: shell.settingsOpen,
     setSettingsOpen: shell.setSettingsOpen,
+    workflowThreadId: shell.workflowThreadId,
+    setWorkflowThreadId: shell.setWorkflowThreadId,
     userProfile: shell.userProfile,
     setUserProfile: shell.setUserProfile,
     ...notes,

@@ -60,6 +60,20 @@ async def create_all_tables() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_ensure_sqlite_plan_due_time)
+
+
+def _ensure_sqlite_plan_due_time(sync_conn) -> None:  # noqa: ANN001
+    """Dev sqlite: create_all won't add new columns — ALTER if missing."""
+    bind = sync_conn
+    if bind.dialect.name != "sqlite":
+        return
+    rows = bind.exec_driver_sql("PRAGMA table_info(plan_items)").fetchall()
+    cols = {r[1] for r in rows}
+    if "due_time" not in cols and rows:
+        bind.exec_driver_sql(
+            "ALTER TABLE plan_items ADD COLUMN due_time VARCHAR(5)"
+        )
 
 
 async def dispose_engine() -> None:

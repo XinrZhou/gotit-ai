@@ -2,27 +2,42 @@
 /**
  * Create/update reminders in a named list (create list if missing).
  * Each item: {title, due:"YYYY-MM-DD", time?:"HH:MM"}
- * Sets dueDate + remindMeDate so Mac/iPhone get notifications.
- * Same title (casefold, incomplete) → update times instead of skip.
+ * Sets dueDate only — no remindMeDate / alerts.
+ * Optional argv[2]: {reconcile:true, due:"YYYY-MM-DD", keep:["title",...]}
+ *   → delete incomplete reminders on that due day whose titles are not in keep.
  */
 function run(argv) {
   var listName = (argv && argv[0]) ? String(argv[0]) : "学习计划";
   var raw = (argv && argv[1]) ? String(argv[1]) : "[]";
+  var optRaw = (argv && argv[2]) ? String(argv[2]) : "";
   var items;
+  var opts = {};
   try {
     items = JSON.parse(raw);
   } catch (e) {
     return JSON.stringify({ ok: false, error: "items JSON 无效: " + String(e) });
   }
-  if (!items || !items.length) {
-    return JSON.stringify({
-      ok: true,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      list: listName,
-      errors: [],
-    });
+  if (optRaw) {
+    try {
+      opts = JSON.parse(optRaw) || {};
+    } catch (e2) {
+      return JSON.stringify({ ok: false, error: "opts JSON 无效: " + String(e2) });
+    }
+  }
+  if (!items) items = [];
+
+  function sameDay(d, ymd) {
+    if (!d || !ymd) return false;
+    try {
+      var y = d.getFullYear();
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      var mm = (m < 10 ? "0" : "") + m;
+      var dd = (day < 10 ? "0" : "") + day;
+      return y + "-" + mm + "-" + dd === ymd;
+    } catch (e) {
+      return false;
+    }
   }
 
   try {
@@ -57,6 +72,7 @@ function run(argv) {
     var created = 0;
     var updated = 0;
     var skipped = 0;
+    var deleted = 0;
     var errors = [];
 
     for (var j = 0; j < items.length; j++) {
@@ -83,17 +99,11 @@ function run(argv) {
           var existing = byTitle[key];
           existing.dueDate = when;
           try {
-            existing.remindMeDate = when;
-          } catch (eRemind) {
-            /* some OS versions — dueDate alone still shows on Mac */
-          }
+            existing.remindMeDate = null;
+          } catch (eClear) {}
           updated++;
         } else {
-          var props = { name: title, dueDate: when };
-          try {
-            props.remindMeDate = when;
-          } catch (e2) {}
-          var rem = app.Reminder(props);
+          var rem = app.Reminder({ name: title, dueDate: when });
           list.reminders.push(rem);
           byTitle[key] = rem;
           created++;
@@ -103,11 +113,47 @@ function run(argv) {
       }
     }
 
+    if (opts.reconcile && opts.due) {
+      var keep = {};
+      var keepList = opts.keep || [];
+      for (var k = 0; k < keepList.length; k++) {
+        var kt = String(keepList[k] || "").trim().toLowerCase();
+        if (kt) keep[kt] = true;
+      }
+      var dueFilter = String(opts.due).trim();
+      reminders = list.reminders();
+      for (var di = reminders.length - 1; di >= 0; di--) {
+        var dr = reminders[di];
+        try {
+          if (dr.completed()) continue;
+        } catch (e3) {}
+        var dname = "";
+        try {
+          dname = String(dr.name() || "").trim().toLowerCase();
+        } catch (e4) {
+          continue;
+        }
+        if (keep[dname]) continue;
+        var dd = null;
+        try {
+          dd = dr.dueDate();
+        } catch (e5) {}
+        if (!sameDay(dd, dueFilter)) continue;
+        try {
+          app.delete(dr);
+          deleted++;
+        } catch (e6) {
+          errors.push(dname + ": " + String(e6));
+        }
+      }
+    }
+
     return JSON.stringify({
       ok: errors.length === 0,
       created: created,
       updated: updated,
       skipped: skipped,
+      deleted: deleted,
       list: listName,
       errors: errors,
       error: errors.length ? errors.join("; ") : undefined,

@@ -25,8 +25,12 @@ Apple：quiet `--fill` select；no ink rings/bars；primary CTA may stay solid i
 ## Interaction — frontend
 
 - 「+ 新对话」：`POST /v1/threads { title: "新对话" }`，无 `window.prompt`。
-- `send`：乐观 user + thinking 行；成功替换；失败回滚。
-- `metadata.thinking` → 可折叠「思考过程」。
+- `send`：乐观 user + thinking 行；成功替换；失败保留乐观气泡并由 agent 错误气泡承接。
+- `metadata.thinking` → 可折叠「思考过程」（无填充 pill；桩/过短不展示）。
+- Stream + composer 居中阅读柱（`max-width: 720px`），左右气泡同属一栏。
+- 顶栏「开一场验证」+ workflow chips；进入后 ModeHeader「正在考我/回讲/深挖」+ hint。
+- 已选 skill → composer meta 安静 chip（可一键清除）；关 tray 仍可见。
+- 连续同文 agent 气泡折叠；prompt 禁止已介绍后再重复自我介绍。
 - thread 列表 hover 删除；删当前则切最近或空态。
 - 打开/切换时 @搭子默认 = 该 thread 最后一条 agent 的 `agent_name`。
 

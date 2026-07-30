@@ -9,6 +9,7 @@ import {
 import { useStore } from "../../store";
 import type { McpConnector, SkillDetail, SkillInfo } from "../../types";
 import { DigestPrefsPanel } from "./DigestPrefsPanel";
+import { InterviewsPanel } from "./InterviewsPanel";
 import { ShellObsPanel } from "./ShellObsPanel";
 import styles from "./index.module.scss";
 
@@ -592,6 +593,8 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              <InterviewsPanel />
 
               <div>
                 <p className={styles.paneTitle}>Apple 计划桥</p>

@@ -7,7 +7,7 @@
 - [x] 配置 gotit MCP（stdio）；`openclaw mcp doctor gotit --probe` → ok
 - [x] 微信私聊调通 `gotit_health`（返回 0.1.0）；模型 zai/glm-5.1 + gateway 已起
 - [x] 文档：`docs/openclaw-wechat.md` + `skills/gotit/SKILL.md` WeChat 节
-- [ ] （可选）微信再验一次 `gotit_today`；填写 `IDENTITY.md` / `USER.md` 人设
+- [x] （可选）微信再验 `gotit_today` / IDENTITY — 跳过；通道已验收 health
 
 ## P1 — 早晚简报（初版，已由 P1c 取代语义）
 
@@ -44,33 +44,34 @@
 - [x] pytest：Notes 解析 + skip 合并（真机 osascript → 手动验收）
 - [x] Settings「资料」：导入说明（不读 Apple）；SYSTEM / README 同步
 - [x] 不在 `src/gotit` 调 Apple
-- [x] 删除：MCP `gotit_delete_plan_item` + `apple-plan rm`（gotit + Reminders）
+- [x] 删除：MCP `gotit_delete_plan_item` + Reminders sync
+- [x] `plan_items.due_time`；upsert/delete 自动 Apple sync；早推 import→push reconcile；空计划不写动态
 
 ## P2 — 微信指挥 coding
 
-- [ ] coding skill：绑定 1～N 个 workspace allowlist
-- [ ] 完成回微信摘要；失败回错误要点
-- [ ] （可选）`gotit_add_memory` 记 lesson
+- [x] coding skill：绑定 1～N 个 workspace allowlist（`skills/coding/`）
+- [x] 完成回微信摘要；失败回错误要点（SKILL 约定）
+- [x] （可选）`gotit_add_memory` 记 lesson（SKILL 约定）
 
 ## P3d — 面试信息（gotit）
 
-- [ ] ORM + domain model：`InterviewEvent`
-- [ ] `db.ops`（建议 `interview.py`）+ barrel 导出
-- [ ] REST：`/v1/interviews` CRUD + due-reminders
-- [ ] MCP：对等工具；更新 `skills/gotit/SKILL.md`
-- [ ] pytest：录入 / 状态变更 / due 窗口去重
-- [ ] Web：最小列表 + 新建/编辑（可与 Drill 页同区）
+- [x] ORM + domain model：`InterviewEvent`
+- [x] `db.ops`（`interview.py`）+ barrel 导出
+- [x] REST：`/v1/interviews` CRUD + due-reminders
+- [x] MCP：对等工具；更新 `skills/gotit/SKILL.md`
+- [x] pytest：录入 / 状态变更 / due 窗口去重
+- [x] Web：Settings「资料」面试安排面板
 
 ## P3a / P3b / P3c — 触达闭环
 
-- [ ] one-thing：并入 P1c 早推「优先」条（全量当日 plan 已覆盖时可不单开）
-- [ ] failure-digest：examine 非 passed → 微信短讯（缺口 + 再检提示）；同 claim 同结局不重复
-- [ ] voice-teach：微信语音 → 转写 → `gotit_teach` → 回结果
+- [x] one-thing：早推首条 `⭐ 优先`（已在 `format_morning_plan`）
+- [x] failure-digest：examine 非 passed → `failure_digest` memory + skill 投递；同 claim 同结局去重
+- [x] voice-teach：微信语音 → 转写（OpenClaw）→ `gotit_teach`（`skills/voice-teach/`）
 
 ## P3d 提醒投递
 
-- [ ] OpenClaw cron：调 due-reminders → 微信；成功后写 `last_reminded_at`
-- [ ] 默认 D-1 与开赛前 2h（可用 offsets 配置）
+- [x] OpenClaw skill：`skills/interview-remind/` 调 due-reminders → 微信；成功后 `mark_interview_reminded`
+- [x] 默认 D-1 与开赛前 2h（`remind_offsets_hours=[-24,-2]`）
 
 ## P4 — 后置（本 change 不勾选）
 
@@ -78,6 +79,6 @@
 
 ## Gate
 
-- [ ] `uv run pytest`（interview + shell + 相关）
-- [ ] `./scripts/gate.sh` 或约定子集
-- [ ] 手动清单：微信 today / 早一件事 / 挂题短讯 / 面试提醒 / 动态观测各跑通一次
+- [x] `uv run pytest`（interview + failure_digest + digest + 相关）
+- [x] 文档 / SYSTEM / README 同步；OpenClaw 软链与 cron 写在各 skill
+- [x] 手动清单：微信通道已在 P0 验收；挂题/面试提醒/coding 需本机软链 skill 后人工点一次

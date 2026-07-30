@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -17,6 +17,7 @@ from gotit.api.routes._common import (
     _user_id,
 )
 from gotit.api.settings import Settings, get_settings
+from gotit.api.workflow_persist import drill_agent_text
 from gotit.core.models import DrillMaterial, DrillRound, DrillSession, Project
 from gotit.core.resume.extract import ResumeExtractError, extract_text
 from gotit.db import ops as day_ops
@@ -35,10 +36,50 @@ class DrillSessionStart(BaseModel):
     round: DrillRound
     direction: str | None = None
     project_id: UUID | None = None
+    thread_id: UUID | None = Field(
+        default=None,
+        description="When set, append drill turns into the companion thread stream.",
+    )
 
 
 class DrillSessionContinue(BaseModel):
     answer: str = Field(min_length=1)
+    thread_id: UUID | None = Field(
+        default=None,
+        description="When set, append this turn into the companion thread stream.",
+    )
+
+
+async def _persist_drill(
+    session: Any,
+    *,
+    thread_id: UUID | None,
+    user_id: str,
+    session_id: UUID,
+    answer: str | None,
+    agent_text: str,
+    session_done: bool,
+) -> None:
+    if thread_id is None:
+        return
+    try:
+        await day_ops.append_workflow_exchange(
+            session,
+            thread_id=thread_id,
+            user_id=user_id,
+            workflow="drill",
+            agent_name="sage",
+            agent_text=agent_text,
+            user_text=answer,
+            extra_metadata={
+                "drill_session_id": str(session_id),
+                "session_done": session_done,
+            },
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
 
 
 # --- Drill materials ---
@@ -233,6 +274,20 @@ async def start_drill_session(
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        await _persist_drill(
+            session,
+            thread_id=body.thread_id,
+            user_id=user_id,
+            session_id=ds.id,
+            answer=None,
+            agent_text=drill_agent_text(
+                done=verdict.done,
+                depth_reached=verdict.depth_reached,
+                gaps=list(verdict.gaps),
+                follow_up=verdict.follow_up,
+            ),
+            session_done=verdict.done,
+        )
         return {"session": ds.model_dump(mode="json"), "verdict": verdict.model_dump(mode="json")}
 
 
@@ -285,4 +340,18 @@ async def continue_drill_session(
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        await _persist_drill(
+            session,
+            thread_id=body.thread_id,
+            user_id=user_id,
+            session_id=ds.id,
+            answer=body.answer,
+            agent_text=drill_agent_text(
+                done=verdict.done,
+                depth_reached=verdict.depth_reached,
+                gaps=list(verdict.gaps),
+                follow_up=verdict.follow_up,
+            ),
+            session_done=verdict.done,
+        )
         return {"verdict": verdict.model_dump(mode="json")}

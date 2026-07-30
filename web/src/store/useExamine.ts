@@ -7,9 +7,15 @@ type Deps = {
   refresh: () => Promise<void>;
   setBusy: (b: boolean) => void;
   setError: (s: string) => void;
+  workflowThreadId: string | null;
 };
 
-export function useExamine({ refresh, setBusy, setError }: Deps) {
+export function useExamine({
+  refresh,
+  setBusy,
+  setError,
+  workflowThreadId,
+}: Deps) {
   const [examineNote, setExamineNote] = useState<DayNote | null>(null);
   const [examineChat, setExamineChat] = useState<ChatTurn[]>([]);
   const [examineAnswer, setExamineAnswer] = useState("");
@@ -27,7 +33,10 @@ export function useExamine({ refresh, setBusy, setError }: Deps) {
         try {
           const res = await api<TopicExamineResponse>("/v1/examine", {
             method: "POST",
-            body: JSON.stringify({ note_id: note.id }),
+            body: JSON.stringify({
+              note_id: note.id,
+              ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
+            }),
           });
           setExamineChat([{ role: "examiner", text: res.verdict.follow_up }]);
           if (res.verdict.session_done) setExamineSessionDone(true);
@@ -38,7 +47,7 @@ export function useExamine({ refresh, setBusy, setError }: Deps) {
         }
       })();
     },
-    [setBusy, setError],
+    [setBusy, setError, workflowThreadId],
   );
 
   const onExamineAnswer = useCallback(() => {
@@ -56,6 +65,7 @@ export function useExamine({ refresh, setBusy, setError }: Deps) {
             note_id: examineNote.id,
             answer: userText,
             history,
+            ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
           }),
         });
         setExamineChat((prev) => [
@@ -78,6 +88,7 @@ export function useExamine({ refresh, setBusy, setError }: Deps) {
     refresh,
     setBusy,
     setError,
+    workflowThreadId,
   ]);
 
   return {

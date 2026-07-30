@@ -12,6 +12,7 @@ from gotit.api.auth import require_api_key
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.api.workflow_persist import examine_agent_text, persist_workflow_exchange
 from gotit.core.agents.axiom import (
     build_axiom_agent,
     build_topic_axiom_agent,
@@ -54,6 +55,35 @@ class ExamineRequest(BaseModel):
             "used for stubs/tests (single-claim mode only)."
         ),
     )
+    thread_id: UUID | None = Field(
+        default=None,
+        description="When set, append this turn into the companion thread stream.",
+    )
+
+
+async def _persist_examine(
+    *,
+    thread_id: UUID | None,
+    user_id: str,
+    answer: str | None,
+    agent_text: str,
+    extra: dict[str, object],
+) -> None:
+    if thread_id is None:
+        return
+    try:
+        await persist_workflow_exchange(
+            thread_id=thread_id,
+            user_id=user_id,
+            workflow="examine",
+            agent_text=agent_text,
+            user_text=answer,
+            extra_metadata=extra,
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
 
 
 @router.post("/v1/examine", dependencies=[Depends(require_api_key)])
@@ -112,6 +142,28 @@ async def examine(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
                 ) from exc
+        extra: dict[str, object] = {
+            "session_done": session_verdict.session_done,
+        }
+        if body.note_id is not None:
+            extra["note_id"] = str(body.note_id)
+        if body.topic is not None:
+            extra["topic"] = body.topic
+        if session_verdict.current_claim_id:
+            extra["claim_id"] = str(session_verdict.current_claim_id)
+        if session_verdict.verdict:
+            extra["verdict"] = session_verdict.verdict
+        await _persist_examine(
+            thread_id=body.thread_id,
+            user_id=user_id,
+            answer=body.answer,
+            agent_text=examine_agent_text(
+                follow_up=session_verdict.follow_up,
+                done=session_verdict.done,
+                verdict=session_verdict.verdict,
+            ),
+            extra=extra,
+        )
         return {
             "verdict": session_verdict.model_dump(mode="json"),
             "writeback": writeback,
@@ -138,6 +190,21 @@ async def examine(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        await _persist_examine(
+            thread_id=body.thread_id,
+            user_id=user_id,
+            answer=body.answer,
+            agent_text=examine_agent_text(
+                follow_up="",
+                done=True,
+                verdict=body.verdict,
+            ),
+            extra={
+                "claim_id": str(body.claim_id),
+                "verdict": body.verdict,
+                "session_done": True,
+            },
+        )
         return {
             "verdict": {
                 "done": True,
@@ -182,4 +249,19 @@ async def examine(
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+    await _persist_examine(
+        thread_id=body.thread_id,
+        user_id=user_id,
+        answer=body.answer,
+        agent_text=examine_agent_text(
+            follow_up=verdict.follow_up,
+            done=verdict.done,
+            verdict=verdict.verdict,
+        ),
+        extra={
+            "claim_id": str(body.claim_id),
+            **({"verdict": verdict.verdict} if verdict.verdict else {}),
+            "session_done": bool(verdict.done),
+        },
+    )
     return {"verdict": verdict.model_dump(mode="json"), "writeback": writeback}

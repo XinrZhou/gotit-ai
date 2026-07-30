@@ -75,6 +75,7 @@ class PlanItemView(BaseModel):
     claim_id: UUID | None = None
     sort_order: int = 0
     due_at: date | None = None
+    due_time: str | None = None  # HH:MM local wall clock for Reminders
     project_id: UUID | None = None
     topic: str | None = None
 
@@ -231,6 +232,19 @@ class DigestCronSyncResult(BaseModel):
     stdout: str = ""
     stderr: str = ""
     detail: str | None = None
+
+
+class DigestCronSuggestRequest(BaseModel):
+    """Natural language → cron for digest prefs."""
+
+    text: str = Field(min_length=1, max_length=200)
+    target: Literal["morning", "evening", "news"] = "morning"
+
+
+class DigestCronSuggestResult(BaseModel):
+    cron: str
+    explanation: str | None = None
+    source: Literal["rule", "llm"] = "rule"
 
 
 class ProfileTopicStat(BaseModel):
@@ -456,6 +470,64 @@ class DrillSession(BaseModel):
     started_at: datetime
     ended_at: datetime | None = None
     messages: list[dict[str, Any]] = Field(default_factory=list)  # [{role, text}]
+
+
+# --- Companion-os: scheduled real interviews ---
+
+
+class InterviewStatus(StrEnum):
+    SCHEDULED = "scheduled"
+    DONE = "done"
+    CANCELLED = "cancelled"
+
+
+DEFAULT_REMIND_OFFSETS_HOURS: list[int] = [-24, -2]
+
+
+class InterviewEvent(BaseModel):
+    """Upsert input for a scheduled real-world interview."""
+
+    id: UUID | None = None
+    company: str = Field(min_length=1, max_length=200)
+    role_title: str = Field(min_length=1, max_length=200)
+    scheduled_at: datetime
+    round: str | None = Field(default=None, max_length=32)
+    status: InterviewStatus = InterviewStatus.SCHEDULED
+    notes: str | None = None
+    remind_offsets_hours: list[int] = Field(
+        default_factory=lambda: list(DEFAULT_REMIND_OFFSETS_HOURS)
+    )
+
+
+class InterviewEventView(BaseModel):
+    """Persisted interview event returned from REST/MCP."""
+
+    id: UUID
+    user_id: str
+    company: str
+    role_title: str
+    scheduled_at: datetime
+    round: str | None = None
+    status: InterviewStatus
+    notes: str | None = None
+    remind_offsets_hours: list[int] = Field(
+        default_factory=lambda: list(DEFAULT_REMIND_OFFSETS_HOURS)
+    )
+    last_reminded_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DueInterviewReminder(BaseModel):
+    """A due reminder for OpenClaw interview-remind skill."""
+
+    interview_id: UUID
+    company: str
+    role_title: str
+    scheduled_at: datetime
+    round: str | None = None
+    offset_hours: int
+    fire_at: datetime
 
 
 # --- Companion-arch: identity / messaging / loop ---

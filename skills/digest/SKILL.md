@@ -17,8 +17,8 @@ description: >-
 
 | mode | 内容 |
 |------|------|
-| `morning` | **今日计划**（首条标优先）；默认不含资讯 |
-| `evening` | **明日计划**：有 → 问调整；无 → 问新建。**禁止**附今日待检 / 资讯 |
+| `morning` | **今日计划**（先 import 提醒→gotit，再 push reconcile；空计划不写动态） |
+| `evening` | **明日计划**：有 → 问调整并 push；无 → 问新建（空不写动态）。**禁止**附今日待检 / 资讯 |
 | `news` | 仅 AI/YouTube RSS（独立 cron，默认关） |
 
 ## 确定性脚本
@@ -38,17 +38,17 @@ Prefs：优先 gotit `GET/PUT /v1/shell/digest-prefs`（Settings「计划推送�
 推送**不塞深链**。空计划时两条路：
 
 1. 打开手机「提醒事项」列表「学习计划」（带到期日）→ 回「导入计划」
-2. 直接对话：「新建明日计划：……」→ Claw **理解日期/时间** → 写 gotit → `push --time HH:MM --apply`
+2. 直接对话：「新建明日计划：……」→ `gotit_upsert_plan_item(day, title, due_time=HH:MM)`（自动 push 提醒事项）
 
 - 用户回 **「导入计划」** / 「导入提醒」/ 「同步计划」
   → **转交 `apple-plan`**：`reminders --list 学习计划`（先 dry-run 再 `--apply`）
 - 用户对话新建/调整计划后
-  → Agent 解析 day/time → `gotit_upsert_plan_item` → `apple-plan push --title … --time HH:MM --apply`
+  → `gotit_upsert_plan_item`（带 `due_time`；自动同步提醒事项）
 - 用户 **删除 / 取消** 某条计划
-  → `apple-plan rm --day … --title … --apply`（或 `gotit_delete_plan_item` + `rm`）
+  → `gotit_delete_plan_item`（自动清提醒）
 - iPhone 与 Mac 靠 **iCloud 提醒事项**同步
 
-计划相关回复（「调整…」「新建明日计划：…」「删除…」）→ upsert/delete + push/rm。
+计划相关回复（「调整…」「新建明日计划：…」「删除…」）→ `gotit_upsert_plan_item` / `gotit_delete_plan_item`（自动同步提醒事项）。
 
 ## 「这篇有用」
 

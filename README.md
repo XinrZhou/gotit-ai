@@ -32,9 +32,9 @@ That gap is **false fluency** — looking like you got it, without being able to
 
 | Capability | What it means |
 |-----------|---------------|
-| **Companion chat** | Threads, @mention, in-character replies with memory |
+| **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded |
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
-| **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell |
+| **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
 | **Verify loop** | Examine → Critic recheck → deterministic gate → trajectory / SR |
 | **Notes → claims** | Ingest study material into testable claims + daily plan |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
@@ -137,9 +137,11 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | OpenClaw→gotit shell writeback + Settings「计划推送」「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
 | Mastery graph (fail events, confused_with, fullscreen from Library) | Done |
+| Persist workflow turns into thread history | Done |
+| Interview schedule + due reminders | Done (P3d) |
+| Failure digest / voice-teach / coding skills | Done (P3b/P3c/P2) |
 | Real agent tool-calling against MCP ops | Next |
 | Per-agent multi-model binding | Next |
-| Persist workflow turns into thread history | Next |
 
 ## Philosophy
 

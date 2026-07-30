@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from gotit.api.auth import require_api_key
@@ -48,6 +49,41 @@ async def list_memory(
             topic=topic,
             limit=limit,
         )
+
+
+@router.get(
+    "/v1/memory/failure-digests/pending",
+    response_model=list[MemoryEntry],
+    dependencies=[Depends(require_api_key)],
+)
+async def list_pending_failure_digests(
+    settings: Annotated[Settings, Depends(get_settings)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[MemoryEntry]:
+    async with session_scope() as session:
+        return await day_ops.list_pending_failure_digests(
+            session, user_id=_user_id(settings), limit=limit
+        )
+
+
+@router.post(
+    "/v1/memory/failure-digests/{memory_id}/notified",
+    response_model=MemoryEntry,
+    dependencies=[Depends(require_api_key)],
+)
+async def mark_failure_digest_notified(
+    memory_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MemoryEntry:
+    try:
+        async with session_scope() as session:
+            return await day_ops.mark_failure_digest_notified(
+                session, memory_id, user_id=_user_id(settings)
+            )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
 
 
 @router.post(

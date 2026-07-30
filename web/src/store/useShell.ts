@@ -18,6 +18,7 @@ export function useShell() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [masteryGraphOpen, setMasteryGraphOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workflowThreadId, setWorkflowThreadId] = useState<string | null>(null);
   const [userProfile, setUserProfileState] = useState<UserProfile>(() =>
     loadUserProfile(),
   );
@@ -60,6 +61,8 @@ export function useShell() {
     setMasteryGraphOpen,
     settingsOpen,
     setSettingsOpen,
+    workflowThreadId,
+    setWorkflowThreadId,
     userProfile,
     setUserProfile,
     bindRun,

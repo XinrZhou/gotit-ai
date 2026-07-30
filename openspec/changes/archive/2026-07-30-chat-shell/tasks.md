@@ -14,6 +14,8 @@
 - [x] Narrow: icon-rail styles
 - [x] Library empty block + CTA
 - [x] Touch `docs/SYSTEM.md` layout note
+- [x] Chat reading column centered (~720px) for stream + composer
+- [x] Quieter thinking toggle；skill chip when selected；workflow context hint
 
 ## Interaction
 
@@ -22,4 +24,5 @@
 - [x] ChatPage：无弹窗新对话；乐观发送 + 思考中；thinking 折叠；删除历史
 - [x] 聊天身份卡 + 不注入 examine rubric
 - [x] 打开对话时 @搭子默认选中最后聊过的搭子
+- [x] Prompt：已介绍过则勿重复自我介绍；stub 不写 thinking
 - [x] `cd web && npm run build`；相关 pytest

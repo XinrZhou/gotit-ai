@@ -51,6 +51,8 @@ export type Store = {
   setMasteryGraphOpen: (open: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  workflowThreadId: string | null;
+  setWorkflowThreadId: (id: string | null) => void;
   userProfile: { name: string; avatar: string };
   setUserProfile: (p: { name: string; avatar: string }) => void;
   viewNote: DayNote | null;

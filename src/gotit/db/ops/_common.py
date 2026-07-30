@@ -19,6 +19,15 @@ DEFAULT_USER_ID = "local"
 EXCERPT_LEN = 240
 
 
+def _as_utc(dt: datetime | None) -> datetime:
+    """SQLite often returns naive UTC; tag as UTC so JSON keeps +00:00 / Z."""
+    if dt is None:
+        return datetime.now(UTC)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
 def _excerpt(body: str, limit: int = EXCERPT_LEN) -> str:
     text = body.strip()
     if len(text) <= limit:
@@ -35,6 +44,7 @@ def _plan_item_view(row: PlanItemRow, *, topic: str | None = None) -> PlanItemVi
         claim_id=row.claim_id,
         sort_order=row.sort_order,
         due_at=row.due_at,
+        due_time=getattr(row, "due_time", None),
         project_id=row.project_id,
         topic=topic,
     )

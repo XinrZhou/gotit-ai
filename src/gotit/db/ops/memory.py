@@ -141,3 +141,69 @@ def count_prior_failures(trajectory: list[MemoryEntry], *, claim_id: UUID) -> in
         if e.source.get("claim_id") == key
         and (e.content.get("gate_verdict") or e.content.get("verdict")) == "owe_next"
     )
+
+
+async def maybe_record_failure_digest(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+    claim_text: str,
+    verdict: str,
+    topic: str | None = None,
+    follow_up: str | None = None,
+) -> MemoryEntry | None:
+    """Queue a WeChat failure digest once per (claim_id, verdict). Returns None if dup."""
+    if verdict not in {"almost", "owe_next"}:
+        return None
+    existing = await list_memory(
+        session, user_id=user_id, kind="failure_digest", limit=100
+    )
+    key = str(claim_id)
+    for e in existing:
+        if e.content.get("claim_id") == key and e.content.get("verdict") == verdict:
+            return None
+    return await add_memory(
+        session,
+        user_id=user_id,
+        layer="working",
+        kind="failure_digest",
+        topic=topic,
+        content={
+            "claim_id": key,
+            "claim_text": (claim_text or "").strip()[:240],
+            "verdict": verdict,
+            "follow_up": (follow_up or "").strip()[:240] or None,
+            "notified": False,
+        },
+        source={"claim_id": key, "skill": "failure-digest"},
+    )
+
+
+async def list_pending_failure_digests(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    limit: int = 20,
+) -> list[MemoryEntry]:
+    entries = await list_memory(
+        session, user_id=user_id, kind="failure_digest", limit=limit * 2
+    )
+    pending = [e for e in entries if not e.content.get("notified")]
+    return pending[:limit]
+
+
+async def mark_failure_digest_notified(
+    session: AsyncSession,
+    memory_id: UUID,
+    *,
+    user_id: str,
+) -> MemoryEntry:
+    row = await session.get(MemoryEntryRow, memory_id)
+    if row is None or row.user_id != user_id or row.kind != "failure_digest":
+        raise KeyError(f"failure_digest not found: {memory_id}")
+    content = dict(row.content or {})
+    content["notified"] = True
+    row.content = content
+    await session.flush()
+    return _memory_view(row)

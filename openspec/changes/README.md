@@ -9,13 +9,11 @@ Before creating `openspec/changes/<new-name>/`, list active siblings (not
 `archive/`) and ask: same subdomain, same UI surface, or follow-up of an open
 proposal? If yes → fold into that change and delete the duplicate folder.
 
-Current active (after 2026-07-29 merge):
+Current active (after 2026-07-30 archive): **none**.
 
-| Change | Owns |
-|--------|------|
-| `chat-shell` | Chat layout drawer + conversation UX |
-| `companion-os` | OpenClaw shell, digests, Apple plan bridge, bridge writeback, interview reminders |
-| `mastery-graph` | Fail events, confused_with edges, budget inject, Settings 图谱 |
-| `profile-center` | Settings: 资料 / Skills / MCP / 动态 |
-| `resume-import` | Resume parse prompt/clip + import without quiz notes |
-| `notes-batch-delete` | Library multi-select delete |
+Archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
+`notes-batch-delete`, `profile-center`, `resume-import`, `workflow-in-thread`,
+`companion-os` → `openspec/changes/archive/2026-07-30-*`.
+
+Next candidates (not opened yet): chat local agent-tools（改计划 / 开考）、
+interview countdown ramp（P4）.

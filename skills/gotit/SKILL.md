@@ -15,14 +15,17 @@ When the user wants to **check understanding** (not just summarize):
    - `gotit_health` — connectivity
    - `gotit_today` — today's plan + truncated notes + due claims
    - `gotit_get_plan` / `gotit_upsert_plan_item` / `gotit_update_plan_item` / `gotit_delete_plan_item`
+     （计划 CRUD；`due_time=HH:MM`；upsert/delete 会自动同步提醒事项）
    - `gotit_fill_today_from_queue` — pull due / not-yet / in-progress claims into today
    - `gotit_list_notes` / `gotit_add_note` / `gotit_ingest_note`
    - `gotit_ingest` — extract claims from raw material
    - `gotit_examine` — multi-turn examination by **Axiom**; pass `answer` + `history`,
      returns `{done, verdict, follow_up}`; writeback on `done=true`. Pass `verdict`
-     directly (passed|almost|owe_next) to bypass the agent (stub/tests).
+     directly (passed|almost|owe_next) to bypass the agent (stub/tests). Optional
+     `thread_id` appends turns into a companion thread stream.
    - `gotit_teach` — teach-back mode by **Echo**; pass `topic` + `answer` + `history`,
-     returns `{done, you_taught_well, gaps, next_question}`.
+     returns `{done, you_taught_well, gaps, next_question}`. Optional `thread_id`
+     likewise.
    - `gotit_curate` — add recommended claims (by text) to a day's plan (**Compass**)
    - `gotit_list_memory` / `gotit_add_memory` — layered memory (long/working/session)
    - `gotit_list_prompts` / `gotit_register_prompts` — prompt version observation
@@ -37,10 +40,14 @@ When the user wants to **check understanding** (not just summarize):
      — user-imported deep-dive materials, consumed by the interviewer as context
    - `gotit_start_drill_session` — start a resume-driven mock interview by **Sage** (桑迪);
      pass `round` (tech_1|tech_2|tech_3|tech_4|hr) + optional `direction` (e.g. "偏架构") +
-     optional `project_id` (focus one project); returns `{session, verdict}`
-   - `gotit_continue_drill_session` — continue a session with the candidate's `answer`;
-     returns `{verdict}`; session auto-finishes when `done=true`
+     optional `project_id` (focus one project) + optional `thread_id`; returns `{session, verdict}`
+   - `gotit_continue_drill_session` — continue a session with the candidate's `answer`
+     (+ optional `thread_id`); returns `{verdict}`; session auto-finishes when `done=true`
    - `gotit_list_drill_sessions` / `gotit_get_drill_session` — session history (persisted)
+   - `gotit_list_interviews` / `gotit_upsert_interview` / `gotit_update_interview_status`
+     — scheduled real-world interviews (company, role, time, round)
+   - `gotit_list_due_interview_reminders` / `gotit_mark_interview_reminded`
+     — cron due list + dedup writeback for OpenClaw interview-remind skill
 2. Do **not** mark mastery from confidence. Wait for check evidence.
 3. On `almost`: keep the claim in today's queue (in_progress); on `owe_next`: re-queue
    for another day; only `passed` advances to mastered.
@@ -85,6 +92,23 @@ See **[docs/openclaw-digest.md](../../docs/openclaw-digest.md)**.
 Import Reminders / Notes into gotit plan via **`skills/apple-plan/`**
 (osascript on Mac). See **[docs/openclaw-apple-plan.md](../../docs/openclaw-apple-plan.md)**.
 Do **not** call Apple APIs from gotit core.
+
+## Interviews (P3d)
+
+- `gotit_list_interviews` / `gotit_upsert_interview` / `gotit_update_interview_status`
+- `gotit_list_due_interview_reminders` / `gotit_mark_interview_reminded`
+- Delivery skill: `skills/interview-remind/`
+
+## Failure digest (P3b)
+
+Examine `almost`/`owe_next` queues `failure_digest` memory (deduped per claim+verdict).
+- `gotit_list_pending_failure_digests` / `gotit_mark_failure_digest_notified`
+- Delivery: `skills/failure-digest/`
+
+## Voice teach / coding (P3c / P2)
+
+- `skills/voice-teach/` — WeChat voice → ASR (OpenClaw) → `gotit_teach`
+- `skills/coding/` — allowlisted workspace coding from WeChat
 
 Shell writeback / obs (bridge):
 

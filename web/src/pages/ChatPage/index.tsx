@@ -9,9 +9,10 @@ import {
 } from "../../components/Avatars";
 import { Modal } from "../../components/Modal";
 import { ModeHeader } from "./ModeHeader";
+import { MessageBody } from "./MessageBody";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import { useStore } from "../../store";
-import { fmtDate } from "../../lib/format";
+import { fmtDate, parseApiDate } from "../../lib/format";
 import { profileInitials, profileTint } from "../../lib/userProfile";
 import type { AgentIdentity, AgentReply, ChatMessage, Mode, SkillInfo, Thread } from "../../types";
 import { ExaminePage } from "../ExaminePage";
@@ -97,7 +98,7 @@ function lastChatAgent(ms: ChatMessage[]): AgentName | null {
 }
 
 function fmtTime(iso: string) {
-  const d = new Date(iso);
+  const d = parseApiDate(iso);
   return d.toLocaleString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -106,9 +107,83 @@ function fmtTime(iso: string) {
   });
 }
 
+/** Quiet message clock: today → HH:mm; else → MM-DD HH:mm (browser local tz). */
+function fmtMsgTime(iso: string) {
+  const d = parseApiDate(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+  return d.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function messageThinking(m: ChatMessage): string | null {
   const raw = m.metadata?.thinking;
-  return typeof raw === "string" && raw.trim() ? raw : null;
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!text) return null;
+  // Stub / noise — don't surface a thinking chrome chip.
+  if (text.startsWith("（桩）") || text.startsWith("(桩)")) return null;
+  if (text.length < 12) return null;
+  return text;
+}
+
+/** Drop consecutive identical agent bubbles (same speaker + text). */
+function collapseDuplicateAgentReplies(ms: ChatMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const m of ms) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      m.role === "agent" &&
+      prev.role === "agent" &&
+      m.agent_name === prev.agent_name &&
+      m.text.trim() === prev.text.trim()
+    ) {
+      continue;
+    }
+    out.push(m);
+  }
+  return out;
+}
+
+function formatChatError(e: unknown): string {
+  const raw = String(e).replace(/^Error:\s*/, "");
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as { detail?: unknown };
+      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+        return parsed.detail.trim();
+      }
+    } catch {
+      /* keep raw */
+    }
+  }
+  return raw.trim() || "发送失败，请再试一次。";
+}
+
+const WORKFLOW_BADGE: Record<string, string> = {
+  examine: "考我",
+  teach: "回讲",
+  drill: "深挖",
+};
+
+function messageWorkflowBadge(m: ChatMessage): string | null {
+  const raw = m.metadata?.workflow;
+  if (typeof raw !== "string") return null;
+  return WORKFLOW_BADGE[raw] ?? raw;
 }
 
 function ThinkingBlock({ text }: { text: string }) {
@@ -122,7 +197,7 @@ function ThinkingBlock({ text }: { text: string }) {
         aria-expanded={open}
       >
         <span className={styles.thinkingIcon} aria-hidden />
-        {open ? "收起思考" : "深度思考"}
+        {open ? "收起思考" : "思考过程"}
       </button>
       {open ? <div className={styles.thinkingBody}>{text}</div> : null}
     </div>
@@ -152,6 +227,7 @@ export function ChatPage() {
     setLibraryOpen,
     setSettingsOpen,
     userProfile,
+    setWorkflowThreadId,
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
   const inWorkflow = mode !== "chat";
@@ -170,6 +246,7 @@ export function ChatPage() {
   const [deleting, setDeleting] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(false);
+  const [showToTop, setShowToTop] = useState(false);
   const streamRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -187,10 +264,26 @@ export function ChatPage() {
   }, [mode]);
 
   const startWorkflow = useCallback(
-    (next: Exclude<Mode, "chat">) => {
+    async (next: Exclude<Mode, "chat">) => {
+      let tid = activeId;
+      if (!tid) {
+        try {
+          const t = await api<Thread>("/v1/threads", {
+            method: "POST",
+            body: JSON.stringify({ title: "学习会话", kind: "chat" }),
+          });
+          setThreads((prev) => [t, ...prev]);
+          setActiveId(t.id);
+          tid = t.id;
+        } catch (e) {
+          setErr(String(e));
+          return;
+        }
+      }
+      setWorkflowThreadId(tid);
       setMode(next);
     },
-    [setMode],
+    [activeId, setMode, setWorkflowThreadId],
   );
 
   const openThread = useCallback(
@@ -246,6 +339,24 @@ export function ChatPage() {
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight });
   }, [messages, busy]);
+
+  useEffect(() => {
+    const el = streamRef.current;
+    if (!el) {
+      setShowToTop(false);
+      return;
+    }
+    const onScroll = () => {
+      setShowToTop(el.scrollTop > 280);
+    };
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeId, messages.length]);
+
+  const scrollStreamToTop = useCallback(() => {
+    streamRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -331,9 +442,18 @@ export function ChatPage() {
         });
       }
     } catch (e) {
-      setMessages((prev) => prev.filter((m) => m.id !== localId));
-      setDraft(text);
-      setErr(String(e));
+      // Keep the optimistic user bubble; show failure as an agent reply (no draft restore).
+      const errMsg: ChatMessage = {
+        id: `local-err-${Date.now()}`,
+        thread_id: activeId,
+        agent_name: mention,
+        role: "agent",
+        text: formatChatError(e),
+        mentions: [],
+        metadata: { error: true },
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
     } finally {
       setBusy(false);
     }
@@ -436,11 +556,46 @@ export function ChatPage() {
             </div>
           ))}
         </div>
+      </aside>
 
-        <div className={styles.navFooter}>
+      <section className={styles.conversation}>
+        <header
+          className={`${styles.conversationTop} ${
+            inWorkflow || (activeId && threadsReady) ? "" : styles.conversationTopSparse
+          }`}
+        >
+          {inWorkflow || (activeId && threadsReady) ? (
+            <div className={styles.conversationTopLead}>
+              {inWorkflow ? (
+                <ModeHeader
+                  mode={mode}
+                  onBack={() => setMode("chat")}
+                  examineCount={examineCount}
+                />
+              ) : (
+                <>
+                  <span className={styles.chatBarHint}>开一场验证</span>
+                  {WORKFLOWS.map((w) => (
+                    <button
+                      key={w.mode}
+                      type="button"
+                      className={styles.chatBarTab}
+                      onClick={() => startWorkflow(w.mode)}
+                      title={w.hint}
+                    >
+                      {w.label}
+                      {w.mode === "examine" && examineCount > 0 ? (
+                        <span className={styles.chatBarCount}>{examineCount}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : null}
           <button
             type="button"
-            className={styles.profileBtn}
+            className={styles.accountBtn}
             onClick={() => setSettingsOpen(true)}
             title="设置"
             aria-label={`打开设置 · ${userProfile.name}`}
@@ -460,15 +615,7 @@ export function ChatPage() {
               )}
             </span>
             <span className={styles.profileName}>{userProfile.name}</span>
-          </button>
-          <button
-            type="button"
-            className={styles.settingsBtn}
-            onClick={() => setSettingsOpen(true)}
-            title="设置"
-            aria-label="打开设置"
-          >
-            <svg className={styles.settingsIcon} viewBox="0 0 24 24" fill="none" aria-hidden>
+            <svg className={styles.accountGear} viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
                 d="M12 8.75a3.25 3.25 0 1 1 0 6.5 3.25 3.25 0 0 1 0-6.5Z"
                 stroke="currentColor"
@@ -482,19 +629,10 @@ export function ChatPage() {
               />
             </svg>
           </button>
-        </div>
-      </aside>
+        </header>
 
-      <section className={styles.conversation}>
         {inWorkflow ? (
           <div className={styles.workflowPane}>
-            <div className={styles.workflowPaneHead}>
-              <ModeHeader
-                mode={mode}
-                onBack={() => setMode("chat")}
-                examineCount={examineCount}
-              />
-            </div>
             <div className={styles.workflowPaneBody}>
               {mode === "examine" ? <ExaminePage /> : null}
               {mode === "teach" ? <TeachPage /> : null}
@@ -539,163 +677,224 @@ export function ChatPage() {
             </div>
           </div>
         ) : (
-          <>
-            <div className={styles.chatBar}>
-              {WORKFLOWS.map((w) => (
-                <button
-                  key={w.mode}
-                  type="button"
-                  className={styles.chatBarTab}
-                  onClick={() => startWorkflow(w.mode)}
-                  title={w.hint}
-                >
-                  {w.label}
-                  {w.mode === "examine" && examineCount > 0 ? (
-                    <span className={styles.chatBarCount}>{examineCount}</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-
+          <div className={styles.chatMain}>
             <div className={styles.stream} ref={streamRef}>
-              {messages.map((m) => {
-                const isUser = m.role === "user";
-                const thinking = !isUser ? messageThinking(m) : null;
-                return (
-                  <div
-                    key={m.id}
-                    className={`${styles.bubbleRow} ${isUser ? styles.bubbleRowUser : ""}`}
-                  >
-                    <div className={`${styles.avatar} ${isUser ? styles.avatarUser : ""}`}>
-                      {isUser ? "你" : agentAvatar(m.agent_name)}
-                    </div>
-                    <div className={styles.bubbleCol}>
-                      {!isUser ? (
-                        <div className={styles.bubbleName}>{agentLabel(m.agent_name)}</div>
-                      ) : null}
-                      {thinking ? <ThinkingBlock text={thinking} /> : null}
-                      <div className={`${styles.bubble} ${isUser ? styles.bubbleUser : ""}`}>
-                        {m.text}
-                      </div>
-                      {!isUser && (m.metadata as { handoff_to?: string }).handoff_to ? (
-                        <div className={styles.handoffBadge}>
-                          → 转给 {agentLabel((m.metadata as { handoff_to?: string }).handoff_to)}
+              <div className={styles.streamInner}>
+                {collapseDuplicateAgentReplies(messages).map((m) => {
+                  const isUser = m.role === "user";
+                  const thinking = !isUser ? messageThinking(m) : null;
+                  const wfBadge = messageWorkflowBadge(m);
+                  const isError = Boolean(m.metadata?.error);
+                  const timeLabel = fmtMsgTime(m.created_at);
+                  return (
+                    <div
+                      key={m.id}
+                      className={`${styles.bubbleRow} ${isUser ? styles.bubbleRowUser : ""}`}
+                    >
+                      {isUser ? (
+                        <div
+                          className={`${styles.avatar} ${styles.avatarUser}`}
+                          style={
+                            userProfile.avatar
+                              ? undefined
+                              : {
+                                  background: profileTint(userProfile.name),
+                                  color: "var(--ink)",
+                                }
+                          }
+                          title={userProfile.name}
+                        >
+                          {userProfile.avatar ? (
+                            <img src={userProfile.avatar} alt="" />
+                          ) : (
+                            profileInitials(userProfile.name)
+                          )}
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className={styles.avatar}>{agentAvatar(m.agent_name)}</div>
+                      )}
+                      <div
+                        className={`${styles.bubbleCol} ${isUser ? styles.bubbleColUser : ""}`}
+                      >
+                        <div
+                          className={`${styles.bubbleMeta} ${isUser ? styles.bubbleMetaUser : ""}`}
+                        >
+                          <span className={styles.bubbleName}>
+                            {isUser ? userProfile.name : agentLabel(m.agent_name)}
+                          </span>
+                          {wfBadge ? (
+                            <span className={styles.workflowBadge}>{wfBadge}</span>
+                          ) : null}
+                          {timeLabel ? (
+                            <span className={styles.bubbleTime}>{timeLabel}</span>
+                          ) : null}
+                        </div>
+                        {thinking ? <ThinkingBlock text={thinking} /> : null}
+                          <div
+                            className={`${styles.bubble} ${isUser ? styles.bubbleUser : ""} ${isError ? styles.bubbleError : ""}`}
+                          >
+                            <MessageBody text={m.text} markdown={!isUser && !isError} />
+                          </div>
+                        {!isUser && (m.metadata as { handoff_to?: string }).handoff_to ? (
+                          <div className={styles.handoffBadge}>
+                            → 转给 {agentLabel((m.metadata as { handoff_to?: string }).handoff_to)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+                {busy ? (
+                  <div className={styles.bubbleRow}>
+                    <div className={styles.avatar}>{agentAvatar(mention)}</div>
+                    <div className={styles.bubbleCol}>
+                      <div className={styles.bubbleName}>{agentLabel(mention)}</div>
+                      <div className={styles.thinkingPending} aria-live="polite">
+                        <span className={styles.thinkingPulse} aria-hidden />
+                        <span className={styles.thinkingLabel}>
+                          思考中
+                          <span className={styles.thinkingDots} aria-hidden>
+                            <span>.</span>
+                            <span>.</span>
+                            <span>.</span>
+                          </span>
+                        </span>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-              {busy ? (
-                <div className={styles.bubbleRow}>
-                  <div className={styles.avatar}>{agentAvatar(mention)}</div>
-                  <div className={styles.bubbleCol}>
-                    <div className={styles.bubbleName}>{agentLabel(mention)}</div>
-                    <div className={styles.thinkingPending} aria-live="polite">
-                      <span className={styles.thinkingPulse} aria-hidden />
-                      思考中…
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              {!busy && messages.length === 0 ? (
-                <span className={styles.threadItemSub}>说点什么开始吧。</span>
-              ) : null}
+                ) : null}
+                {!busy && messages.length === 0 ? (
+                  <span className={styles.threadItemSub}>说点什么开始吧。</span>
+                ) : null}
+              </div>
             </div>
 
             <div className={styles.composer}>
-              {toolsOpen ? (
-                <div className={styles.toolsTray}>
-                  <div className={styles.mentionRow}>
-                    <span className={styles.mentionLabel}>搭子</span>
-                    {AGENTS.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        className={`${styles.mentionChip} ${mention === a ? styles.mentionChipActive : ""}`}
-                        onClick={() => setMention(a)}
-                        data-tip={AGENT_UI[a].hint}
-                      >
-                        <span className={styles.mentionChipAvatar}>{AGENT_UI[a].avatar()}</span>
-                        {AGENT_UI[a].label}
-                      </button>
-                    ))}
-                  </div>
-                  {skills.length > 0 ? (
+              <div className={styles.composerInner}>
+                {toolsOpen ? (
+                  <div className={styles.toolsTray}>
                     <div className={styles.mentionRow}>
-                      <span className={styles.mentionLabel}>技能</span>
-                      <button
-                        type="button"
-                        className={`${styles.mentionChip} ${activeSkill === null ? styles.mentionChipActive : ""}`}
-                        onClick={() => setActiveSkill(null)}
-                      >
-                        无
-                      </button>
-                      {skills.map((s) => (
+                      <span className={styles.mentionLabel}>搭子</span>
+                      {AGENTS.map((a) => (
                         <button
-                          key={s}
+                          key={a}
                           type="button"
-                          className={`${styles.mentionChip} ${activeSkill === s ? styles.mentionChipActive : ""}`}
-                          onClick={() => setActiveSkill(s)}
+                          className={`${styles.mentionChip} ${mention === a ? styles.mentionChipActive : ""}`}
+                          onClick={() => setMention(a)}
+                          data-tip={AGENT_UI[a].hint}
                         >
-                          {s}
+                          <span className={styles.mentionChipAvatar}>{AGENT_UI[a].avatar()}</span>
+                          {AGENT_UI[a].label}
                         </button>
                       ))}
                     </div>
+                    {skills.length > 0 ? (
+                      <div className={styles.mentionRow}>
+                        <span className={styles.mentionLabel}>技能</span>
+                        <button
+                          type="button"
+                          className={`${styles.mentionChip} ${activeSkill === null ? styles.mentionChipActive : ""}`}
+                          onClick={() => setActiveSkill(null)}
+                        >
+                          无
+                        </button>
+                        {skills.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`${styles.mentionChip} ${activeSkill === s ? styles.mentionChipActive : ""}`}
+                            onClick={() => setActiveSkill(s)}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className={styles.composerMeta}>
+                  <button
+                    type="button"
+                    className={`${styles.toolsToggle} ${toolsOpen ? styles.toolsToggleOpen : ""}`}
+                    aria-expanded={toolsOpen}
+                    aria-label={toolsOpen ? "收起搭子与技能" : "选择搭子与技能"}
+                    title={toolsOpen ? "收起" : "搭子与技能"}
+                    onClick={() => setToolsOpen((v) => !v)}
+                  >
+                    {toolsOpen ? "−" : "+"}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.composerAgent}
+                    onClick={() => setToolsOpen(true)}
+                    title={AGENT_UI[mention].hint}
+                  >
+                    <span className={styles.composerAgentAvatar}>{AGENT_UI[mention].avatar()}</span>
+                    <span className={styles.composerAgentName}>{AGENT_UI[mention].label}</span>
+                  </button>
+                  {activeSkill ? (
+                    <button
+                      type="button"
+                      className={styles.skillChip}
+                      onClick={() => setActiveSkill(null)}
+                      title="本轮已选技能 · 点击清除"
+                      aria-label={`清除技能 ${activeSkill}`}
+                    >
+                      <span>技能 · {activeSkill}</span>
+                      <span className={styles.skillChipClear} aria-hidden>
+                        ×
+                      </span>
+                    </button>
                   ) : null}
                 </div>
-              ) : null}
-              <div className={styles.composerMeta}>
-                <button
-                  type="button"
-                  className={`${styles.toolsToggle} ${toolsOpen ? styles.toolsToggleOpen : ""}`}
-                  aria-expanded={toolsOpen}
-                  aria-label={toolsOpen ? "收起搭子与技能" : "选择搭子与技能"}
-                  title={toolsOpen ? "收起" : "搭子与技能"}
-                  onClick={() => setToolsOpen((v) => !v)}
-                >
-                  {toolsOpen ? "−" : "+"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.composerAgent}
-                  onClick={() => setToolsOpen(true)}
-                  title={AGENT_UI[mention].hint}
-                >
-                  <span className={styles.composerAgentAvatar}>{AGENT_UI[mention].avatar()}</span>
-                  <span className={styles.composerAgentName}>
-                    {AGENT_UI[mention].label}
-                    {activeSkill ? ` · ${activeSkill}` : ""}
-                  </span>
-                </button>
+                <div className={styles.composerField}>
+                  <textarea
+                    ref={textareaRef}
+                    className={styles.textarea}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={`和${AGENT_UI[mention].label}聊点什么…`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                    rows={2}
+                  />
+                  <button
+                    type="button"
+                    className={styles.sendBtn}
+                    disabled={busy || !draft.trim()}
+                    onClick={send}
+                  >
+                    发送
+                  </button>
+                </div>
+                {err ? <span className={styles.sendError}>{err}</span> : null}
               </div>
-              <div className={styles.composerField}>
-                <textarea
-                  ref={textareaRef}
-                  className={styles.textarea}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={`和${AGENT_UI[mention].label}聊点什么…`}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void send();
-                    }
-                  }}
-                  rows={2}
-                />
-                <button
-                  type="button"
-                  className={styles.sendBtn}
-                  disabled={busy || !draft.trim()}
-                  onClick={send}
-                >
-                  发送
-                </button>
-              </div>
-              {err ? <span className={styles.sendError}>{err}</span> : null}
             </div>
-          </>
+
+            {showToTop ? (
+              <button
+                type="button"
+                className={styles.toTop}
+                onClick={scrollStreamToTop}
+                aria-label="回到顶部"
+                title="回到顶部"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M8 12.5V3.5M8 3.5 4 7.5M8 3.5l4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : null}
+          </div>
         )}
       </section>
 

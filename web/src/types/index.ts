@@ -6,6 +6,7 @@ export type PlanItem = {
   claim_id: string | null;
   sort_order: number;
   due_at: string | null;
+  due_time: string | null;
   project_id: string | null;
   topic: string | null;
 };
@@ -274,4 +275,21 @@ export type GraphEdge = {
 export type GraphView = {
   nodes: GraphNode[];
   edges: GraphEdge[];
+};
+
+export type InterviewStatus = "scheduled" | "done" | "cancelled";
+
+export type InterviewEvent = {
+  id: string;
+  user_id: string;
+  company: string;
+  role_title: string;
+  scheduled_at: string;
+  round: string | null;
+  status: InterviewStatus;
+  notes: string | null;
+  remind_offsets_hours: number[];
+  last_reminded_at: string | null;
+  created_at: string;
+  updated_at: string;
 };

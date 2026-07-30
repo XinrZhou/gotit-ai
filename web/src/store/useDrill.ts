@@ -23,6 +23,7 @@ type Deps = {
   setBusy: (b: boolean) => void;
   setError: (s: string) => void;
   setProjectPicked: (v: boolean) => void;
+  workflowThreadId: string | null;
 };
 
 export function useDrill({
@@ -33,6 +34,7 @@ export function useDrill({
   setBusy,
   setError,
   setProjectPicked,
+  workflowThreadId,
 }: Deps) {
   const [activeDrillSession, setActiveDrillSession] = useState<DrillSession | null>(
     null,
@@ -131,6 +133,7 @@ export function useDrill({
             round: drillRound,
             direction: drillDirection.trim() || null,
             project_id: drillFocusProjectId,
+            ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
           }),
         });
         setActiveDrillSession(res.session);
@@ -164,6 +167,7 @@ export function useDrill({
     refresh,
     setBusy,
     setError,
+    workflowThreadId,
   ]);
 
   const onDrillAnswer = useCallback(() => {
@@ -176,7 +180,13 @@ export function useDrill({
       try {
         const res = await api<DrillSessionContinueResponse>(
           `/v1/drill/sessions/${activeDrillSession.id}`,
-          { method: "POST", body: JSON.stringify({ answer: userText }) },
+          {
+            method: "POST",
+            body: JSON.stringify({
+              answer: userText,
+              ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
+            }),
+          },
         );
         const v = res.verdict;
         if (v.done) {
@@ -202,7 +212,7 @@ export function useDrill({
         setBusy(false);
       }
     })();
-  }, [activeDrillSession, drillAnswer, drillDone, refresh, setBusy, setError]);
+  }, [activeDrillSession, drillAnswer, drillDone, refresh, setBusy, setError, workflowThreadId]);
 
   const onSelectDrillSession = useCallback(
     (s: DrillSession) => {

@@ -19,6 +19,7 @@ from gotit.core.models import (
     PlanItemView,
     TodayView,
 )
+from gotit.core.plan_time import resolve_due_time
 from gotit.db.models import ChatMessageRow, ClaimRow, LearningDayRow, PlanItemRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view, _plan_item_view
 from gotit.db.ops.note import list_notes
@@ -88,32 +89,38 @@ async def upsert_plan_item(
     claim_id: UUID | None = None,
     sort_order: int | None = None,
     due_at: date | None = None,
+    due_time: str | None = None,
     project_id: UUID | None = None,
 ) -> PlanItemView:
     learning_day = await ensure_day(session, day, user_id=user_id)
+    clean_title = title.strip()
+    resolved_time = resolve_due_time(due_time=due_time, title=clean_title)
     if item_id is not None:
         row = await session.get(PlanItemRow, item_id)
         if row is None or row.day_id != learning_day.id:
             raise KeyError(f"plan item not found: {item_id}")
-        row.title = title.strip()
+        row.title = clean_title
         row.source = source.value
         row.status = status.value
         row.claim_id = claim_id
         if sort_order is not None:
             row.sort_order = sort_order
         row.due_at = due_at
+        if due_time is not None or resolved_time:
+            row.due_time = resolved_time
         row.project_id = project_id
     else:
         order = sort_order if sort_order is not None else len(learning_day.plan_items)
         row = PlanItemRow(
             id=uuid4(),
             day_id=learning_day.id,
-            title=title.strip(),
+            title=clean_title,
             source=source.value,
             status=status.value,
             claim_id=claim_id,
             sort_order=order,
             due_at=due_at,
+            due_time=resolved_time,
             project_id=project_id,
         )
         session.add(row)
@@ -129,6 +136,7 @@ async def update_plan_item(
     status: PlanItemStatus | None = None,
     sort_order: int | None = None,
     due_at: date | None = None,
+    due_time: str | None = None,
     defer_to: date | None = None,
     user_id: str = DEFAULT_USER_ID,
 ) -> PlanItemView:
@@ -146,6 +154,10 @@ async def update_plan_item(
         row.sort_order = sort_order
     if due_at is not None:
         row.due_at = due_at
+    if due_time is not None:
+        row.due_time = resolve_due_time(due_time=due_time, title=row.title)
+    elif title is not None and not row.due_time:
+        row.due_time = resolve_due_time(due_time=None, title=row.title)
     if defer_to is not None:
         row.status = PlanItemStatus.DEFERRED.value
         row.due_at = defer_to
@@ -153,7 +165,6 @@ async def update_plan_item(
         row.day_id = target.id
     await session.flush()
     return _plan_item_view(row)
-
 
 async def delete_plan_item(
     session: AsyncSession,

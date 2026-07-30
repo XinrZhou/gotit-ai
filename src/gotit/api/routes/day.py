@@ -34,6 +34,9 @@ class PlanItemCreate(BaseModel):
     claim_id: UUID | None = None
     sort_order: int | None = None
     due_at: date | None = None
+    due_time: str | None = Field(
+        default=None, description="HH:MM local wall clock for Reminders"
+    )
 
 
 class PlanItemPatch(BaseModel):
@@ -41,6 +44,7 @@ class PlanItemPatch(BaseModel):
     status: PlanItemStatus | None = None
     sort_order: int | None = None
     due_at: date | None = None
+    due_time: str | None = None
     defer_to: date | None = None
 
 
@@ -83,7 +87,7 @@ async def create_plan_item(
 ) -> PlanItemView:
     async with session_scope() as session:
         try:
-            return await day_ops.upsert_plan_item(
+            view = await day_ops.upsert_plan_item(
                 session,
                 day,
                 title=body.title,
@@ -94,9 +98,14 @@ async def create_plan_item(
                 claim_id=body.claim_id,
                 sort_order=body.sort_order,
                 due_at=body.due_at,
+                due_time=body.due_time,
             )
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    from gotit.bridge.reminders import push_day
+
+    push_day(day, title=view.title, time=view.due_time, reconcile=True)
+    return view
 
 
 @router.post(
@@ -124,18 +133,34 @@ async def patch_plan_item(
 ) -> PlanItemView:
     async with session_scope() as session:
         try:
-            return await day_ops.update_plan_item(
+            view = await day_ops.update_plan_item(
                 session,
                 item_id,
                 title=body.title,
                 status=body.status,
                 sort_order=body.sort_order,
                 due_at=body.due_at,
+                due_time=body.due_time,
                 defer_to=body.defer_to,
                 user_id=_user_id(settings),
             )
+            # Resolve calendar day after possible defer.
+            plan_day = body.defer_to
+            if plan_day is None:
+                from gotit.db.models import LearningDayRow, PlanItemRow
+
+                row = await session.get(PlanItemRow, item_id)
+                if row is not None:
+                    day_row = await session.get(LearningDayRow, row.day_id)
+                    if day_row is not None:
+                        plan_day = day_row.day
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if plan_day is not None:
+        from gotit.bridge.reminders import push_day
+
+        push_day(plan_day, reconcile=True)
+    return view
 
 
 @router.delete(
@@ -146,11 +171,25 @@ async def delete_plan_item(
     item_id: UUID,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, bool]:
+    title: str | None = None
+    plan_day: date | None = None
     async with session_scope() as session:
         try:
+            from gotit.db.models import LearningDayRow, PlanItemRow
+
+            row = await session.get(PlanItemRow, item_id)
+            if row is not None:
+                title = row.title
+                day_row = await session.get(LearningDayRow, row.day_id)
+                if day_row is not None:
+                    plan_day = day_row.day
             await day_ops.delete_plan_item(session, item_id, user_id=_user_id(settings))
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if title and plan_day is not None:
+        from gotit.bridge.reminders import rm_item
+
+        rm_item(plan_day, title)
     return {"ok": True}
 
 

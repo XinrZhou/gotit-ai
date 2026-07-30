@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gotit import __version__
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.settings import Settings, get_settings
+from gotit.api.workflow_persist import (
+    drill_agent_text,
+    examine_agent_text,
+    persist_workflow_exchange,
+    teach_agent_text,
+)
 from gotit.core.agents.axiom import (
     build_axiom_agent,
     build_topic_axiom_agent,
@@ -24,6 +30,7 @@ from gotit.core.agents.sage import build_sage_agent, run_sage, stub_sage
 from gotit.core.models import (
     DrillMaterial,
     DrillRound,
+    InterviewStatus,
     MasteryStatus,
     PlanItemSource,
     PlanItemStatus,
@@ -90,12 +97,35 @@ async def gotit_examine(
     answer: str | None = None,
     history: list[dict[str, str]] | None = None,
     verdict: str | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, object]:
     """Examine a claim (multi-turn). Pass `note_id` for note-session mode or
     `topic` for topic-session mode (Axiom shuttles across the claims); pass
-    `verdict` to bypass the agent (stub/tests, single-claim mode only)."""
+    `verdict` to bypass the agent (stub/tests, single-claim mode only).
+    Optional `thread_id` appends turns to the companion thread stream."""
     await ensure_db()
     user_id = _user_id()
+    tid = UUID(thread_id) if thread_id else None
+
+    async def _persist(
+        *,
+        agent_text: str,
+        extra: dict[str, object],
+    ) -> dict[str, object] | None:
+        if tid is None:
+            return None
+        try:
+            await persist_workflow_exchange(
+                thread_id=tid,
+                user_id=user_id,
+                workflow="examine",
+                agent_text=agent_text,
+                user_text=answer,
+                extra_metadata=extra,
+            )
+        except KeyError as exc:
+            return {"error": str(exc)}
+        return None
 
     # --- Claims-session mode (note_id or topic) ---
     if note_id is not None or topic is not None:
@@ -141,6 +171,25 @@ async def gotit_examine(
                     verdict=session_result.verdict,
                     user_id=user_id,
                 )
+        extra: dict[str, object] = {"session_done": session_result.session_done}
+        if note_id is not None:
+            extra["note_id"] = note_id
+        if topic is not None:
+            extra["topic"] = topic
+        if session_result.current_claim_id:
+            extra["claim_id"] = str(session_result.current_claim_id)
+        if session_result.verdict:
+            extra["verdict"] = session_result.verdict
+        err = await _persist(
+            agent_text=examine_agent_text(
+                follow_up=session_result.follow_up,
+                done=session_result.done,
+                verdict=session_result.verdict,
+            ),
+            extra=extra,
+        )
+        if err:
+            return err
         return {
             "verdict": session_result.model_dump(mode="json"),
             "writeback": writeback,
@@ -155,6 +204,16 @@ async def gotit_examine(
             direct_writeback = await day_ops.apply_examine_verdict(
                 session, UUID(claim_id), verdict=verdict, user_id=user_id
             )
+        err = await _persist(
+            agent_text=examine_agent_text(follow_up="", done=True, verdict=verdict),
+            extra={
+                "claim_id": claim_id,
+                "verdict": verdict,
+                "session_done": True,
+            },
+        )
+        if err:
+            return err
         return {
             "verdict": {
                 "done": True,
@@ -188,6 +247,20 @@ async def gotit_examine(
             writeback = await day_ops.apply_examine_verdict(
                 session, UUID(claim_id), verdict=result.verdict, user_id=user_id
             )
+    err = await _persist(
+        agent_text=examine_agent_text(
+            follow_up=result.follow_up,
+            done=result.done,
+            verdict=result.verdict,
+        ),
+        extra={
+            "claim_id": claim_id,
+            **({"verdict": result.verdict} if result.verdict else {}),
+            "session_done": bool(result.done),
+        },
+    )
+    if err:
+        return err
     return {"verdict": result.model_dump(mode="json"), "writeback": writeback}
 
 
@@ -220,13 +293,18 @@ async def gotit_upsert_plan_item(
     claim_id: str | None = None,
     sort_order: int | None = None,
     due_at: str | None = None,
+    due_time: str | None = None,
 ) -> dict[str, object]:
-    """Create or update a plan item for a day."""
+    """Create or update a plan item. Pass due_time=HH:MM when known (Reminders).
+
+    Best-effort syncs to Apple Reminders after write (same Mac as OpenClaw).
+    """
     await ensure_db()
+    day_d = date.fromisoformat(day)
     async with session_scope() as session:
         view = await day_ops.upsert_plan_item(
             session,
-            date.fromisoformat(day),
+            day_d,
             title=title,
             user_id=_user_id(),
             item_id=UUID(item_id) if item_id else None,
@@ -235,8 +313,17 @@ async def gotit_upsert_plan_item(
             claim_id=UUID(claim_id) if claim_id else None,
             sort_order=sort_order,
             due_at=date.fromisoformat(due_at) if due_at else None,
+            due_time=due_time,
         )
-    return view.model_dump(mode="json")
+    from gotit.bridge.reminders import push_day
+
+    apple_err = push_day(day_d, title=view.title, time=view.due_time)
+    out = view.model_dump(mode="json")
+    if apple_err:
+        out["apple_sync_error"] = apple_err
+    else:
+        out["apple_synced"] = True
+    return out
 
 
 @mcp.tool()
@@ -256,10 +343,12 @@ async def gotit_update_plan_item(
     status: str | None = None,
     sort_order: int | None = None,
     due_at: str | None = None,
+    due_time: str | None = None,
     defer_to: str | None = None,
 ) -> dict[str, object]:
-    """Patch a plan item (status, defer, reorder)."""
+    """Patch a plan item (status, defer, reorder, due_time). Syncs Reminders for the day."""
     await ensure_db()
+    plan_day: date | None = None
     async with session_scope() as session:
         view = await day_ops.update_plan_item(
             session,
@@ -268,10 +357,27 @@ async def gotit_update_plan_item(
             status=PlanItemStatus(status) if status else None,
             sort_order=sort_order,
             due_at=date.fromisoformat(due_at) if due_at else None,
+            due_time=due_time,
             defer_to=date.fromisoformat(defer_to) if defer_to else None,
             user_id=_user_id(),
         )
-    return view.model_dump(mode="json")
+        from gotit.db.models import LearningDayRow, PlanItemRow
+
+        row = await session.get(PlanItemRow, UUID(item_id))
+        if row is not None:
+            day_row = await session.get(LearningDayRow, row.day_id)
+            if day_row is not None:
+                plan_day = day_row.day
+    out = view.model_dump(mode="json")
+    if plan_day is not None:
+        from gotit.bridge.reminders import push_day
+
+        apple_err = push_day(plan_day, reconcile=True)
+        if apple_err:
+            out["apple_sync_error"] = apple_err
+        else:
+            out["apple_synced"] = True
+    return out
 
 
 @mcp.tool()
@@ -282,8 +388,7 @@ async def gotit_delete_plan_item(
 ) -> dict[str, object]:
     """Delete a plan item by id, or by day + title (casefold exact match).
 
-    After delete, also run apple-plan ``rm --title … --apply`` so Reminders
-    stay in sync (OpenClaw skill; not done inside this tool).
+    Also removes the matching incomplete Reminder (best-effort).
     """
     await ensure_db()
     uid = _user_id()
@@ -292,6 +397,14 @@ async def gotit_delete_plan_item(
         matched_day = day
         if item_id:
             target_id = UUID(item_id)
+            from gotit.db.models import LearningDayRow, PlanItemRow
+
+            row = await session.get(PlanItemRow, target_id)
+            if row is not None:
+                matched_title = row.title
+                day_row = await session.get(LearningDayRow, row.day_id)
+                if day_row is not None:
+                    matched_day = day_row.day.isoformat()
         else:
             if not day or not matched_title:
                 raise ValueError("provide item_id, or both day and title")
@@ -313,12 +426,21 @@ async def gotit_delete_plan_item(
             target_id = hits[0].id
             matched_title = hits[0].title
         await day_ops.delete_plan_item(session, target_id, user_id=uid)
-    return {
+    out: dict[str, object] = {
         "ok": True,
         "deleted_id": str(target_id),
         "day": matched_day,
         "title": matched_title,
     }
+    if matched_title and matched_day:
+        from gotit.bridge.reminders import rm_item
+
+        apple_err = rm_item(date.fromisoformat(matched_day), matched_title)
+        if apple_err:
+            out["apple_sync_error"] = apple_err
+        else:
+            out["apple_synced"] = True
+    return out
 
 
 @mcp.tool()
@@ -437,20 +559,49 @@ async def gotit_teach(
     answer: str | None = None,
     history: list[dict[str, str]] | None = None,
     you_taught_well: bool | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, object]:
-    """Teach-back mode (Echo). Pass `you_taught_well` to bypass the agent (stub/tests)."""
+    """Teach-back mode (Echo). Pass `you_taught_well` to bypass the agent (stub/tests).
+    Optional `thread_id` appends turns to the companion thread stream."""
     await ensure_db()
     user_id = _user_id()
+    tid = UUID(thread_id) if thread_id else None
+
+    async def _persist(verdict: TeachVerdict) -> dict[str, object] | None:
+        if tid is None:
+            return None
+        extra: dict[str, object] = {"topic": topic, "session_done": verdict.done}
+        if verdict.you_taught_well is not None:
+            extra["verdict"] = "passed" if verdict.you_taught_well else "owe_next"
+        try:
+            await persist_workflow_exchange(
+                thread_id=tid,
+                user_id=user_id,
+                workflow="teach",
+                agent_text=teach_agent_text(
+                    done=verdict.done,
+                    you_taught_well=verdict.you_taught_well,
+                    gaps=list(verdict.gaps),
+                    next_question=verdict.next_question,
+                ),
+                user_text=answer,
+                extra_metadata=extra,
+            )
+        except KeyError as exc:
+            return {"error": str(exc)}
+        return None
 
     if you_taught_well is not None:
-        return {
-            "verdict": TeachVerdict(
-                done=True,
-                you_taught_well=you_taught_well,
-                gaps=[],
-                next_question=None,
-            ).model_dump(mode="json")
-        }
+        verdict = TeachVerdict(
+            done=True,
+            you_taught_well=you_taught_well,
+            gaps=[],
+            next_question=None,
+        )
+        err = await _persist(verdict)
+        if err:
+            return err
+        return {"verdict": verdict.model_dump(mode="json")}
 
     async with session_scope() as session:
         prompt = await SessionPromptReader(session).get_active_prompt("echo")
@@ -464,6 +615,9 @@ async def gotit_teach(
             history=history or [],
             answer=answer,
         )
+    err = await _persist(verdict)
+    if err:
+        return err
     return {"verdict": verdict.model_dump(mode="json")}
 
 
@@ -507,6 +661,28 @@ async def gotit_add_memory(
             content=content or {},
             topic=topic,
             source=source,
+        )
+    return entry.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_list_pending_failure_digests(limit: int = 20) -> list[dict[str, object]]:
+    """Pending examine failure digests (almost|owe_next) not yet sent to WeChat."""
+    await ensure_db()
+    async with session_scope() as session:
+        entries = await day_ops.list_pending_failure_digests(
+            session, user_id=_user_id(), limit=limit
+        )
+    return [e.model_dump(mode="json") for e in entries]
+
+
+@mcp.tool()
+async def gotit_mark_failure_digest_notified(memory_id: str) -> dict[str, object]:
+    """Mark a failure_digest memory as delivered (WeChat)."""
+    await ensure_db()
+    async with session_scope() as session:
+        entry = await day_ops.mark_failure_digest_notified(
+            session, UUID(memory_id), user_id=_user_id()
         )
     return entry.model_dump(mode="json")
 
@@ -822,6 +998,105 @@ async def gotit_delete_drill_material(material_id: str) -> dict[str, str]:
 
 
 @mcp.tool()
+async def gotit_list_interviews(include_done: bool = False) -> list[dict[str, object]]:
+    """List scheduled real-world interviews (newest scheduled first)."""
+    await ensure_db()
+    async with session_scope() as session:
+        rows = await day_ops.list_interviews(
+            session, user_id=_user_id(), include_done=include_done
+        )
+    return [r.model_dump(mode="json") for r in rows]
+
+
+@mcp.tool()
+async def gotit_upsert_interview(
+    company: str,
+    role_title: str,
+    scheduled_at: str,
+    interview_id: str | None = None,
+    round: str | None = None,
+    status: str = "scheduled",
+    notes: str | None = None,
+    remind_offsets_hours: list[int] | None = None,
+) -> dict[str, object]:
+    """Create or update a real-world interview. `scheduled_at` is ISO-8601 tz-aware."""
+    await ensure_db()
+    from datetime import datetime
+
+    async with session_scope() as session:
+        row = await day_ops.upsert_interview(
+            session,
+            interview_id=UUID(interview_id) if interview_id else None,
+            company=company,
+            role_title=role_title,
+            scheduled_at=datetime.fromisoformat(scheduled_at.replace("Z", "+00:00")),
+            round=round,
+            status=InterviewStatus(status),
+            notes=notes,
+            remind_offsets_hours=remind_offsets_hours,
+            user_id=_user_id(),
+        )
+    return row.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_update_interview_status(
+    interview_id: str,
+    status: str,
+) -> dict[str, object]:
+    """Update interview status: scheduled | done | cancelled."""
+    await ensure_db()
+    async with session_scope() as session:
+        row = await day_ops.update_interview_status(
+            session,
+            UUID(interview_id),
+            InterviewStatus(status),
+            user_id=_user_id(),
+        )
+    return row.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_list_due_interview_reminders(
+    now: str | None = None,
+) -> list[dict[str, object]]:
+    """Return due interview reminders for OpenClaw cron (offset + fire_at)."""
+    await ensure_db()
+    from datetime import UTC, datetime
+
+    at = (
+        datetime.fromisoformat(now.replace("Z", "+00:00"))
+        if now
+        else datetime.now(UTC)
+    )
+    async with session_scope() as session:
+        due = await day_ops.list_due_interview_reminders(session, at, user_id=_user_id())
+    return [d.model_dump(mode="json") for d in due]
+
+
+@mcp.tool()
+async def gotit_mark_interview_reminded(
+    interview_id: str,
+    at: str | None = None,
+) -> dict[str, object]:
+    """Mark an interview reminder as sent (updates last_reminded_at)."""
+    await ensure_db()
+    from datetime import datetime
+
+    reminded_at = (
+        datetime.fromisoformat(at.replace("Z", "+00:00")) if at else None
+    )
+    async with session_scope() as session:
+        row = await day_ops.mark_interview_reminded(
+            session,
+            UUID(interview_id),
+            at=reminded_at,
+            user_id=_user_id(),
+        )
+    return row.model_dump(mode="json")
+
+
+@mcp.tool()
 async def gotit_list_drill_sessions() -> list[dict[str, object]]:
     """List all mock-interview drill sessions (newest first)."""
     await ensure_db()
@@ -844,11 +1119,14 @@ async def gotit_start_drill_session(
     round: str,
     direction: str | None = None,
     project_id: str | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, object]:
-    """Start a resume-driven mock interview session. `round` is tech_1/2/3/4/hr."""
+    """Start a resume-driven mock interview session. `round` is tech_1/2/3/4/hr.
+    Optional `thread_id` appends turns to the companion thread stream."""
     await ensure_db()
     settings = get_settings()
     user_id = _user_id()
+    tid = UUID(thread_id) if thread_id else None
     async with session_scope() as session:
         resume = await day_ops.get_resume(session, user_id=user_id)
         if resume is None:
@@ -881,15 +1159,40 @@ async def gotit_start_drill_session(
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        if tid is not None:
+            await day_ops.append_workflow_exchange(
+                session,
+                thread_id=tid,
+                user_id=user_id,
+                workflow="drill",
+                agent_name="sage",
+                agent_text=drill_agent_text(
+                    done=verdict.done,
+                    depth_reached=verdict.depth_reached,
+                    gaps=list(verdict.gaps),
+                    follow_up=verdict.follow_up,
+                ),
+                user_text=None,
+                extra_metadata={
+                    "drill_session_id": str(ds.id),
+                    "session_done": verdict.done,
+                },
+            )
     return {"session": ds.model_dump(mode="json"), "verdict": verdict.model_dump(mode="json")}
 
 
 @mcp.tool()
-async def gotit_continue_drill_session(session_id: str, answer: str) -> dict[str, object]:
-    """Continue a drill session with the candidate's latest answer."""
+async def gotit_continue_drill_session(
+    session_id: str,
+    answer: str,
+    thread_id: str | None = None,
+) -> dict[str, object]:
+    """Continue a drill session with the candidate's latest answer.
+    Optional `thread_id` appends turns to the companion thread stream."""
     await ensure_db()
     settings = get_settings()
     user_id = _user_id()
+    tid = UUID(thread_id) if thread_id else None
     async with session_scope() as session:
         ds = await day_ops.get_drill_session(session, UUID(session_id), user_id=user_id)
         if ds.status == "done":
@@ -922,6 +1225,25 @@ async def gotit_continue_drill_session(session_id: str, answer: str) -> dict[str
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        if tid is not None:
+            await day_ops.append_workflow_exchange(
+                session,
+                thread_id=tid,
+                user_id=user_id,
+                workflow="drill",
+                agent_name="sage",
+                agent_text=drill_agent_text(
+                    done=verdict.done,
+                    depth_reached=verdict.depth_reached,
+                    gaps=list(verdict.gaps),
+                    follow_up=verdict.follow_up,
+                ),
+                user_text=answer,
+                extra_metadata={
+                    "drill_session_id": str(ds.id),
+                    "session_done": verdict.done,
+                },
+            )
     return {"verdict": verdict.model_dump(mode="json")}
 
 

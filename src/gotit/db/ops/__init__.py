@@ -70,13 +70,25 @@ from gotit.db.ops.identity import (
     seed_default_identities,
     upsert_identity,
 )
+from gotit.db.ops.interview import (
+    delete_interview,
+    list_due_interview_reminders,
+    list_interviews,
+    mark_interview_reminded,
+    patch_interview,
+    update_interview_status,
+    upsert_interview,
+)
 from gotit.db.ops.memory import (
     _memory_view,
     add_memory,
     append_trajectory,
     count_prior_failures,
     list_memory,
+    list_pending_failure_digests,
     list_trajectory,
+    mark_failure_digest_notified,
+    maybe_record_failure_digest,
 )
 from gotit.db.ops.shell import (
     build_graph_v0,
@@ -143,6 +155,7 @@ from gotit.db.ops.skills import (
 )
 from gotit.db.ops.thread import (
     add_message,
+    append_workflow_exchange,
     clear_ball,
     count_user_messages,
     create_thread,
@@ -223,6 +236,14 @@ __all__ = [
     "finish_drill_session",
     "list_drill_sessions",
     "get_drill_session",
+    # interviews (companion-os P3d)
+    "list_interviews",
+    "upsert_interview",
+    "patch_interview",
+    "update_interview_status",
+    "delete_interview",
+    "list_due_interview_reminders",
+    "mark_interview_reminded",
     # prompt
     "register_prompts",
     "get_active_prompt",
@@ -233,6 +254,9 @@ __all__ = [
     "append_trajectory",
     "list_trajectory",
     "count_prior_failures",
+    "maybe_record_failure_digest",
+    "list_pending_failure_digests",
+    "mark_failure_digest_notified",
     # shell / obs (OpenClaw bridge)
     "record_shell_event",
     "record_interest",
@@ -268,6 +292,7 @@ __all__ = [
     "delete_thread",
     "derive_thread_title",
     "add_message",
+    "append_workflow_exchange",
     "count_user_messages",
     "list_messages",
     "get_ball",

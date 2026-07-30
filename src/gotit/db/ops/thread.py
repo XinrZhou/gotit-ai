@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.models import BallCustody, BallStage, Message, Thread
 from gotit.db.models import BallCustodyRow, MessageRow, ThreadRow
+from gotit.db.ops._common import _as_utc
 
 
 def _thread_view(row: ThreadRow) -> Thread:
@@ -20,8 +21,8 @@ def _thread_view(row: ThreadRow) -> Thread:
         title=row.title,
         kind=row.kind,  # type: ignore[arg-type]
         status=row.status,
-        created_at=row.created_at or datetime.now(UTC),
-        updated_at=row.updated_at or datetime.now(UTC),
+        created_at=_as_utc(row.created_at),
+        updated_at=_as_utc(row.updated_at),
     )
 
 
@@ -34,7 +35,7 @@ def _message_view(row: MessageRow) -> Message:
         text=row.text,
         mentions=list(row.mentions or []),
         metadata=dict(row.metadata_ or {}),
-        created_at=row.created_at or datetime.now(UTC),
+        created_at=_as_utc(row.created_at),
     )
 
 
@@ -45,8 +46,8 @@ def _ball_view(row: BallCustodyRow) -> BallCustody:
         holder=row.holder,
         stage=row.stage,  # type: ignore[arg-type]
         context=dict(row.context or {}),
-        acquired_at=row.acquired_at or datetime.now(UTC),
-        expires_at=row.expires_at,
+        acquired_at=_as_utc(row.acquired_at),
+        expires_at=_as_utc(row.expires_at) if row.expires_at is not None else None,
     )
 
 
@@ -209,6 +210,52 @@ async def list_messages(
     )
     rows = list((await session.execute(stmt)).scalars().all())
     return [_message_view(r) for r in rows]
+
+
+async def append_workflow_exchange(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+    user_id: str,
+    workflow: str,
+    agent_name: str,
+    agent_text: str,
+    user_text: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
+) -> list[Message]:
+    """Write a workflow user+agent exchange into a thread the user owns.
+
+    Raises ``KeyError`` when the thread is missing or not owned by ``user_id``.
+    Skips empty agent text (user answer still written when present).
+    """
+    thread = await get_thread(session, thread_id)
+    if thread is None or thread.user_id != user_id:
+        raise KeyError(f"thread not found: {thread_id}")
+
+    base: dict[str, Any] = {"workflow": workflow, **dict(extra_metadata or {})}
+    out: list[Message] = []
+    if user_text is not None and user_text.strip():
+        out.append(
+            await add_message(
+                session,
+                thread_id=thread_id,
+                role="user",
+                text=user_text.strip(),
+                metadata={**base, "step": "answer"},
+            )
+        )
+    if agent_text.strip():
+        out.append(
+            await add_message(
+                session,
+                thread_id=thread_id,
+                role="agent",
+                text=agent_text.strip(),
+                agent_name=agent_name,
+                metadata={**base, "step": "agent"},
+            )
+        )
+    return out
 
 
 # --- ball custody ---

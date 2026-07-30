@@ -93,11 +93,25 @@ async def apply_examine_verdict(
         raise ValueError(f"unknown verdict: {verdict}")
 
     await session.flush()
-    return {
+    out: dict[str, object] = {
         "claim": _claim_view(claim).model_dump(mode="json"),
         "plan_items": [_plan_item_view(i).model_dump(mode="json") for i in items],
         "verdict": verdict,
     }
+    if verdict in {"almost", "owe_next"}:
+        from gotit.db.ops.memory import maybe_record_failure_digest
+
+        digest = await maybe_record_failure_digest(
+            session,
+            user_id=user_id,
+            claim_id=claim_id,
+            claim_text=claim.text,
+            topic=claim.topic,
+            verdict=verdict,
+        )
+        if digest is not None:
+            out["failure_digest_id"] = str(digest.id)
+    return out
 
 
 async def list_topic_claims_today(

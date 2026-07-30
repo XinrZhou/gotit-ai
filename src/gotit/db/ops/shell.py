@@ -205,8 +205,10 @@ async def put_digest_prefs(
 ) -> DigestPrefs:
     """Upsert singleton digest_prefs (long layer)."""
     cleaned = DigestPrefs.model_validate(prefs.model_dump(mode="json"))
-    # evening must never mix news into the plan job via prefs flag abuse in v0 —
-    # still persist the field but fetch_digest ignores it for evening body.
+    # morning/evening must never mix news into the plan job
+    cleaned = cleaned.model_copy(
+        update={"evening_include_news": False, "morning_include_news": False}
+    )
     stmt = (
         select(MemoryEntryRow)
         .where(

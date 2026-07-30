@@ -31,6 +31,7 @@ def test_identity_card_chinese_first() -> None:
     assert "绝不说英文代号" in card
     assert "冒充其他同伴" in card
     assert "职务说明书" in card
+    assert "人设口吻" in card
     assert "职责：" not in card
 
 
@@ -68,3 +69,5 @@ def test_build_chat_prompt_forces_self_intro() -> None:
     assert "禁止反问爱好" in prompt
     assert "派大星" in prompt
     assert "误判" in prompt
+    assert "已经自我介绍过" in prompt
+    assert "不要再重复报名字" in prompt

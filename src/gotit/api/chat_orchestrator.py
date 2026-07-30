@@ -6,7 +6,9 @@ the agent-to-agent handoff chain stays in one place (REST ↔ MCP parity).
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from gotit.api.deps import (
     SessionIdentityReader,
@@ -15,7 +17,12 @@ from gotit.api.deps import (
     SessionPromptReader,
     get_model,
 )
-from gotit.core.agents.runtime import AgentContext, run_chat
+from gotit.core.agents.runtime import (
+    AgentContext,
+    format_plan_markdown_list,
+    format_today_plan_brief,
+    run_chat,
+)
 from gotit.core.messaging import route_message
 from gotit.core.models import AgentReply, ChatTurn, Message, Thread
 from gotit.db import ops as day_ops
@@ -26,12 +33,17 @@ if TYPE_CHECKING:
     from gotit.api.settings import Settings
 
 MAX_A2A_TURNS = 4
+_PLAN_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _learner_today() -> date:
+    return datetime.now(_PLAN_TZ).date()
 
 
 def _stub_turn(agent_name: str, user_text: str, force_handoff: str | None) -> ChatTurn:
     handoff = force_handoff if force_handoff != agent_name else None
     return ChatTurn(
-        thinking="（桩）扫一眼学习者说的话，组织一句回应。",
+        thinking=None,
         text=f"[{agent_name}（无 LLM key，桩回复）] 你说了：{user_text}",
         handoff_to=handoff,
         reason=None if handoff is None else "手动转交",
@@ -93,6 +105,14 @@ async def post_message_chain(
     connectors = await day_ops.list_connectors(session, user_id=user_id)
     enabled_connectors = [c for c in connectors if c.enabled]
 
+    today = _learner_today()
+    plan = await day_ops.get_plan(session, today, user_id=user_id)
+    plan_markdown_list = format_plan_markdown_list(plan)
+    today_plan_brief = format_today_plan_brief(
+        plan,
+        include_list=plan_markdown_list is None,
+    )
+
     agent_messages: list[Message] = []
     current_user_text: str = text
     current_handoff_to: str | None = handoff_to
@@ -115,14 +135,41 @@ async def post_message_chain(
                     memory=SessionMemoryReader(session, user_id=user_id),
                     messages=SessionMessageReader(session, thread_id=thread.id),
                 )
-                turn = await run_chat(
-                    ctx,
-                    get_model(),
-                    user_text=current_user_text,
-                    skill_bodies=skill_bodies if turn_idx == 0 else None,
-                    toolsets=toolsets or None,
-                    force_handoff=current_handoff_to if turn_idx == 0 else None,
-                )
+                try:
+                    turn = await run_chat(
+                        ctx,
+                        get_model(),
+                        user_text=current_user_text,
+                        skill_bodies=skill_bodies if turn_idx == 0 else None,
+                        toolsets=toolsets or None,
+                        force_handoff=current_handoff_to if turn_idx == 0 else None,
+                        today_plan_brief=today_plan_brief,
+                        plan_markdown_list=plan_markdown_list,
+                    )
+                except Exception as exc:
+                    # Keep the user turn; surface failure as an in-thread agent reply
+                    # so the UI never has to roll back the optimistic send.
+                    detail = str(exc).split("\n", 1)[0][:240]
+                    err_text = (
+                        f"搭子暂时没回上（{type(exc).__name__}: {detail}）"
+                    )
+                    agent_msg = await day_ops.add_message(
+                        session,
+                        thread_id=thread.id,
+                        role="agent",
+                        text=err_text,
+                        agent_name=agent_name,
+                        metadata={
+                            "error": True,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                    agent_messages.append(agent_msg)
+                    return AgentReply(
+                        user_message=persisted_user,
+                        agent_messages=agent_messages,
+                        thread=updated_thread,
+                    )
 
             agent_msg = await day_ops.add_message(
                 session,

@@ -1,0 +1,9 @@
+{
+  "workspaces": [
+    {
+      "id": "gotit",
+      "path": "/Users/zxr/workspace2026/gotit-ai",
+      "notes": "Replace path with your clone; OpenClaw coding skill must refuse paths outside this list."
+    }
+  ]
+}

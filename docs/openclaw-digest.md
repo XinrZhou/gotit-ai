@@ -4,9 +4,11 @@ gotit **不**抓新闻、不跑 cron。编排在 OpenClaw。
 
 | Job | 默认 | 正文 |
 |-----|------|------|
-| `morning` | 08:00 | **今日计划**（首条标优先） |
+| `morning` | 08:00 | **今日计划**（仅计划；不同资讯） |
 | `evening` | 21:00 | **明日计划**询问（有→调整；无→新建）。**不含**今日待检、**不含**资讯 |
 | `news` | 默认关 | 仅 AI/YouTube RSS |
+
+有计划时早/晚推送会顺带 `apple-plan push` 到提醒事项「学习计划」。
 
 相关：[`docs/openclaw-wechat.md`](openclaw-wechat.md)、`skills/digest/`。Apple 导入见 P1d（另一 agent）。
 
@@ -38,8 +40,7 @@ ln -sfn /Users/zxr/workspace2026/gotit-ai/skills/digest \
 
 - `feeds[]` — AI 站 / YouTube Atom（`…/feeds/videos.xml?channel_id=UC…`）
 - `keywords` — 标题过滤
-- `news_enabled` / `news_cron` — 独立资讯 job
-- `morning_include_news` — 早报附资讯（默认 false；晚报字段忽略）
+- `news_enabled` / `news_cron` — 独立资讯 job（与早/晚计划分离；早推不再附资讯）
 
 默认源：量子位、HF Blog、OpenAI News、DeepMind（MarkTechPost 默认关）。
 

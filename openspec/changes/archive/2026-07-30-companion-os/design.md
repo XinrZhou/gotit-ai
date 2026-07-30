@@ -81,11 +81,11 @@ API / MCP（对等）：`list_interviews` / `upsert_interview` / `update_intervi
 
 | Job | 默认时间 | 正文 |
 |-----|----------|------|
-| morning | 08:00 | 当日开放 plan items（首条标优先）；默认**不含**资讯 |
+| morning | 08:00 | 当日开放 plan items（首条标优先）；**不含**资讯 |
 | evening | 21:00 | 明日 plan：有 → 问是否调整；无 → 问是否新建；**不含**今日待检、**不含**资讯 |
 | news（可选） | 关 / 用户开 | 仅 RSS（量子位/实验室博客/可选 YouTube Atom） |
 
-Prefs 真源：gotit `digest_prefs`（REST/MCP）；`skills/digest/config.json` 为文件默认 + cron 回退。Settings「计划推送」读写 prefs；改 cron 后点「保存并同步」（`POST /v1/shell/digest-cron/sync` → `install-cron.sh`）。
+Prefs 真源：gotit `digest_prefs`（REST/MCP）；`skills/digest/config.json` 为文件默认 + cron 回退。Settings「计划推送」读写 prefs；改 cron 后点「保存并同步」。有计划时 digest 会 `apple-plan push` 到提醒事项。
 
 ## P1d Apple 计划桥
 

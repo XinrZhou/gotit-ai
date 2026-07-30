@@ -17,6 +17,7 @@ from gotit.api.routes import (
     health,
     identities,
     ingest,
+    interviews,
     memory,
     notes,
     projects,
@@ -44,5 +45,6 @@ router.include_router(prompts.router)
 router.include_router(projects.router)
 router.include_router(resume.router)
 router.include_router(drill.router)
+router.include_router(interviews.router)
 
 __all__ = ["router"]

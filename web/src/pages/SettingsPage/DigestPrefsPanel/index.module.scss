@@ -1,7 +1,13 @@
 .digest {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .sectionTitle {
@@ -13,6 +19,27 @@
   color: var(--faint);
 }
 
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.block:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.blockLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+
 .subTitle {
   margin: 0;
   font-size: 13px;
@@ -21,14 +48,20 @@
   letter-spacing: -0.01em;
 }
 
-.hint {
+.hint,
+.hintTight {
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
 }
 
-.hint code {
+.hintTight {
+  margin-top: -4px;
+}
+
+.hint code,
+.hintTight code {
   font-size: 11px;
   color: var(--ink);
 }
@@ -51,10 +84,58 @@
   font-size: 13px;
 }
 
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+}
+
+.cronAi {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cronAiInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--bg) !important;
+  color: var(--ink);
+  padding: 8px 12px !important;
+  font-size: 12.5px !important;
+  font-family: inherit !important;
+  letter-spacing: -0.01em !important;
+}
+
+.cronAiBtn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.cronAiBtn:hover:not(:disabled) {
+  background: var(--soft);
+}
+
+.cronAiBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 @media (max-width: 720px) {
@@ -81,7 +162,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
 }
 
 .feedList {
@@ -94,12 +174,19 @@
 }
 
 .feedCard {
-  display: grid;
-  grid-template-columns: auto 1fr 100px;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: var(--soft);
+}
+
+.feedTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .feedInput,
@@ -110,10 +197,8 @@
   color: var(--ink);
   padding: 7px 10px;
   font-size: 12px;
-}
-
-.feedInputWide {
-  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .linkBtn {
@@ -124,7 +209,6 @@
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;
-  justify-self: start;
 }
 
 .linkBtn:hover {
@@ -136,28 +220,31 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   padding-top: 4px;
+  border-top: 1px solid var(--line);
 }
 
-.secondaryBtn {
+.ghostBtn {
   border: none;
-  border-radius: 980px;
-  background: var(--fill);
-  color: var(--ink);
+  background: transparent;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  padding: 8px 14px;
+  padding: 8px 12px;
+  border-radius: 980px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
-.secondaryBtn:hover:not(:disabled) {
+.ghostBtn:hover:not(:disabled) {
+  color: var(--ink);
   background: var(--soft);
 }
 
-.secondaryBtn:disabled {
+.ghostBtn:disabled {
   opacity: 0.5;
   cursor: default;
 }

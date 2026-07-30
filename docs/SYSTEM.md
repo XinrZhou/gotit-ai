@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-07-29.
+> Last reviewed: 2026-07-30.
 
 ## Product (one line)
 
@@ -37,7 +37,7 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0007 (… + mastery: fail_events / graph_edges)
+alembic/versions/  0001…0009 (… + interviews)
 openspec/changes/  active + archive/
 ```
 
@@ -56,16 +56,25 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 ## Shipped capabilities
 
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
+- **Chat plan grounding**: each companion turn gets today's `plan_items` skeleton
+  (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
+  list (no paraphrased times/items in the opener)
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
   conversation top bar; nav rail = brand + threads)
 - Library = left **drawer overlay**; 「图谱」opens **fullscreen** mastery graph
-- Composer: agents/skills behind `+` tray; quiet Apple select
-- **Settings** (nav gear): 资料 / Skills / MCP / 计划推送 / 动态 — profile + DIY skill
+- Composer: agents/skills behind `+` tray; quiet Apple select; active skill
+  shows as a clearable chip on the composer meta row
+- Chat reading column centered (~720px); thinking toggle is quiet text (not a
+  pill); workflow bar hint + ModeHeader「正在…」context
+- **Settings** (conversation top-right account): 资料 / Skills / MCP / 计划推送 / 动态 — profile + DIY skill
   install/view/edit + MCP connectors；**计划推送** = 早/晚计划 cron + 可选 AI/YouTube 源
   （「保存并同步」→ OpenClaw cron）；
   动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含 Apple 计划桥导入说明
+- Nav rail = brand + library + threads only (no account footer)
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
   + mastery-graph writeback (`fail_events`, `confused_with` edges)
+- **Workflow turns in thread**: examine / teach / drill optionally append to the
+  active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
 - Notes → claims → plan; project + resume-driven drill (resume import =
   projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
@@ -79,17 +88,21 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   skill `skills/digest/` + Gateway cron（Asia/Shanghai）
 - **Bridge writeback**：digest → `shell_event`；「有用」→ `interest`；
   prefs `/v1/shell/digest-prefs` + `POST /v1/shell/digest-cron/sync`；obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「计划推送」「动态」
-- **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（import / push / rm）；
-  MCP `gotit_delete_plan_item`；`docs/openclaw-apple-plan.md` + `skills/apple-plan/`
-  （osascript；**不**进 `src/gotit`）
+- **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（`due_time`；upsert/delete
+  自动 sync；早推 import→push reconcile）；`gotit.bridge.reminders` + `skills/apple-plan/`
+  （osascript；**不**进 `gotit.core`）
+- **Interviews**（P3d）：`InterviewEvent` + REST/MCP due-reminders；Settings「资料」列表；
+  投递 `skills/interview-remind/`
+- **Failure digest**（P3b）：examine `almost|owe_next` → `failure_digest` memory（同 claim+verdict
+  去重）；`skills/failure-digest/` 推微信
+- **Voice teach / coding**（P3c/P2）：OpenClaw skills `voice-teach` / `coding`（workspace allowlist）
 
 ## Not done yet (honest)
 
 - Per-agent multi-model binding in production
-- Workflow turns fully persisted into the same thread message stream
-- companion-os P2 coding / P3 interview reminders (see `openspec/changes/companion-os/`)
 - Broad agent-as-tool coverage beyond user MCP connectors
 - Rich profile / full KG store beyond mastery confuse edges (depends_on later)
+- Interview countdown ramp（P4；另开 change）
 
 ## Commands
 
