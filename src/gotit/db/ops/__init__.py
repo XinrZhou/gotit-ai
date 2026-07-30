@@ -55,6 +55,12 @@ from gotit.db.ops.drill import (
     list_drill_sessions,
     upsert_drill_material,
 )
+from gotit.db.ops.graph import (
+    build_budget_subgraph,
+    fail_counts_by_claim,
+    list_confused_edges,
+    record_verify_mastery_writeback,
+)
 from gotit.db.ops.harness import (
     _harness_case_view,
     _harness_run_view,
@@ -83,29 +89,13 @@ from gotit.db.ops.memory import (
     _memory_view,
     add_memory,
     append_trajectory,
+    build_failure_lesson_block,
     count_prior_failures,
     list_memory,
     list_pending_failure_digests,
     list_trajectory,
     mark_failure_digest_notified,
     maybe_record_failure_digest,
-)
-from gotit.db.ops.shell import (
-    build_graph_v0,
-    build_profile_v0,
-    default_digest_prefs,
-    get_digest_prefs,
-    list_shell_activity,
-    put_digest_prefs,
-    record_interest,
-    record_shell_event,
-    sync_digest_openclaw_cron,
-)
-from gotit.db.ops.graph import (
-    build_budget_subgraph,
-    fail_counts_by_claim,
-    list_confused_edges,
-    record_verify_mastery_writeback,
 )
 from gotit.db.ops.note import (
     _strip_html,
@@ -142,6 +132,17 @@ from gotit.db.ops.resume import (
     apply_resume,
     get_resume,
     upsert_resume,
+)
+from gotit.db.ops.shell import (
+    build_graph_v0,
+    build_profile_v0,
+    default_digest_prefs,
+    get_digest_prefs,
+    list_shell_activity,
+    put_digest_prefs,
+    record_interest,
+    record_shell_event,
+    sync_digest_openclaw_cron,
 )
 from gotit.db.ops.skills import (
     delete_user_skill,
@@ -257,6 +258,7 @@ __all__ = [
     "maybe_record_failure_digest",
     "list_pending_failure_digests",
     "mark_failure_digest_notified",
+    "build_failure_lesson_block",
     # shell / obs (OpenClaw bridge)
     "record_shell_event",
     "record_interest",

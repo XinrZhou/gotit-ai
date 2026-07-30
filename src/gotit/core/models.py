@@ -541,7 +541,9 @@ class AgentIdentity(BaseModel):
     display_name: str
     personality: str  # 人格 prompt 片段，注入 system prompt
     role: str  # examiner | curator | teachback | reviewer | critic
-    llm_config: dict[str, Any] = Field(default_factory=dict)  # {base_url, model_name, ...}
+    llm_config: dict[str, Any] = Field(
+        default_factory=dict
+    )  # {model|model_name, base_url, api_key|api_key_env}
     memory_scope: dict[str, Any] = Field(default_factory=dict)  # {layers, topics}
     prompt_version_id: UUID | None = None  # 绑定的 rubric 版本
     created_at: datetime

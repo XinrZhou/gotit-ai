@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4.1-mini"
 
+    # Optional Critic (凯伦) overrides — used when identity.llm_config omits a field.
+    critic_model: str = ""
+    critic_base_url: str = ""
+    critic_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

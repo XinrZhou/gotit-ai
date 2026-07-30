@@ -20,7 +20,9 @@ from gotit.api.chat_orchestrator import post_message_chain
 from gotit.api.deps import (
     SessionMemoryReader,
     SessionPromptReader,
+    get_critic_model,
     get_model,
+    resolve_critic_binding,
 )
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
@@ -193,7 +195,11 @@ async def start_verify(
 
         # --- examine (axiom) ---
         from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
-        from gotit.db.ops.memory import count_prior_failures, list_trajectory
+        from gotit.db.ops.memory import (
+            build_failure_lesson_block,
+            count_prior_failures,
+            list_trajectory,
+        )
 
         trajectory = await list_trajectory(
             session, user_id=user_id, topic=claim.topic, claim_id=body.claim_id
@@ -201,6 +207,13 @@ async def start_verify(
         prior_failures = count_prior_failures(trajectory, claim_id=body.claim_id)
         budget = await build_budget_subgraph(
             session, user_id=user_id, claim_id=body.claim_id
+        )
+        lesson_block = await build_failure_lesson_block(
+            session,
+            user_id=user_id,
+            claim_id=body.claim_id,
+            topic=claim.topic,
+            neighbor_claim_ids=budget.confused_claim_ids,
         )
 
         if body.examine_verdict is not None:
@@ -223,6 +236,7 @@ async def start_verify(
                 answer=body.answer,
                 trajectory=trajectory,
                 budget_block=budget.prompt_block,
+                failure_lesson_block=lesson_block,
             )
             examine_verdict = ev.verdict or "almost"
             examine_score = ev.score
@@ -240,14 +254,20 @@ async def start_verify(
             context=ball.context,
         )
 
-        # --- recheck (critic) ---
-        if not settings.llm_api_key:
+        # --- recheck (critic; optional per-identity / CRITIC_* model) ---
+        critic_identity = await day_ops.get_identity(session, "critic")
+        critic_cfg = critic_identity.llm_config if critic_identity else None
+        critic_binding = resolve_critic_binding(critic_cfg, settings=settings)
+        if not critic_binding.api_key:
             recheck = stub_critic(examine_verdict=examine_verdict)
         else:
             cprompt = await SessionPromptReader(session).get_active_prompt("critic")
             csystem = cprompt.system_prompt if cprompt else ""
             creader = SessionMemoryReader(session, user_id=user_id)
-            cagent = build_critic_agent(get_model(), system_prompt=csystem)
+            cagent = build_critic_agent(
+                get_critic_model(critic_cfg, settings=settings),
+                system_prompt=csystem,
+            )
             recheck = await run_critic(
                 cagent,
                 creader,

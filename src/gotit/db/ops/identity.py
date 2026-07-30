@@ -65,8 +65,11 @@ async def upsert_identity(
     row.display_name = display_name
     row.personality = personality
     row.role = role
-    row.model_config = dict(llm_config or {})
-    row.memory_scope = dict(memory_scope or {})
+    # None = leave existing llm_config / memory_scope alone (seed must not wipe).
+    if llm_config is not None:
+        row.model_config = dict(llm_config)
+    if memory_scope is not None:
+        row.memory_scope = dict(memory_scope)
     row.prompt_version_id = prompt_version_id
     # Avoid onupdate-expired attrs triggering sync IO under async (MissingGreenlet).
     row.updated_at = datetime.now(UTC)

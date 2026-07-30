@@ -8,6 +8,7 @@ import {
   SquidwardAvatar,
 } from "../../components/Avatars";
 import { Modal } from "../../components/Modal";
+import { isMasteryVerdict, VerifyVerdictChip } from "../../components/VerifyVerdict";
 import { ModeHeader } from "./ModeHeader";
 import { MessageBody } from "./MessageBody";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
@@ -184,6 +185,20 @@ function messageWorkflowBadge(m: ChatMessage): string | null {
   const raw = m.metadata?.workflow;
   if (typeof raw !== "string") return null;
   return WORKFLOW_BADGE[raw] ?? raw;
+}
+
+function messageExamineVerdict(m: ChatMessage): {
+  verdict: "passed" | "almost" | "owe_next";
+  sessionDone: boolean;
+} | null {
+  if (m.role !== "agent") return null;
+  if (m.metadata?.workflow !== "examine") return null;
+  if (m.metadata?.step === "answer") return null;
+  if (!isMasteryVerdict(m.metadata?.verdict)) return null;
+  return {
+    verdict: m.metadata.verdict,
+    sessionDone: Boolean(m.metadata?.session_done),
+  };
 }
 
 function ThinkingBlock({ text }: { text: string }) {
@@ -684,6 +699,7 @@ export function ChatPage() {
                   const isUser = m.role === "user";
                   const thinking = !isUser ? messageThinking(m) : null;
                   const wfBadge = messageWorkflowBadge(m);
+                  const examineVerdict = !isUser ? messageExamineVerdict(m) : null;
                   const isError = Boolean(m.metadata?.error);
                   const timeLabel = fmtMsgTime(m.created_at);
                   return (
@@ -735,6 +751,12 @@ export function ChatPage() {
                           >
                             <MessageBody text={m.text} markdown={!isUser && !isError} />
                           </div>
+                        {examineVerdict ? (
+                          <VerifyVerdictChip
+                            verdict={examineVerdict.verdict}
+                            sessionDone={examineVerdict.sessionDone}
+                          />
+                        ) : null}
                         {!isUser && (m.metadata as { handoff_to?: string }).handoff_to ? (
                           <div className={styles.handoffBadge}>
                             → 转给 {agentLabel((m.metadata as { handoff_to?: string }).handoff_to)}

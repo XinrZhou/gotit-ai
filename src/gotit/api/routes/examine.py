@@ -110,6 +110,18 @@ async def examine(
             )
         else:
             async with session_scope() as session:
+                from gotit.db.ops.memory import build_failure_lesson_block
+
+                lesson_block: str | None = None
+                if claims:
+                    focus = claims[0]
+                    lesson_block = await build_failure_lesson_block(
+                        session,
+                        user_id=user_id,
+                        claim_id=focus.id,
+                        topic=body.topic or focus.topic,
+                        neighbor_claim_ids=[c.id for c in claims[1:]],
+                    )
                 prompt = await SessionPromptReader(session).get_active_prompt("axiom")
                 system_prompt = prompt.system_prompt if prompt else ""
                 reader = SessionMemoryReader(session, user_id=user_id)
@@ -123,6 +135,7 @@ async def examine(
                 claims=claims,
                 history=body.history,
                 answer=body.answer,
+                failure_lesson_block=lesson_block,
             )
         writeback: dict[str, object] | None = None
         if (
@@ -222,6 +235,14 @@ async def examine(
             claim = await session.get(ClaimRow, body.claim_id)
             if claim is None or claim.user_id != user_id:
                 raise KeyError(f"claim not found: {body.claim_id}")
+            from gotit.db.ops.memory import build_failure_lesson_block
+
+            lesson_block = await build_failure_lesson_block(
+                session,
+                user_id=user_id,
+                claim_id=body.claim_id,
+                topic=claim.topic,
+            )
             prompt = await SessionPromptReader(session).get_active_prompt("axiom")
             system_prompt = prompt.system_prompt if prompt else ""
             reader = SessionMemoryReader(session, user_id=user_id)
@@ -232,6 +253,7 @@ async def examine(
                 claim_text=claim.text,
                 history=body.history,
                 answer=body.answer,
+                failure_lesson_block=lesson_block,
             )
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

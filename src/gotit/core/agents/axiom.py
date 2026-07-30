@@ -61,6 +61,7 @@ def build_prompt(
     memory: list[MemoryEntry],
     trajectory: list[MemoryEntry] | None = None,
     budget_block: str | None = None,
+    failure_lesson_block: str | None = None,
 ) -> str:
     parts = [
         f"## Claim under examination\n{claim_text}",
@@ -73,6 +74,8 @@ def build_prompt(
         )
     if budget_block:
         parts.append(budget_block)
+    if failure_lesson_block:
+        parts.append(failure_lesson_block)
     parts.append(f"## Conversation so far\n{_format_history(history)}")
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
@@ -94,6 +97,7 @@ async def run_axiom(
     answer: str | None = None,
     trajectory: list[MemoryEntry] | None = None,
     budget_block: str | None = None,
+    failure_lesson_block: str | None = None,
 ) -> ExamineVerdict:
     entries = await memory.list_memory(layer="working", limit=10)
     prompt = build_prompt(
@@ -103,6 +107,7 @@ async def run_axiom(
         memory=entries,
         trajectory=trajectory,
         budget_block=budget_block,
+        failure_lesson_block=failure_lesson_block,
     )
     result = await agent.run(prompt)
     return result.output
@@ -121,13 +126,16 @@ def build_topic_prompt(
     history: list[dict[str, str]],
     answer: str | None,
     memory: list[MemoryEntry],
+    failure_lesson_block: str | None = None,
 ) -> str:
     parts = [
         f"## Topic\n{topic}",
         f"## Claims to examine (id + text)\n{_format_claims(claims)}",
         f"## Relevant memory about this learner\n{_format_memory(memory)}",
-        f"## Conversation so far\n{_format_history(history)}",
     ]
+    if failure_lesson_block:
+        parts.append(failure_lesson_block)
+    parts.append(f"## Conversation so far\n{_format_history(history)}")
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
     parts.append(
@@ -153,6 +161,7 @@ async def run_topic_examine(
     claims: list[Claim],
     history: list[dict[str, str]] | None = None,
     answer: str | None = None,
+    failure_lesson_block: str | None = None,
 ) -> TopicExamineVerdict:
     if not claims:
         return TopicExamineVerdict(
@@ -169,6 +178,7 @@ async def run_topic_examine(
         history=list(history or []),
         answer=answer,
         memory=entries,
+        failure_lesson_block=failure_lesson_block,
     )
     result = await agent.run(prompt)
     return result.output

@@ -9,7 +9,13 @@ from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit import __version__
-from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
+from gotit.api.deps import (
+    SessionMemoryReader,
+    SessionPromptReader,
+    get_critic_model,
+    get_model,
+    resolve_critic_binding,
+)
 from gotit.api.settings import Settings, get_settings
 from gotit.api.workflow_persist import (
     drill_agent_text,
@@ -144,6 +150,18 @@ async def gotit_examine(
             )
         else:
             async with session_scope() as session:
+                from gotit.db.ops.memory import build_failure_lesson_block
+
+                lesson_block: str | None = None
+                if claims:
+                    focus = claims[0]
+                    lesson_block = await build_failure_lesson_block(
+                        session,
+                        user_id=user_id,
+                        claim_id=focus.id,
+                        topic=topic or focus.topic,
+                        neighbor_claim_ids=[c.id for c in claims[1:]],
+                    )
                 prompt = await SessionPromptReader(session).get_active_prompt("axiom")
                 system_prompt = prompt.system_prompt if prompt else ""
                 reader = SessionMemoryReader(session, user_id=user_id)
@@ -157,6 +175,7 @@ async def gotit_examine(
                 claims=claims,
                 history=history or [],
                 answer=answer,
+                failure_lesson_block=lesson_block,
             )
         writeback: dict[str, object] | None = None
         if (
@@ -229,6 +248,14 @@ async def gotit_examine(
         claim = await session.get(ClaimRow, UUID(claim_id))
         if claim is None or claim.user_id != user_id:
             return {"error": f"claim not found: {claim_id}"}
+        from gotit.db.ops.memory import build_failure_lesson_block
+
+        lesson_block = await build_failure_lesson_block(
+            session,
+            user_id=user_id,
+            claim_id=UUID(claim_id),
+            topic=claim.topic,
+        )
         prompt = await SessionPromptReader(session).get_active_prompt("axiom")
         system_prompt = prompt.system_prompt if prompt else ""
         reader = SessionMemoryReader(session, user_id=user_id)
@@ -239,6 +266,7 @@ async def gotit_examine(
             claim_text=claim.text,
             history=history or [],
             answer=answer,
+            failure_lesson_block=lesson_block,
         )
 
     writeback = None
@@ -1573,6 +1601,7 @@ async def gotit_start_verify(
         from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
         from gotit.db.ops.memory import (
             append_trajectory,
+            build_failure_lesson_block,
             count_prior_failures,
             list_trajectory,
         )
@@ -1582,6 +1611,13 @@ async def gotit_start_verify(
         )
         prior_failures = count_prior_failures(trajectory, claim_id=cid)
         budget = await build_budget_subgraph(session, user_id=user_id, claim_id=cid)
+        lesson_block = await build_failure_lesson_block(
+            session,
+            user_id=user_id,
+            claim_id=cid,
+            topic=claim.topic,
+            neighbor_claim_ids=budget.confused_claim_ids,
+        )
 
         if examine_verdict is not None:
             ex_verdict = examine_verdict
@@ -1600,6 +1636,7 @@ async def gotit_start_verify(
                 agent, reader, claim_text=claim.text,
                 answer=answer, trajectory=trajectory,
                 budget_block=budget.prompt_block,
+                failure_lesson_block=lesson_block,
             )
             ex_verdict = ev.verdict or "almost"
             ex_score = ev.score
@@ -1613,13 +1650,19 @@ async def gotit_start_verify(
             session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
         )
 
-        if not settings.llm_api_key:
+        critic_identity = await day_ops.get_identity(session, "critic")
+        critic_cfg = critic_identity.llm_config if critic_identity else None
+        critic_binding = resolve_critic_binding(critic_cfg, settings=settings)
+        if not critic_binding.api_key:
             recheck = stub_critic(examine_verdict=ex_verdict)
         else:
             cprompt = await SessionPromptReader(session).get_active_prompt("critic")
             csystem = cprompt.system_prompt if cprompt else ""
             creader = SessionMemoryReader(session, user_id=user_id)
-            cagent = build_critic_agent(get_model(), system_prompt=csystem)
+            cagent = build_critic_agent(
+                get_critic_model(critic_cfg, settings=settings),
+                system_prompt=csystem,
+            )
             recheck = await run_critic(
                 cagent, creader,
                 claim_text=claim.text,

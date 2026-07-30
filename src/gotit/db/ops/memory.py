@@ -207,3 +207,73 @@ async def mark_failure_digest_notified(
     row.content = content
     await session.flush()
     return _memory_view(row)
+
+
+async def build_failure_lesson_block(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+    topic: str | None = None,
+    neighbor_claim_ids: list[UUID] | None = None,
+) -> str | None:
+    """Budgeted failure_digest excerpt for Axiom examine context; None if none match.
+
+    Prefer same claim → confuse neighbors → same topic. Hard caps in
+    ``gotit.core.failure_lessons``. Does not replace claim text.
+    """
+    from gotit.core.failure_lessons import (
+        FAILURE_LESSON_FETCH_LIMIT,
+        FailureLessonCandidate,
+        budget_failure_lesson_block,
+    )
+    from gotit.core.mastery_graph import (
+        BUDGET_CONFUSED_MAX,
+        CONFUSED_THRESHOLD,
+        pick_confused_neighbors,
+    )
+    from gotit.db.ops.graph import list_confused_edges
+
+    neighbors = list(neighbor_claim_ids or [])
+    edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
+    graph_neighbors = pick_confused_neighbors(
+        target_id=claim_id,
+        edges=[
+            (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
+        ],
+        limit=BUDGET_CONFUSED_MAX,
+        threshold=CONFUSED_THRESHOLD,
+    )
+    seen = {n for n in neighbors}
+    for nid in graph_neighbors:
+        if nid not in seen:
+            neighbors.append(nid)
+            seen.add(nid)
+
+    entries = await list_memory(
+        session,
+        user_id=user_id,
+        kind="failure_digest",
+        limit=FAILURE_LESSON_FETCH_LIMIT,
+    )
+    candidates = [
+        FailureLessonCandidate(
+            claim_id=str(e.content.get("claim_id") or e.source.get("claim_id") or ""),
+            verdict=str(e.content.get("verdict") or ""),
+            claim_text=str(e.content.get("claim_text") or ""),
+            follow_up=(
+                str(e.content["follow_up"])
+                if e.content.get("follow_up") is not None
+                else None
+            ),
+            topic=e.topic,
+            created_at=e.created_at,
+        )
+        for e in entries
+    ]
+    return budget_failure_lesson_block(
+        candidates,
+        claim_id=claim_id,
+        neighbor_ids=neighbors,
+        topic=topic,
+    )

@@ -6,6 +6,7 @@ and hands a configured model to agents.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from functools import lru_cache
 from typing import Any
 from uuid import UUID
@@ -13,8 +14,13 @@ from uuid import UUID
 from pydantic_ai.models.openai import OpenAIChatModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gotit.api.settings import get_settings
-from gotit.core.agents.llm import build_model
+from gotit.api.settings import Settings, get_settings
+from gotit.core.agents.llm import (
+    LlmBinding,
+    build_model,
+    build_model_from_binding,
+    resolve_llm_binding,
+)
 from gotit.core.models import AgentIdentity, MemoryEntry, PromptVersion
 from gotit.db import ops as day_ops
 
@@ -27,6 +33,76 @@ def get_model() -> OpenAIChatModel:
         api_key=settings.llm_api_key,
         model_name=settings.llm_model,
     )
+
+
+def resolve_agent_binding(
+    llm_config: Mapping[str, Any] | None = None,
+    *,
+    overlay: Mapping[str, Any] | None = None,
+    settings: Settings | None = None,
+) -> LlmBinding:
+    """Resolve per-agent LLM binding; empty fields fall back to global `LLM_*`."""
+    s = settings or get_settings()
+    return resolve_llm_binding(
+        llm_config,
+        default_base_url=s.llm_base_url,
+        default_api_key=s.llm_api_key,
+        default_model=s.llm_model,
+        overlay=overlay,
+    )
+
+
+def critic_overlay(settings: Settings | None = None) -> dict[str, str]:
+    """Build CRITIC_* env overlay (only non-empty fields)."""
+    s = settings or get_settings()
+    out: dict[str, str] = {}
+    if s.critic_model.strip():
+        out["model"] = s.critic_model.strip()
+    if s.critic_base_url.strip():
+        out["base_url"] = s.critic_base_url.strip()
+    if s.critic_api_key.strip():
+        out["api_key"] = s.critic_api_key.strip()
+    return out
+
+
+def resolve_critic_binding(
+    llm_config: Mapping[str, Any] | None = None,
+    *,
+    settings: Settings | None = None,
+) -> LlmBinding:
+    """Critic recheck binding: identity `llm_config` → CRITIC_* → global LLM_*."""
+    s = settings or get_settings()
+    return resolve_agent_binding(
+        llm_config, overlay=critic_overlay(s), settings=s
+    )
+
+
+def get_model_for(
+    llm_config: Mapping[str, Any] | None = None,
+    *,
+    overlay: Mapping[str, Any] | None = None,
+    settings: Settings | None = None,
+) -> OpenAIChatModel:
+    """Build a model from optional agent config; reuse cached global when identical."""
+    s = settings or get_settings()
+    binding = resolve_agent_binding(llm_config, overlay=overlay, settings=s)
+    if (
+        binding.base_url == s.llm_base_url
+        and binding.api_key == s.llm_api_key
+        and binding.model_name == s.llm_model
+    ):
+        return get_model()
+    return build_model_from_binding(binding)
+
+
+def get_critic_model(
+    llm_config: Mapping[str, Any] | None = None,
+    *,
+    settings: Settings | None = None,
+) -> OpenAIChatModel:
+    """Model for Critic recheck only (reusable helper; other agents stay on global)."""
+    s = settings or get_settings()
+    return get_model_for(llm_config, overlay=critic_overlay(s), settings=s)
 
 
 class SessionMemoryReader:

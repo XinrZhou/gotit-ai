@@ -9,7 +9,8 @@ Before creating `openspec/changes/<new-name>/`, list active siblings (not
 `archive/`) and ask: same subdomain, same UI surface, or follow-up of an open
 proposal? If yes → fold into that change and delete the duplicate folder.
 
-Current active (after 2026-07-30 archive): **none**.
+Current active: **`verify-surface`**（结构化判定 UI；Critic 独立模型 / failure
+注入见该目录 `HANDOFF.md`）。
 
 Archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 `notes-batch-delete`, `profile-center`, `resume-import`, `workflow-in-thread`,

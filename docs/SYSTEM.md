@@ -73,6 +73,11 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Nav rail = brand + library + threads only (no account footer)
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
   + mastery-graph writeback (`fail_events`, `confused_with` edges)
+  + Critic may bind a distinct OpenAI-compatible model via
+    `agent_identities.llm_config` (`model` / `base_url` / `api_key_env`) or
+    `CRITIC_MODEL` / `CRITIC_BASE_URL` / `CRITIC_API_KEY` (fallback: global `LLM_*`)
+- **Verify surface**: examine agent turns show quiet mastery chips（过了 / 还差点 /
+  欠着下次；主题考完另标）；chip 读 `metadata.verdict`，不解析气泡文案
 - **Workflow turns in thread**: examine / teach / drill optionally append to the
   active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
 - Notes → claims → plan; project + resume-driven drill (resume import =
@@ -94,12 +99,14 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - **Interviews**（P3d）：`InterviewEvent` + REST/MCP due-reminders；Settings「资料」列表；
   投递 `skills/interview-remind/`
 - **Failure digest**（P3b）：examine `almost|owe_next` → `failure_digest` memory（同 claim+verdict
-  去重）；`skills/failure-digest/` 推微信
+  去重）；`skills/failure-digest/` 推微信；再考时 **budgeted** 注入 Axiom（同 claim /
+  confuse 邻居 / 同 topic；`FAILURE_LESSON_MAX_ITEMS=3` · `MAX_CHARS=600`）
 - **Voice teach / coding**（P3c/P2）：OpenClaw skills `voice-teach` / `coding`（workspace allowlist）
 
 ## Not done yet (honest)
 
-- Per-agent multi-model binding in production
+- Broad per-agent multi-model binding beyond Critic (Axiom/others still share
+  global `LLM_*`; Critic may use `identity.llm_config` or `CRITIC_*`)
 - Broad agent-as-tool coverage beyond user MCP connectors
 - Rich profile / full KG store beyond mastery confuse edges (depends_on later)
 - Interview countdown ramp（P4；另开 change）

@@ -70,7 +70,12 @@ export function useExamine({
         });
         setExamineChat((prev) => [
           ...prev,
-          { role: "examiner", text: res.verdict.follow_up },
+          {
+            role: "examiner",
+            text: res.verdict.follow_up,
+            verdict: res.verdict.done ? res.verdict.verdict : null,
+            session_done: res.verdict.session_done,
+          },
         ]);
         if (res.verdict.session_done) setExamineSessionDone(true);
         await refresh();

@@ -4,6 +4,7 @@ import type {
   DrillMaterial,
   DrillRound,
   DrillSession,
+  MasteryVerdict,
   Mode,
   Project,
   ProjectProgress,
@@ -12,7 +13,12 @@ import type {
   ResumeUploadResponse,
 } from "../types";
 
-export type ChatTurn = { role: "examiner" | "user"; text: string };
+export type ChatTurn = {
+  role: "examiner" | "user";
+  text: string;
+  verdict?: MasteryVerdict | null;
+  session_done?: boolean;
+};
 
 export type Run = (
   action: () => Promise<unknown>,

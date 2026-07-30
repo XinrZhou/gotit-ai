@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { ChatMsg } from "../../types";
+import { isMasteryVerdict, VerifyVerdictChip } from "../VerifyVerdict";
 import styles from "./index.module.scss";
 
 type Props = {
@@ -27,6 +28,7 @@ export function ChatLog({ messages, examinerAvatar, examinerName, empty }: Props
     <div className={styles.chat} ref={ref}>
       {messages.map((m, i) => {
         const isExaminer = m.role === "examiner";
+        const showVerdict = isExaminer && isMasteryVerdict(m.verdict);
         return (
           <div
             key={i}
@@ -38,6 +40,12 @@ export function ChatLog({ messages, examinerAvatar, examinerName, empty }: Props
             <div className={styles.col}>
               <div className={styles.name}>{isExaminer ? examinerName : "我"}</div>
               <div className={styles.bubble}>{m.text}</div>
+              {showVerdict ? (
+                <VerifyVerdictChip
+                  verdict={m.verdict!}
+                  sessionDone={Boolean(m.session_done)}
+                />
+              ) : null}
             </div>
           </div>
         );

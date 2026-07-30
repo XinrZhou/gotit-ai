@@ -46,15 +46,20 @@ export type ProjectProgress = {
   not_yet: number;
 };
 
+export type MasteryVerdict = "passed" | "almost" | "owe_next";
+
 export type ChatMsg = {
   role: "examiner" | "user";
   text: string;
+  /** Present when this examiner turn closed a claim. */
+  verdict?: MasteryVerdict | null;
+  session_done?: boolean;
 };
 
 export type TopicExamineVerdict = {
   current_claim_id: string | null;
   done: boolean;
-  verdict: "passed" | "almost" | "owe_next" | null;
+  verdict: MasteryVerdict | null;
   follow_up: string;
   session_done: boolean;
 };
