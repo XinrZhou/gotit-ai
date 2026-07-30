@@ -38,11 +38,16 @@ _OPEN_NOTES_HTML = """<!DOCTYPE html>
 body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
 font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;color:#1d1d1f}
 main{max-width:22rem;text-align:center}
-a.btn{display:inline-block;padding:.85rem 1.25rem;border-radius:980px;background:#1d1d1f;color:#fff;text-decoration:none}
+a.btn{display:inline-block;padding:.85rem 1.25rem;border-radius:980px;
+background:#1d1d1f;color:#fff;text-decoration:none}
 .hint{margin-top:1.25rem;font-size:.8rem;color:#86868b}
 </style>
 <script>
-(function(){var t=["mobilenotes://","notes://"],i=0;function g(){if(i>=t.length)return;location.href=t[i++];setTimeout(g,400)}g();})();
+(function(){
+var t=["mobilenotes://","notes://"],i=0;
+function g(){if(i>=t.length)return;location.href=t[i++];setTimeout(g,400)}
+g();
+})();
 </script>
 </head><body><main>
 <h1>打开备忘录</h1>

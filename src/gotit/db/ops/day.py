@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from gotit.core.models import (
     ChatMessageView,
+    Claim,
     DayPlanView,
     MasteryStatus,
     PlanItemSource,
@@ -199,7 +200,102 @@ async def list_due_claims(
         ),
         or_(ClaimRow.next_review_at.is_(None), ClaimRow.next_review_at <= as_of),
     )
-    return list((await session.execute(stmt)).scalars().all())
+    rows = list((await session.execute(stmt)).scalars().all())
+    return await _sort_due_claims(session, rows, as_of=as_of, user_id=user_id)
+
+
+async def _sort_due_claims(
+    session: AsyncSession,
+    due: list[ClaimRow],
+    *,
+    as_of: date,
+    user_id: str,
+) -> list[ClaimRow]:
+    """Rank due claims: overdue days → fail severity → confuse weight → id."""
+    if not due:
+        return due
+    from gotit.core.schedule import confuse_weights_from_edges, due_sort_key
+    from gotit.db.ops.graph import fail_counts_by_claim, list_confused_edges
+
+    fail_counts = await fail_counts_by_claim(
+        session, user_id=user_id, claim_ids=[c.id for c in due]
+    )
+    edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
+    edges = [
+        (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
+    ]
+    weights = confuse_weights_from_edges([c.id for c in due], edges)
+    return sorted(
+        due,
+        key=lambda c: due_sort_key(
+            as_of=as_of,
+            next_review_at=c.next_review_at,
+            fail_count=fail_counts.get(c.id, 0),
+            confuse_weight=weights.get(c.id, 0),
+            claim_id=c.id,
+        ),
+    )
+
+
+async def _due_claim_views(
+    session: AsyncSession,
+    due: list[ClaimRow],
+    *,
+    as_of: date,
+    user_id: str,
+) -> list[Claim]:
+    """Enrich due rows with reason_code/text for today / MCP surfaces."""
+    from gotit.core.schedule import (
+        confuse_weights_from_edges,
+        explain_due_reason,
+        top_confuse_neighbor_ids,
+    )
+    from gotit.db.ops.graph import list_confused_edges
+
+    if not due:
+        return []
+    edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
+    edges = [
+        (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
+    ]
+    weights = confuse_weights_from_edges([c.id for c in due], edges)
+    neighbor_by_claim: dict[UUID, UUID | None] = {}
+    label_ids: set[UUID] = set()
+    for c in due:
+        tops = top_confuse_neighbor_ids(target_id=c.id, edges=edges, limit=1)
+        nid = tops[0] if tops else None
+        neighbor_by_claim[c.id] = nid
+        if nid is not None:
+            label_ids.add(nid)
+    labels: dict[UUID, str] = {}
+    if label_ids:
+        rows = list(
+            (
+                await session.execute(
+                    select(ClaimRow).where(
+                        ClaimRow.id.in_(label_ids), ClaimRow.user_id == user_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        labels = {r.id: r.text for r in rows}
+
+    out: list[Claim] = []
+    for c in due:
+        nid = neighbor_by_claim.get(c.id)
+        code, text = explain_due_reason(
+            as_of=as_of,
+            status=c.status,
+            next_review_at=c.next_review_at,
+            confuse_weight=weights.get(c.id, 0),
+            confuse_neighbor_label=labels.get(nid) if nid else None,
+        )
+        out.append(
+            _claim_view(c, due_reason_code=code, due_reason_text=text)
+        )
+    return out
 
 
 async def fill_today_from_queue(
@@ -208,16 +304,10 @@ async def fill_today_from_queue(
     *,
     user_id: str = DEFAULT_USER_ID,
 ) -> DayPlanView:
-    from gotit.db.ops.graph import fail_counts_by_claim
-
     learning_day = await ensure_day(session, day, user_id=user_id)
     existing_claim_ids = {i.claim_id for i in learning_day.plan_items if i.claim_id is not None}
+    # list_due_claims already sorts: overdue → severity → confuse → id
     due = await list_due_claims(session, day, user_id=user_id)
-    fail_counts = await fail_counts_by_claim(
-        session, user_id=user_id, claim_ids=[c.id for c in due]
-    )
-    # Soft sort: more fails first (mastery-graph hint), then stable by id.
-    due = sorted(due, key=lambda c: (-fail_counts.get(c.id, 0), str(c.id)))
     next_order = max((i.sort_order for i in learning_day.plan_items), default=-1) + 1
     for claim in due:
         if claim.id in existing_claim_ids:
@@ -311,9 +401,12 @@ async def get_today(
     plan = await get_plan(session, target, user_id=user_id)
     notes = await list_notes(session, target, user_id=user_id, full_body=False)
     due_rows = await list_due_claims(session, target, user_id=user_id)
+    due_claims = await _due_claim_views(
+        session, due_rows, as_of=target, user_id=user_id
+    )
     return TodayView(
         date=target,
         plan=plan,
         notes=notes,
-        due_claims=[_claim_view(r) for r in due_rows],
+        due_claims=due_claims,
     )

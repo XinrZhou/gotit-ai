@@ -143,7 +143,9 @@ def build_prompt(
         "depth_reached=current depth, gaps=[]), or wrap up (done=true, "
         "depth_reached=final depth, gaps=list of weak points, follow_up=null). "
         "Ask ONE question at a time. Probe for trade-offs and real numbers. "
-        "Stop after ~3-5 layers or when you have enough signal."
+        "Stop after ~3-5 layers or when you have enough signal. "
+        "If the candidate said they don't know or asked you to answer, do NOT "
+        "repeat the previous question — different angle or wrap with that gap."
     )
     return "\n\n".join(parts)
 

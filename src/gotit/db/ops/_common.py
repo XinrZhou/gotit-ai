@@ -67,7 +67,12 @@ def _note_view(row: DayNoteRow, *, full_body: bool = False) -> DayNoteView:
     )
 
 
-def _claim_view(row: ClaimRow) -> Claim:
+def _claim_view(
+    row: ClaimRow,
+    *,
+    due_reason_code: str | None = None,
+    due_reason_text: str | None = None,
+) -> Claim:
     return Claim(
         id=row.id,
         text=row.text,
@@ -78,4 +83,6 @@ def _claim_view(row: ClaimRow) -> Claim:
         topic=row.topic,
         tags=list(row.tags or []),
         project_id=row.project_id,
+        due_reason_code=due_reason_code,
+        due_reason_text=due_reason_text,
     )

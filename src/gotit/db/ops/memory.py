@@ -232,18 +232,26 @@ async def build_failure_lesson_block(
         CONFUSED_THRESHOLD,
         pick_confused_neighbors,
     )
+    from gotit.core.schedule import top_confuse_neighbor_ids
     from gotit.db.ops.graph import list_confused_edges
 
     neighbors = list(neighbor_claim_ids or [])
     edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
+    edge_tuples = [
+        (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
+    ]
     graph_neighbors = pick_confused_neighbors(
         target_id=claim_id,
-        edges=[
-            (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
-        ],
+        edges=edge_tuples,
         limit=BUDGET_CONFUSED_MAX,
         threshold=CONFUSED_THRESHOLD,
     )
+    # Also pull top weight≥1 neighbor for re-practice lesson ranking.
+    for nid in top_confuse_neighbor_ids(
+        target_id=claim_id, edges=edge_tuples, limit=1, min_weight=1
+    ):
+        if nid not in graph_neighbors:
+            graph_neighbors = [nid, *graph_neighbors][:BUDGET_CONFUSED_MAX]
     seen = {n for n in neighbors}
     for nid in graph_neighbors:
         if nid not in seen:

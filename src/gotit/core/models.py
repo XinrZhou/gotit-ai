@@ -57,6 +57,9 @@ class Claim(BaseModel):
     topic: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: UUID | None = None
+    # Populated on today/due views (server-assembled; optional elsewhere).
+    due_reason_code: str | None = None
+    due_reason_text: str | None = None
 
 
 class CheckResult(BaseModel):

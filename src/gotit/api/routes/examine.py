@@ -151,17 +151,27 @@ async def examine(
             )
         else:
             async with session_scope() as session:
+                from gotit.db.ops.graph import build_budget_subgraph
                 from gotit.db.ops.memory import build_failure_lesson_block
 
                 lesson_block: str | None = None
+                budget_block: str | None = None
                 if claims:
                     focus = claims[0]
+                    budget = await build_budget_subgraph(
+                        session, user_id=user_id, claim_id=focus.id
+                    )
+                    budget_block = budget.prompt_block
+                    neighbor_ids = list(budget.confused_claim_ids)
+                    for c in claims[1:]:
+                        if c.id not in neighbor_ids:
+                            neighbor_ids.append(c.id)
                     lesson_block = await build_failure_lesson_block(
                         session,
                         user_id=user_id,
                         claim_id=focus.id,
                         topic=body.topic or focus.topic,
-                        neighbor_claim_ids=[c.id for c in claims[1:]],
+                        neighbor_claim_ids=neighbor_ids,
                     )
                 prompt = await SessionPromptReader(session).get_active_prompt("axiom")
                 system_prompt = prompt.system_prompt if prompt else ""
@@ -177,6 +187,7 @@ async def examine(
                 history=body.history,
                 answer=body.answer,
                 failure_lesson_block=lesson_block,
+                budget_block=budget_block,
             )
         writeback: dict[str, object] | None = None
         verify: dict[str, object] | None = None
@@ -297,13 +308,18 @@ async def examine(
             claim = await session.get(ClaimRow, body.claim_id)
             if claim is None or claim.user_id != user_id:
                 raise KeyError(f"claim not found: {body.claim_id}")
+            from gotit.db.ops.graph import build_budget_subgraph
             from gotit.db.ops.memory import build_failure_lesson_block
 
+            budget = await build_budget_subgraph(
+                session, user_id=user_id, claim_id=body.claim_id
+            )
             lesson_block = await build_failure_lesson_block(
                 session,
                 user_id=user_id,
                 claim_id=body.claim_id,
                 topic=claim.topic,
+                neighbor_claim_ids=budget.confused_claim_ids,
             )
             prompt = await SessionPromptReader(session).get_active_prompt("axiom")
             system_prompt = prompt.system_prompt if prompt else ""
@@ -316,6 +332,7 @@ async def examine(
                 claim_text=claim_text,
                 history=body.history,
                 answer=body.answer,
+                budget_block=budget.prompt_block,
                 failure_lesson_block=lesson_block,
             )
     except KeyError as exc:

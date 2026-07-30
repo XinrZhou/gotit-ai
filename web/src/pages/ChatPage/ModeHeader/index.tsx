@@ -6,9 +6,9 @@ const LABELS: Record<
   Exclude<Mode, "chat">,
   { title: string; hint: string; avatar: "squid" | "patrick" | "sandy" }
 > = {
-  examine: { title: "考我", hint: "过了才算", avatar: "squid" },
-  teach: { title: "回讲", hint: "讲清才算", avatar: "patrick" },
-  drill: { title: "项目深挖", hint: "扛住追问", avatar: "sandy" },
+  examine: { title: "考我", hint: "过了 / 还差点 / 欠着", avatar: "squid" },
+  teach: { title: "回讲", hint: "讲不清他会追问", avatar: "patrick" },
+  drill: { title: "项目深挖", hint: "按简历往下挖", avatar: "sandy" },
 };
 
 type Props = {

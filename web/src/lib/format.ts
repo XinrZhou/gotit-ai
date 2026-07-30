@@ -22,6 +22,23 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
+/**
+ * Quiet one-line why a claim is owed today.
+ * Prefer server `due_reason_text`; soft fallback only — never invent formulas.
+ */
+export function dueReasonLine(claim: {
+  due_reason_text?: string | null;
+  status?: string;
+  next_review_at?: string | null;
+}): string | null {
+  const text = claim.due_reason_text?.trim();
+  if (text) return text;
+  const status = (claim.status || "").toLowerCase();
+  if (status === "in_progress") return "上次还差点，今天接着练";
+  if (claim.next_review_at) return "按计划该复习";
+  return null;
+}
+
 export function fmtDate(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return iso;

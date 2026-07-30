@@ -100,7 +100,9 @@ async def finalize_examine_with_gate(
             stage=ball.stage,
             context=ball.context,
         )
-        gate: GateResult = VerifyWorkflow.gate(ball)
+        gate: GateResult = VerifyWorkflow.gate(
+            ball, prior_failures=prior_failures
+        )
         await day_ops.clear_ball(session, thread_id)
     else:
         gate = deterministic_gate(
@@ -108,6 +110,7 @@ async def finalize_examine_with_gate(
             recheck_verdict=recheck.verdict,
             score=examine_score,
             evidence=examine_evidence,
+            prior_failures=prior_failures,
         )
 
     writeback = await day_ops.apply_examine_verdict(

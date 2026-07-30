@@ -138,7 +138,11 @@ async def patch_interview(
         n = fields["notes"]
         row.notes = str(n).strip() if n else None
     if "remind_offsets_hours" in fields and fields["remind_offsets_hours"] is not None:
-        row.remind_offsets_hours = list(fields["remind_offsets_hours"])  # type: ignore[arg-type]
+        raw = fields["remind_offsets_hours"]
+        if isinstance(raw, (list, tuple, set)):
+            row.remind_offsets_hours = [int(x) for x in raw]
+        else:
+            raise TypeError("remind_offsets_hours must be a sequence of ints")
     row.updated_at = now
     await session.flush()
     return _interview_view(row)

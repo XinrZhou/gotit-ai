@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from uuid import UUID, uuid4
 
 from gotit.core.models import (
@@ -10,6 +10,7 @@ from gotit.core.models import (
     GateResult,
     LoopState,
 )
+from gotit.core.schedule import schedule_after_verdict
 
 
 class VerifyLoop:
@@ -69,37 +70,49 @@ def deterministic_gate(
     *,
     score: float | None = None,
     evidence: str | None = None,
+    prior_failures: int = 0,
+    as_of: date | None = None,
 ) -> GateResult:
     """Deterministic mastery gate — no LLM.
 
     Takes the stricter of the examiner's and the critic's verdicts (so a single
-    lenient agent cannot pass a claim), then maps to a GateResult with the
-    canonical next_review_at scheduling.
+    lenient agent cannot pass a claim), then maps to a GateResult with
+    ``schedule_after_verdict`` for ``next_review_at`` (writeback may pass a
+    richer ``prior_failures`` again).
     """
+    del score, evidence  # reserved for future gate signals
     ex = _STRICTNESS.get(examine_verdict, 1)
     rc = _STRICTNESS.get(recheck_verdict, 1)
     final_rank = max(ex, rc)
     final = next(v for v, r in _STRICTNESS.items() if r == final_rank)
+    today = as_of or date.today()
+    sched = schedule_after_verdict(
+        final, prior_failures=prior_failures, as_of=today
+    )
 
     if final == "passed":
         return GateResult(
             passed=True,
             verdict="passed",
-            next_review_at=None,
+            next_review_at=sched.next_review_at,
             reason=f"examine={examine_verdict} recheck={recheck_verdict} → 掌握",
         )
     if final == "almost":
         return GateResult(
             passed=False,
             verdict="almost",
-            next_review_at=None,
-            reason=f"examine={examine_verdict} recheck={recheck_verdict} → 续考（不进队列）",
+            next_review_at=sched.next_review_at,
+            reason=f"examine={examine_verdict} recheck={recheck_verdict} → 续考（今天接着）",
         )
+    days = sched.interval_days if sched.interval_days is not None else 1
     return GateResult(
         passed=False,
         verdict="owe_next",
-        next_review_at=date.today() + timedelta(days=1),
-        reason=f"examine={examine_verdict} recheck={recheck_verdict} → 欠着，明天再考",
+        next_review_at=sched.next_review_at,
+        reason=(
+            f"examine={examine_verdict} recheck={recheck_verdict} "
+            f"→ 欠着，{days} 天后再考"
+        ),
     )
 
 
@@ -162,11 +175,12 @@ class VerifyWorkflow:
         )
 
     @staticmethod
-    def gate(ball: BallCustody) -> GateResult:
+    def gate(ball: BallCustody, *, prior_failures: int = 0) -> GateResult:
         ctx = ball.context
         return deterministic_gate(
             examine_verdict=str(ctx.get("examine_verdict", "almost")),
             recheck_verdict=str(ctx.get("recheck_verdict", "almost")),
             score=ctx.get("examine_score"),
             evidence=ctx.get("examine_evidence"),
+            prior_failures=prior_failures,
         )

@@ -57,16 +57,16 @@ export function SessionStartPanel() {
   return (
     <div className={styles.wrap}>
       <div className={styles.panel}>
-        <div className={styles.title}>开始一轮模拟面试</div>
+        <div className={styles.title}>开一轮深挖</div>
         <div className={styles.muted}>
-          桑迪会看着你的简历（{resume?.document.projects.length ?? 0} 个项目）和深挖资料，像面试官一样深挖。
+          桑迪会按简历（{resume?.document.projects.length ?? 0} 个项目）和资料往下问。
         </div>
 
         {projectPicked && focusProject ? (
           <div className={styles.focusCtx}>
             <div className={styles.focusCtxHead}>
               <span className={styles.focusCtxTitle}>{focusProject.name}</span>
-              <span className={styles.focusCtxTag}>即将深挖</span>
+              <span className={styles.focusCtxTag}>这一轮</span>
             </div>
             <div className={styles.focusCtxMeta}>
               {focusProject.role ? <span>{focusProject.role}</span> : null}
@@ -86,7 +86,7 @@ export function SessionStartPanel() {
           <div className={styles.focusCtx}>
             <div className={styles.focusCtxHead}>
               <span className={styles.focusCtxTitle}>整份简历</span>
-              <span className={styles.focusCtxTag}>即将深挖</span>
+              <span className={styles.focusCtxTag}>这一轮</span>
             </div>
             <div className={styles.focusCtxMeta}>
               {resume.document.basics.name ? <span>{resume.document.basics.name}</span> : null}

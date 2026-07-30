@@ -207,16 +207,33 @@ async def build_budget_subgraph(
     user_id: str,
     claim_id: UUID,
 ) -> BudgetSubgraphView:
+    from gotit.core.schedule import top_confuse_neighbor_ids
+
     edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
     tuples = [
         (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
     ]
+    # Active confuse edges (threshold) plus always the top weight≥1 neighbor
+    # so re-practice gets a short「易混」hint even before weight grows to 2.
     neighbor_ids = pick_confused_neighbors(
         target_id=claim_id,
         edges=tuples,
         limit=BUDGET_CONFUSED_MAX,
         threshold=CONFUSED_THRESHOLD,
     )
+    top = top_confuse_neighbor_ids(
+        target_id=claim_id, edges=tuples, limit=1, min_weight=1
+    )
+    merged: list[UUID] = []
+    seen: set[UUID] = set()
+    for nid in [*top, *neighbor_ids]:
+        if nid in seen:
+            continue
+        seen.add(nid)
+        merged.append(nid)
+        if len(merged) >= BUDGET_CONFUSED_MAX:
+            break
+    neighbor_ids = merged
     labels: list[str] = []
     if neighbor_ids:
         claims = list(

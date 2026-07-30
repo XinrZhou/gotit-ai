@@ -1,0 +1,14 @@
+---
+description: AI Coding 0→1 playbook pointer; commit-time practice sync
+alwaysApply: true
+---
+
+# AI Coding 实践（短记）
+
+全文：`/Users/zxr/personal/Agent-项目/AI-Coding工程实践.md`  
+产品：`docs/PRODUCT.md`
+
+**初期：** 规范先行（产品定位 / 分层 / 一键检查 / 需求变更记录）→ 骨架 → 一条主流程。  
+**迭代：** 文档跟行为走；变更可合并可勾选；硬规则进代码；提交按逻辑成批；真用再下一刀。  
+**成本：** 工程规矩 > 凡事最强模型。  
+**Commit：** 有新工程结论才更新全文 + 本 rule；纯业务跳过。

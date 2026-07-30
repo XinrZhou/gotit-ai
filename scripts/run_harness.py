@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""Run the dev harness case set and print a baseline verdict.
+"""Run a harness case set and print a baseline verdict.
 
 Usage:
-    uv run python scripts/run_harness.py [--label LABEL]
+    uv run python scripts/run_harness.py [--set dev|gold] [--label LABEL]
 
 Exit code 0 if all cases pass, 1 otherwise.
 """
@@ -17,13 +17,17 @@ from gotit.db import session_scope
 from gotit.db.runtime import ensure_db
 from gotit.harness import run_harness
 from gotit.harness.cases.dev import build_dev_cases
+from gotit.harness.cases.gold import build_gold_cases
 
 
-async def main(label: str | None) -> int:
+async def main(*, case_set: str, label: str | None) -> int:
     await ensure_db()
     async with session_scope() as session:
-        cases = build_dev_cases(session)
-        run = await run_harness(session, cases, case_set="dev", label=label)
+        if case_set == "gold":
+            cases = build_gold_cases(session)
+        else:
+            cases = build_dev_cases(session)
+        run = await run_harness(session, cases, case_set=case_set, label=label)
         await session.commit()
 
     print(f"harness run {run.id}")
@@ -35,6 +39,13 @@ async def main(label: str | None) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--set",
+        dest="case_set",
+        choices=("dev", "gold"),
+        default="dev",
+        help="case set to run (default: dev)",
+    )
     parser.add_argument("--label", default=None)
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.label)))
+    sys.exit(asyncio.run(main(case_set=args.case_set, label=args.label)))

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.models import Claim, MasteryStatus, PlanItemStatus
+from gotit.core.schedule import schedule_after_verdict
 from gotit.db.models import ClaimRow, PlanItemRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view, _plan_item_view
 
@@ -36,8 +37,12 @@ async def apply_examine_result(
         for item in items:
             item.status = PlanItemStatus.VERIFIED.value
     else:
+        # Stub binary fail ≡ owe_next with no prior failures (interval = 1d).
+        sched = schedule_after_verdict(
+            "owe_next", prior_failures=0, as_of=today
+        )
         claim.status = MasteryStatus.QUEUED.value
-        claim.next_review_at = today + timedelta(days=1)
+        claim.next_review_at = sched.next_review_at
         for item in items:
             item.status = PlanItemStatus.FAILED.value
 
@@ -60,11 +65,12 @@ async def apply_examine_verdict(
 ) -> dict[str, object]:
     """Writeback for continuous verdicts: passed | almost | owe_next.
 
-    - passed     → claim MASTERED, plan items VERIFIED
-    - almost     → claim IN_PROGRESS, plan items IN_PROGRESS (stays today)
-    - owe_next   → claim QUEUED, plan items FAILED, next_review_at grows with
-                  prior failures on this claim (forgetting-curve weighting;
-                  SM-2 remains out of scope): interval = 1 + 2*prior_failures.
+    Scheduling is deterministic via ``gotit.core.schedule.schedule_after_verdict``
+    (never LLM):
+
+    - passed     → MASTERED, plan VERIFIED, ``next_review_at`` cleared
+    - almost     → IN_PROGRESS, plan IN_PROGRESS, due today (``as_of``)
+    - owe_next   → QUEUED, plan FAILED, interval ``min(30, 1+2*prior_failures)``
     """
     today = as_of or date.today()
     claim = await session.get(ClaimRow, claim_id)
@@ -73,20 +79,23 @@ async def apply_examine_verdict(
 
     stmt = select(PlanItemRow).where(PlanItemRow.claim_id == claim_id)
     items = list((await session.execute(stmt)).scalars().all())
+    sched = schedule_after_verdict(
+        verdict, prior_failures=prior_failures, as_of=today
+    )
 
     if verdict == "passed":
         claim.status = MasteryStatus.MASTERED.value
-        claim.next_review_at = None
+        claim.next_review_at = sched.next_review_at
         for item in items:
             item.status = PlanItemStatus.VERIFIED.value
     elif verdict == "almost":
         claim.status = MasteryStatus.IN_PROGRESS.value
+        claim.next_review_at = sched.next_review_at
         for item in items:
             item.status = PlanItemStatus.IN_PROGRESS.value
     elif verdict == "owe_next":
         claim.status = MasteryStatus.QUEUED.value
-        interval = 1 + 2 * max(prior_failures, 0)
-        claim.next_review_at = today + timedelta(days=interval)
+        claim.next_review_at = sched.next_review_at
         for item in items:
             item.status = PlanItemStatus.FAILED.value
     else:
@@ -97,6 +106,8 @@ async def apply_examine_verdict(
         "claim": _claim_view(claim).model_dump(mode="json"),
         "plan_items": [_plan_item_view(i).model_dump(mode="json") for i in items],
         "verdict": verdict,
+        "schedule_reason": sched.reason_code,
+        "interval_days": sched.interval_days,
     }
     if verdict in {"almost", "owe_next"}:
         from gotit.db.ops.memory import maybe_record_failure_digest

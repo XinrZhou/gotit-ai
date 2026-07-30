@@ -42,8 +42,9 @@ def format_budget_block(
     *,
     confused_labels: list[str],
     fail_reasons: list[str],
+    max_chars: int = 600,
 ) -> str | None:
-    """Prompt section for Axiom; None when empty."""
+    """Prompt section for Axiom; None when empty. Caps total size near failure-lesson budget."""
     parts: list[str] = []
     if confused_labels:
         lines = "\n".join(f"- {t}" for t in confused_labels)
@@ -53,4 +54,7 @@ def format_budget_block(
         parts.append(f"## Recent failures on this claim\n{lines}")
     if not parts:
         return None
-    return "\n\n".join(parts)
+    block = "\n\n".join(parts)
+    if len(block) > max_chars:
+        return block[: max_chars - 1] + "…"
+    return block

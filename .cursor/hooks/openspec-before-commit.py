@@ -31,6 +31,7 @@ OPENSPEC_PREFIXES = (
     "docs/adr/",
     "docs/VISION.md",
     "docs/SYSTEM.md",
+    "docs/PRODUCT.md",
     "AGENTS.md",
 )
 
@@ -68,6 +69,22 @@ AGENT_README = (
     "humans need the same story. Retry commit/PR after."
 )
 
+ASK_PRACTICE = (
+    "Before commit/PR: if this work taught a reusable AI-Coding / system-building "
+    "practice (process, layering, doc discipline, anti-drift rules), update "
+    "`/Users/zxr/personal/Agent-项目/AI-Coding工程实践.md` and sync "
+    "`.cursor/rules/ai-coding-practice.mdc`. Pure feature/UI with no new method "
+    "→ confirm and proceed."
+)
+
+AGENT_PRACTICE = (
+    "AI-Coding practice check: code or product docs changed. If the session "
+    "yielded a lasting engineering conclusion, update "
+    "`/Users/zxr/personal/Agent-项目/AI-Coding工程实践.md` and "
+    "`.cursor/rules/ai-coding-practice.mdc`, then retry. Otherwise confirm "
+    "no methodology change and proceed."
+)
+
 # Paths that usually imply user-facing story / architecture drift
 USER_FACING_PREFIXES = (
     "src/gotit/api/",
@@ -77,6 +94,7 @@ USER_FACING_PREFIXES = (
     "web/src/components/Shell/",
     "web/src/components/ModeHeader/",
     "docs/VISION.md",
+    "docs/PRODUCT.md",
 )
 
 
@@ -129,6 +147,16 @@ def main() -> None:
     openspec_touched = any(_matches(p, OPENSPEC_PREFIXES) for p in changed)
     readme_touched = any(_matches(p, README_PREFIXES) for p in changed)
     user_facing = any(_matches(p, USER_FACING_PREFIXES) for p in changed)
+    # PRODUCT / practice rule edits count as already syncing methodology surface
+    practice_touched = any(
+        p in (
+            "docs/PRODUCT.md",
+            ".cursor/rules/ai-coding-practice.mdc",
+            ".cursor/hooks/openspec-before-commit.py",
+        )
+        or p.endswith("AI-Coding工程实践.md")
+        for p in changed
+    )
 
     if code_changed and not openspec_touched:
         print(
@@ -149,6 +177,19 @@ def main() -> None:
                     "permission": "ask",
                     "user_message": ASK_README,
                     "agent_message": AGENT_README,
+                }
+            )
+        )
+        return
+
+    # After doc gates: remind to refresh AI-Coding methodology when code moved
+    if code_changed and not practice_touched:
+        print(
+            json.dumps(
+                {
+                    "permission": "ask",
+                    "user_message": ASK_PRACTICE,
+                    "agent_message": AGENT_PRACTICE,
                 }
             )
         )

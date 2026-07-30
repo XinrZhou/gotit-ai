@@ -55,6 +55,9 @@ export type Claim = {
   topic: string | null;
   source_note_id: string | null;
   next_review_at: string | null;
+  /** Present on `/v1/today` due list — why this claim is owed today. */
+  due_reason_code?: string | null;
+  due_reason_text?: string | null;
 };
 
 export type VerifyPath = {
@@ -72,6 +75,8 @@ export type ChatMsg = {
   session_done?: boolean;
   /** Critic → gate path when this turn closed a claim. */
   verify?: VerifyPath | null;
+  /** Soft failure bubble (e.g. LLM/gateway down). */
+  error?: boolean;
 };
 
 export type TopicExamineVerdict = {

@@ -105,9 +105,10 @@ def suggest_cron_from_text(text: str) -> str | None:
         elif token.endswith("十") and len(token) == 2:
             hour = cn.get(token[0], 0) * 10
         else:
-            hour = cn.get(token)
-            if hour is None:
+            parsed = cn.get(token)
+            if parsed is None:
                 return None
+            hour = parsed
         if period in {"下午", "晚上", "傍晚"} and 1 <= hour <= 11:
             hour += 12
         elif period == "中午" and hour < 11:

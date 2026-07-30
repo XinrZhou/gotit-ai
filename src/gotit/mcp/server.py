@@ -1703,7 +1703,7 @@ async def gotit_start_verify(
         await day_ops.set_ball(
             session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
         )
-        gate = VerifyWorkflow.gate(ball)
+        gate = VerifyWorkflow.gate(ball, prior_failures=prior_failures)
         writeback = await day_ops.apply_examine_verdict(
             session, cid, verdict=gate.verdict, user_id=user_id,
             prior_failures=prior_failures,

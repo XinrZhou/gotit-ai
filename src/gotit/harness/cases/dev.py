@@ -143,7 +143,7 @@ def _case_gate_no_llm() -> Case:
 
         # stricter-of-two: passed + owe_next -> owe_next
         g1 = deterministic_gate("passed", "owe_next")
-        # agreement: almost + almost -> almost (no next_review_at)
+        # agreement: almost + almost -> almost (still due today)
         g2 = deterministic_gate("almost", "almost")
         # both pass -> passed, next_review_at cleared
         g3 = deterministic_gate("passed", "passed")
@@ -151,7 +151,7 @@ def _case_gate_no_llm() -> Case:
             g1.verdict == "owe_next"
             and g1.next_review_at is not None
             and g2.verdict == "almost"
-            and g2.next_review_at is None
+            and g2.next_review_at is not None
             and g3.verdict == "passed"
             and g3.next_review_at is None
             and not g1.passed

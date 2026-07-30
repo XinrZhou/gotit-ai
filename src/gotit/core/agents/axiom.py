@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from pydantic_ai import Agent
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import AgentRunError, UnexpectedModelBehavior
 
 from gotit.core.agents.deps import MemoryReader
 from gotit.core.models import Claim, ExamineVerdict, MemoryEntry, TopicExamineVerdict
@@ -88,6 +88,13 @@ def _fallback_examine(*, claim_text: str) -> ExamineVerdict:
     )
 
 
+def _error_follow_up(exc: BaseException) -> str:
+    """Pass through the model/gateway error text (trimmed) as the chat reply."""
+    text = str(exc).strip() or type(exc).__name__
+    # Keep one short line for the bubble.
+    return text.split("\n", 1)[0][:400]
+
+
 def _fallback_topic(*, claims: list[Claim]) -> TopicExamineVerdict:
     first = claims[0]
     return TopicExamineVerdict(
@@ -153,7 +160,10 @@ def build_prompt(
         "Decide: ask the next probing question (done=false, verdict=null), or "
         "deliver a verdict (done=true, verdict in passed|almost|owe_next). "
         "Put the next question in `follow_up`; on the final turn set follow_up "
-        "to a one-line summary."
+        "to a one-line summary. "
+        "If the learner said they don't know or asked you to answer, do NOT "
+        "repeat the previous question — give a short scaffold in follow_up "
+        "and either ask a different check or deliver almost/owe_next."
     )
     return "\n\n".join(parts)
 
@@ -184,6 +194,11 @@ async def run_axiom(
         return result.output
     except UnexpectedModelBehavior as exc:
         return _recover_examine(getattr(exc, "body", None), claim_text=claim_text)
+    except AgentRunError as exc:
+        # Surface the model/gateway error as follow_up instead of 500.
+        return ExamineVerdict(done=False, verdict=None, follow_up=_error_follow_up(exc))
+    except Exception as exc:
+        return ExamineVerdict(done=False, verdict=None, follow_up=_error_follow_up(exc))
 
 
 def _format_claims(claims: list[Claim]) -> str:
@@ -200,12 +215,15 @@ def build_topic_prompt(
     answer: str | None,
     memory: list[MemoryEntry],
     failure_lesson_block: str | None = None,
+    budget_block: str | None = None,
 ) -> str:
     parts = [
         f"## Topic\n{topic}",
         f"## Claims to examine (id + text)\n{_format_claims(claims)}",
         f"## Relevant memory about this learner\n{_format_memory(memory)}",
     ]
+    if budget_block:
+        parts.append(budget_block)
     if failure_lesson_block:
         parts.append(failure_lesson_block)
     parts.append(f"## Conversation so far\n{_format_history(history)}")
@@ -222,7 +240,10 @@ def build_topic_prompt(
         "to the next claim's opening question in `follow_up`, unless all claims are done — "
         "then set session_done=true and put a one-line summary in follow_up.\n"
         "Always set current_claim_id to the claim this turn is about. Put the next question "
-        "in follow_up. Ask ONE question at a time; never dump a list."
+        "in follow_up. Ask ONE question at a time; never dump a list. "
+        "If the learner said they don't know or asked you to answer, do NOT "
+        "repeat the previous question — short scaffold, then a different check "
+        "or almost/owe_next."
     )
     return "\n\n".join(parts)
 
@@ -236,6 +257,7 @@ async def run_topic_examine(
     history: list[dict[str, str]] | None = None,
     answer: str | None = None,
     failure_lesson_block: str | None = None,
+    budget_block: str | None = None,
 ) -> TopicExamineVerdict:
     if not claims:
         return TopicExamineVerdict(
@@ -253,12 +275,31 @@ async def run_topic_examine(
         answer=answer,
         memory=entries,
         failure_lesson_block=failure_lesson_block,
+        budget_block=budget_block,
     )
     try:
         result = await agent.run(prompt)
         return result.output
     except UnexpectedModelBehavior as exc:
         return _recover_topic(getattr(exc, "body", None), claims=claims)
+    except AgentRunError as exc:
+        first = claims[0]
+        return TopicExamineVerdict(
+            current_claim_id=first.id,
+            done=False,
+            verdict=None,
+            follow_up=_error_follow_up(exc),
+            session_done=False,
+        )
+    except Exception as exc:
+        first = claims[0]
+        return TopicExamineVerdict(
+            current_claim_id=first.id,
+            done=False,
+            verdict=None,
+            follow_up=_error_follow_up(exc),
+            session_done=False,
+        )
 
 
 def stub_topic_examine(

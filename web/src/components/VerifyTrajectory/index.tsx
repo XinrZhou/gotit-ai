@@ -10,7 +10,7 @@ const STEP_LABEL: Record<"examine" | "recheck" | "gate", string> = {
 
 const VERDICT_SHORT: Record<MasteryVerdict, string> = {
   passed: "过了",
-  almost: "差点",
+  almost: "还差点",
   owe_next: "欠着",
 };
 

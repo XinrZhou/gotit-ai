@@ -204,10 +204,7 @@ def _is_safe_plan_opener(line: str, skeleton: str) -> bool:
         return False
     if _CLOCKISH_RE.search(s):
         return False
-    for title in _skeleton_titles(skeleton):
-        if title and title in s:
-            return False
-    return True
+    return all(not (title and title in s) for title in _skeleton_titles(skeleton))
 
 
 def enforce_plan_reply(
@@ -235,6 +232,7 @@ def build_chat_prompt(
     display_name: str,
     today_plan_brief: str | None = None,
     plan_markdown_list: str | None = None,
+    tool_hint: str | None = None,
 ) -> str:
     if plan_markdown_list:
         # Brief should not re-list items (orchestrator passes include_list=False).
@@ -243,6 +241,8 @@ def build_chat_prompt(
         )
     else:
         plan_block = today_plan_brief or format_today_plan_brief(None)
+
+    tool_block = f"{tool_hint.strip()}\n\n" if tool_hint and tool_hint.strip() else ""
 
     if plan_markdown_list:
         example_open = _DEFAULT_PLAN_OPENERS.get(display_name, "今天这些——")
@@ -266,6 +266,7 @@ def build_chat_prompt(
             "- 清单为空：用人设口吻如实说还没有，可温和建议下一步；不要编条目。\n"
         )
     return (
+        f"{tool_block}"
         f"## 关于这位学习者的记忆\n{_format_memory(memory)}\n\n"
         f"## 今日计划\n{plan_block}\n\n"
         f"## 之前的对话\n{_format_history(history)}\n\n"
@@ -355,6 +356,7 @@ async def run_chat(
     force_handoff: str | None = None,
     today_plan_brief: str | None = None,
     plan_markdown_list: str | None = None,
+    tool_hint: str | None = None,
 ) -> ChatTurn:
     # Chat uses personality only — examine/curate rubrics are English-first and
     # make agents introduce themselves as Compass/Axiom instead of 中文昵称.
@@ -403,6 +405,7 @@ async def run_chat(
         display_name=ctx.identity.display_name,
         today_plan_brief=today_plan_brief,
         plan_markdown_list=plan_markdown_list,
+        tool_hint=tool_hint if tools else None,
     )
     try:
         result = await agent.run(prompt)

@@ -101,6 +101,7 @@ async def test_apply_examine_verdict_continuous(session: AsyncSession) -> None:
     )
     assert almost["verdict"] == "almost"
     assert almost["claim"]["status"] == MasteryStatus.IN_PROGRESS.value
+    assert almost["claim"]["next_review_at"] == day.isoformat()
 
     passed = await day_ops.apply_examine_verdict(
         session, claim.id, verdict="passed", as_of=day

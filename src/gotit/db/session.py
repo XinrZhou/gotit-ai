@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -63,15 +64,14 @@ async def create_all_tables() -> None:
         await conn.run_sync(_ensure_sqlite_plan_due_time)
 
 
-def _ensure_sqlite_plan_due_time(sync_conn) -> None:  # noqa: ANN001
+def _ensure_sqlite_plan_due_time(sync_conn: Connection) -> None:
     """Dev sqlite: create_all won't add new columns — ALTER if missing."""
-    bind = sync_conn
-    if bind.dialect.name != "sqlite":
+    if sync_conn.dialect.name != "sqlite":
         return
-    rows = bind.exec_driver_sql("PRAGMA table_info(plan_items)").fetchall()
+    rows = sync_conn.exec_driver_sql("PRAGMA table_info(plan_items)").fetchall()
     cols = {r[1] for r in rows}
     if "due_time" not in cols and rows:
-        bind.exec_driver_sql(
+        sync_conn.exec_driver_sql(
             "ALTER TABLE plan_items ADD COLUMN due_time VARCHAR(5)"
         )
 

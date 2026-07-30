@@ -17,6 +17,7 @@ CONTEXT = """\
 
 ## Onboarding (do this first)
 - Read `docs/SYSTEM.md` for architecture, stack, shipped features, layout.
+- Read `docs/PRODUCT.md` before expanding features (positioning + intake rules).
 - Product: daily learning companion; chat owns the surface; verify is the spine.
 - Stack: Python 3.12 + uv + FastAPI + MCP; React/Vite/npm; Postgres/Redis.
 - Iron: `gotit.core` framework-free; REST↔MCP share `db.ops`; gate is code not LLM.
@@ -31,10 +32,15 @@ CONTEXT = """\
 ## Doc sync (before commit/PR)
 If the change alters product behavior, APIs, architecture, or user-facing story:
 update `docs/SYSTEM.md`, and `README.md` / `README.zh-CN.md` when the human
-pitch or quick start drifts. A commit hook may ask when code changed without
-those docs.
+pitch or quick start drifts. Positioning / feature intake → `docs/PRODUCT.md`.
+A commit hook may ask when code changed without those docs.
 
-See `openspec/config.yaml`, `AGENTS.md`, `docs/SYSTEM.md`.
+## AI Coding practice
+On commit: if the session taught a reusable system-building practice, update
+`/Users/zxr/personal/Agent-项目/AI-Coding工程实践.md` and
+`.cursor/rules/ai-coding-practice.mdc`. See that rule for the checklist.
+
+See `openspec/config.yaml`, `AGENTS.md`, `docs/SYSTEM.md`, `docs/PRODUCT.md`.
 """
 
 

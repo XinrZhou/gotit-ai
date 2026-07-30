@@ -59,7 +59,10 @@ def build_prompt(
     parts.append(
         "Decide: ask one clarifying or stress-test question (done=false, "
         "next_question set, you_taught_well=null), or deliver a verdict "
-        "(done=true, you_taught_well bool, gaps list, next_question null)."
+        "(done=true, you_taught_well bool, gaps list, next_question null). "
+        "If the learner said they don't know or asked you to explain, do NOT "
+        "repeat the previous question — short scaffold or wrap with "
+        "you_taught_well=false and concrete gaps."
     )
     return "\n\n".join(parts)
 

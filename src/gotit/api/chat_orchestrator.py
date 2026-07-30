@@ -10,6 +10,11 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from gotit.api.companion_tools import (
+    COMPANION_TOOL_HINT,
+    ToolCallRecorder,
+    build_companion_tools,
+)
 from gotit.api.deps import (
     SessionIdentityReader,
     SessionMemoryReader,
@@ -50,13 +55,19 @@ def _stub_turn(agent_name: str, user_text: str, force_handoff: str | None) -> Ch
     )
 
 
-def _agent_metadata(turn: ChatTurn) -> dict[str, object]:
+def _agent_metadata(
+    turn: ChatTurn,
+    *,
+    tool_calls: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     meta: dict[str, object] = {}
     if turn.thinking:
         meta["thinking"] = turn.thinking
     if turn.handoff_to is not None:
         meta["handoff_to"] = turn.handoff_to
         meta["handoff_reason"] = turn.reason
+    if tool_calls:
+        meta["tool_calls"] = tool_calls
     return meta
 
 
@@ -117,6 +128,20 @@ async def post_message_chain(
     current_user_text: str = text
     current_handoff_to: str | None = handoff_to
 
+    # Builtin whitelist only under a real LLM — stub path must not fake tool writes.
+    tool_recorder = ToolCallRecorder()
+    builtin_tools = (
+        build_companion_tools(
+            session,
+            user_id=user_id,
+            day=today,
+            thread_id=thread.id,
+            recorder=tool_recorder,
+        )
+        if settings.llm_api_key
+        else None
+    )
+
     async with entered_toolsets(enabled_connectors) as toolsets:
         # --- A2A 链式接力：首棒回复后可 handoff 给同伴，同伴再回复，
         # 直到无 handoff 或达上限。 ---
@@ -126,8 +151,12 @@ async def post_message_chain(
                 raise KeyError(f"agent identity '{agent_name}' not seeded")
             rubric = await prompt_reader.get_active_prompt(agent_name)
 
+            # Per-turn recorder slice: only this turn's calls go on the message.
+            turn_start = len(tool_recorder.calls)
+
             if not settings.llm_api_key:
                 turn = _stub_turn(agent_name, current_user_text, current_handoff_to)
+                turn_tool_calls: list[dict[str, object]] | None = None
             else:
                 ctx = AgentContext(
                     identity=identity,
@@ -141,10 +170,12 @@ async def post_message_chain(
                         get_model(),
                         user_text=current_user_text,
                         skill_bodies=skill_bodies if turn_idx == 0 else None,
+                        tools=builtin_tools,
                         toolsets=toolsets or None,
                         force_handoff=current_handoff_to if turn_idx == 0 else None,
                         today_plan_brief=today_plan_brief,
                         plan_markdown_list=plan_markdown_list,
+                        tool_hint=COMPANION_TOOL_HINT,
                     )
                 except Exception as exc:
                     # Keep the user turn; surface failure as an in-thread agent reply
@@ -153,16 +184,22 @@ async def post_message_chain(
                     err_text = (
                         f"搭子暂时没回上（{type(exc).__name__}: {detail}）"
                     )
+                    err_meta: dict[str, object] = {
+                        "error": True,
+                        "error_type": type(exc).__name__,
+                    }
+                    slice_calls = [
+                        c.as_dict() for c in tool_recorder.calls[turn_start:]
+                    ]
+                    if slice_calls:
+                        err_meta["tool_calls"] = slice_calls
                     agent_msg = await day_ops.add_message(
                         session,
                         thread_id=thread.id,
                         role="agent",
                         text=err_text,
                         agent_name=agent_name,
-                        metadata={
-                            "error": True,
-                            "error_type": type(exc).__name__,
-                        },
+                        metadata=err_meta,
                     )
                     agent_messages.append(agent_msg)
                     return AgentReply(
@@ -170,6 +207,10 @@ async def post_message_chain(
                         agent_messages=agent_messages,
                         thread=updated_thread,
                     )
+                slice_calls = [
+                    c.as_dict() for c in tool_recorder.calls[turn_start:]
+                ]
+                turn_tool_calls = slice_calls or None
 
             agent_msg = await day_ops.add_message(
                 session,
@@ -177,7 +218,7 @@ async def post_message_chain(
                 role="agent",
                 text=turn.text,
                 agent_name=agent_name,
-                metadata=_agent_metadata(turn),
+                metadata=_agent_metadata(turn, tool_calls=turn_tool_calls),
             )
             agent_messages.append(agent_msg)
 

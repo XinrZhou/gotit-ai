@@ -58,10 +58,18 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
 - **Daily verify brief**: empty chat / empty thread / examine picker show
   owed (`due_claims` from `/v1/today`) + today's plan with one-tap 开考
-  (claim-id or note-id examine)
+  (claim-id or note-id examine); each owed row shows quiet `due_reason_text`
+  (why today — overdue / almost / scheduled / confuse / queued)
 - **Chat plan grounding**: each companion turn gets today's `plan_items` skeleton
   (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
   list (no paraphrased times/items in the opener)
+- **Companion builtin tools** (whitelist, not full MCP): chat turns with an LLM key
+  inject `get_today` / `list_due_claims` / `start_examine` / `get_failure_lessons` /
+  `add_memory` via `api/companion_tools.py` → `db.ops`; calls land on agent message
+  `metadata.tool_calls` (name / args_digest / ok / summary). Stub (no `LLM_API_KEY`)
+  skips tools and does not fake writes. `start_examine` only prepares open-examine
+  payload (+ soft plan/in_progress); mastery still Critic + gate via `/v1/examine`.
+  REST + MCP `gotit_post_message` share `chat_orchestrator` (same tools).
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
   conversation top bar)
 - Library = left **drawer overlay** (notes / projects only)
@@ -84,6 +92,12 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
     `CRITIC_MODEL` / `CRITIC_BASE_URL` / `CRITIC_API_KEY` (fallback: global `LLM_*`)
   + Shared finalize (`api/verify_finalize.py`) for **thread verify and `/v1/examine`**
     claim-close (note/topic/single) — same Critic + gate + trajectory path
+  + **Spaced review** (`core/schedule.py`, deterministic — never LLM):
+    `passed` clears due; `almost` stays due today; `owe_next` →
+    `next_review_at = as_of + min(30, 1+2×prior_failures)`;
+    `due_claims` / fill-from-queue sort by overdue → fail severity → confuse weight;
+    `/v1/today` due items carry `due_reason_code` / `due_reason_text`;
+    re-examine injects top `confused_with` neighbor short labels (budgeted)
 - **Verify surface**: examine agent turns show quiet mastery chips（过了 / 还差点 /
   欠着下次；主题考完另标）；chip 读 `metadata.verdict`，不解析气泡文案
   + **VerifyTrajectory** 考→核→门 step row from `examine_verdict` /
@@ -92,6 +106,7 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
 - Notes → claims → plan; project + resume-driven drill (resume import =
   projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
+  （个人 gold 对照见 `openspec/changes/archive/2026-07-30-companion-tools-and-schedule/notes-gold.md`：`uv run python scripts/run_gold_compare.py`）
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
 - **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; budget subgraph
   injects into Axiom; fullscreen「弱点图谱」from conversation top bar
@@ -118,7 +133,8 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 
 - Broad per-agent multi-model binding beyond Critic (Axiom/others still share
   global `LLM_*`; Critic may use `identity.llm_config` or `CRITIC_*`)
-- Broad agent-as-tool coverage beyond user MCP connectors
+- Broad agent-as-tool beyond the companion **builtin whitelist** + optional user
+  MCP connectors (no auto-mount of the full gotit MCP catalog into chat)
 - Rich profile / full KG store beyond mastery confuse edges (depends_on later)
 - Interview countdown ramp（P4；另开 change）
 
