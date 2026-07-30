@@ -25,9 +25,10 @@ export function TeachPage() {
         examinerName="派大星"
         empty={
           <EmptyState avatar={<PatrickAvatar />}>
-            输入一个主题，开始讲给派大星听。派大星会像学生一样追问，检验你是不是真懂。
+            说一个主题，讲给派大星听。讲不清的地方，他会接着问。
           </EmptyState>
         }
+        busy={busy}
       />
 
       {teachChat.length === 0 ? (
@@ -35,9 +36,9 @@ export function TeachPage() {
           kind="topic"
           value={teachTopic}
           onChange={setTeachTopic}
-          placeholder="讲一个主题，例如：上下文预算"
+          placeholder="例如：上下文预算"
           onSubmit={onTeachStart}
-          submitLabel="开始回讲"
+          submitLabel="开始讲"
           busy={busy}
         />
       ) : !teachDone ? (

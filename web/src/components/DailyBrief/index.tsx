@@ -1,5 +1,5 @@
 import type { Claim, PlanItem } from "../../types";
-import { stripHtml } from "../../lib/format";
+import { dueReasonLine, stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
 
@@ -32,10 +32,11 @@ function claimFromPlan(item: PlanItem, dueClaims: Claim[]): Claim | null {
 type Row = {
   key: string;
   label: string;
+  reason: string | null;
   onOpen: () => void;
 };
 
-/** Home brief: today's owed/plan — click a row to examine. */
+/** Today's owed/plan — click a row to examine. */
 export function DailyBrief({
   onExamineClaim,
   onExamineNoteId,
@@ -52,24 +53,30 @@ export function DailyBrief({
       i.claim_id &&
       !owedIds.has(i.claim_id),
   );
-  const noteEntries =
-    variant === "home" && onExamineNoteId
-      ? notes.filter((n) => n.claim_ids.length > 0)
-      : [];
+  const noteEntries = onExamineNoteId
+    ? notes.filter((n) => n.claim_ids.length > 0)
+    : [];
 
   const seen = new Set<string>();
   const rows: Row[] = [];
 
-  const push = (key: string, label: string, onOpen: () => void) => {
+  const push = (
+    key: string,
+    label: string,
+    reason: string | null,
+    onOpen: () => void,
+  ) => {
     if (rows.length >= maxItems || !label) return;
     const norm = label.toLowerCase().slice(0, 96);
     if (seen.has(norm)) return;
     seen.add(norm);
-    rows.push({ key, label, onOpen });
+    rows.push({ key, label, reason, onOpen });
   };
 
   for (const c of dueClaims) {
-    push(`due-${c.id}`, cleanTitle(c.text), () => onExamineClaim(c));
+    push(`due-${c.id}`, cleanTitle(c.text), dueReasonLine(c), () =>
+      onExamineClaim(c),
+    );
   }
   for (const item of planOpen) {
     const claim = claimFromPlan(
@@ -88,12 +95,18 @@ export function DailyBrief({
       dueClaims,
     );
     if (!claim) continue;
-    push(`plan-${item.id}`, cleanTitle(item.title), () => onExamineClaim(claim));
+    push(
+      `plan-${item.id}`,
+      cleanTitle(item.title),
+      dueReasonLine(claim),
+      () => onExamineClaim(claim),
+    );
   }
   for (const n of noteEntries) {
     push(
       `note-${n.id}`,
       cleanTitle(n.title?.trim() || n.excerpt || "未命名笔记"),
+      null,
       () => onExamineNoteId?.(n.id),
     );
   }
@@ -105,43 +118,52 @@ export function DailyBrief({
   const allCount = more + rows.length;
 
   return (
-    <div
+    <section
       className={`${styles.brief} ${variant === "thread" ? styles.thread : styles.home}`}
+      aria-label="今日欠账"
     >
-      <div className={styles.head}>
-        <h2 className={styles.headTitle}>今天练这些</h2>
-        <p className={styles.headHint}>过了才算</p>
-      </div>
+      <header className={styles.head}>
+        <h2 className={styles.headTitle}>今天还欠这些</h2>
+        {more > 0 && onViewAll ? (
+          <button
+            type="button"
+            className={styles.headAction}
+            disabled={busy}
+            onClick={onViewAll}
+          >
+            全部 {allCount}
+          </button>
+        ) : (
+          <span className={styles.headCount}>{allCount}</span>
+        )}
+      </header>
 
       <ul className={styles.list}>
         {rows.map((r) => (
           <li key={r.key}>
             <button
               type="button"
-              className={styles.rowBtn}
+              className={styles.row}
               disabled={busy}
               onClick={r.onOpen}
             >
-              <span className={styles.title} title={r.label}>
-                {r.label}
+              <span className={styles.rowBody}>
+                <span className={styles.title} title={r.label}>
+                  {r.label}
+                </span>
+                {r.reason ? (
+                  <span className={styles.reason} title={r.reason}>
+                    {r.reason}
+                  </span>
+                ) : null}
               </span>
-              <span className={styles.cta}>开考</span>
+              <span className={styles.chevron} aria-hidden>
+                ›
+              </span>
             </button>
           </li>
         ))}
       </ul>
-
-      {more > 0 && onViewAll ? (
-        <button
-          type="button"
-          className={styles.moreBtn}
-          disabled={busy}
-          onClick={onViewAll}
-        >
-          <span>查看全部</span>
-          <span className={styles.moreMeta}>{allCount} →</span>
-        </button>
-      ) : null}
-    </div>
+    </section>
   );
 }

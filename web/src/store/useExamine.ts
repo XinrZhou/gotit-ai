@@ -15,6 +15,22 @@ function asVerify(v: TopicExamineResponse["verify"]): VerifyPath | null {
   return v;
 }
 
+function formatExamineError(e: unknown): string {
+  const raw = String(e).replace(/^Error:\s*/, "");
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as { detail?: unknown };
+      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+        return parsed.detail.trim();
+      }
+    } catch {
+      /* keep raw */
+    }
+  }
+  return raw.trim() || "刚才没判上，请再试一次。";
+}
+
 export function useExamine({
   refresh,
   setBusy,
@@ -61,7 +77,11 @@ export function useExamine({
           ]);
           if (res.verdict.session_done) setExamineSessionDone(true);
         } catch (err) {
-          setError(String(err));
+          const msg = formatExamineError(err);
+          setError(msg);
+          setExamineChat([
+            { role: "examiner", text: msg, error: true },
+          ]);
         } finally {
           setBusy(false);
         }
@@ -102,7 +122,11 @@ export function useExamine({
             setExamineSessionDone(true);
           }
         } catch (err) {
-          setError(String(err));
+          const msg = formatExamineError(err);
+          setError(msg);
+          setExamineChat([
+            { role: "examiner", text: msg, error: true },
+          ]);
         } finally {
           setBusy(false);
         }
@@ -125,6 +149,7 @@ export function useExamine({
     setExamineAnswer("");
     void (async () => {
       setBusy(true);
+      setError("");
       try {
         const payload = examineNote
           ? { note_id: examineNote.id, answer: userText, history, ...threadBody() }
@@ -154,7 +179,12 @@ export function useExamine({
         if (done) setExamineSessionDone(true);
         await refresh();
       } catch (err) {
-        setError(String(err));
+        const msg = formatExamineError(err);
+        setError(msg);
+        setExamineChat((prev) => [
+          ...prev,
+          { role: "examiner", text: msg, error: true },
+        ]);
       } finally {
         setBusy(false);
       }

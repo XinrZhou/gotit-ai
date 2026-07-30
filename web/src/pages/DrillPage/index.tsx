@@ -44,7 +44,7 @@ export function DrillPage() {
               </button>
             </>
           ) : (
-            <span className={styles.muted}>还没导入简历（点左侧「项目」旁的 + 导入）</span>
+            <span className={styles.muted}>还没导入简历（左侧「项目」旁 +）</span>
           )}
         </div>
         <div className={styles.topActions}>
@@ -76,7 +76,7 @@ export function DrillPage() {
           examinerName="桑迪"
           empty={
             <EmptyState avatar={<SandyAvatar />}>
-              先点左侧「项目」旁的 + 导入简历，桑迪就能像面试官一样深挖你的项目了。
+              先导入简历，桑迪再按项目往下问。
             </EmptyState>
           }
         />
@@ -95,7 +95,7 @@ export function DrillPage() {
               onClick={onBackToDrillStart}
               disabled={busy}
             >
-              ← 开新 session
+              ← 开新一轮
             </button>
           </div>
           <ChatLog
@@ -103,8 +103,9 @@ export function DrillPage() {
             examinerAvatar={<SandyAvatar />}
             examinerName="桑迪"
             empty={
-              <EmptyState avatar={<SandyAvatar />}>桑迪准备开始深挖了。</EmptyState>
+              <EmptyState avatar={<SandyAvatar />}>桑迪在想怎么问…</EmptyState>
             }
+            busy={busy}
           />
           {!drillDone ? (
             <Composer

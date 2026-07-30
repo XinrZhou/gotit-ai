@@ -545,9 +545,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   width: 100%;
-  max-width: 400px;
+  max-width: 480px;
 }
 
 .emptyCrew {
@@ -604,7 +604,7 @@
 .emptyHint {
   margin: 0;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--faint);
   line-height: 1.45;
   max-width: 280px;
 }
@@ -654,11 +654,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   max-width: 360px;
   margin: 48px auto 0;
   text-align: center;
+}
+
+.threadEmptyBrief {
+  max-width: none;
+  width: 100%;
+  align-items: stretch;
+  text-align: left;
+  gap: 28px;
+  margin: 28px auto 8px;
+  padding: 0;
 }
 
 .threadEmptyLead {
@@ -678,6 +688,45 @@
 
 .threadEmpty .workflowTabs {
   justify-content: center;
+}
+
+.briefAltNav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.briefAltItem {
+  display: inline-flex;
+  align-items: center;
+}
+
+.briefAltSep {
+  color: var(--line);
+  font-size: 12px;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.briefAltLink {
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.briefAltLink:hover {
+  color: var(--ink);
 }
 
 .composerWorkflows {

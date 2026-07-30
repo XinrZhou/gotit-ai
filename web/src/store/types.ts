@@ -21,6 +21,7 @@ export type ChatTurn = {
   verdict?: MasteryVerdict | null;
   session_done?: boolean;
   verify?: VerifyPath | null;
+  error?: boolean;
 };
 
 export type Run = (

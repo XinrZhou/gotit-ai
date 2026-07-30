@@ -2,13 +2,19 @@ import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
 import { SquidwardAvatar } from "../../components/Avatars";
-import { stripHtml } from "../../lib/format";
+import { dueReasonLine, stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { Claim } from "../../types";
 import styles from "./index.module.scss";
 
 type PickRow =
-  | { key: string; kind: "claim"; label: string; claim: Claim }
+  | {
+      key: string;
+      kind: "claim";
+      label: string;
+      reason: string | null;
+      claim: Claim;
+    }
   | { key: string; kind: "note"; label: string; noteId: string; count: number };
 
 function clean(raw: string): string {
@@ -44,23 +50,18 @@ export function ExaminePage() {
           messages={examineChat}
           examinerAvatar={<SquidwardAvatar />}
           examinerName="章鱼哥"
-          empty={<span>章鱼哥准备开场了…</span>}
+          empty={<span>章鱼哥在等你答</span>}
+          busy={busy}
         />
         {!examineSessionDone ? (
           <Composer
             kind="textarea"
             value={examineAnswer}
             onChange={setExamineAnswer}
-            placeholder={`和章鱼哥聊「${examineLabel || "考点"}」…`}
+            placeholder={`聊聊「${examineLabel || "考点"}」…`}
             onSubmit={onExamineAnswer}
             submitLabel="发送"
             busy={busy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                onExamineAnswer();
-              }
-            }}
           />
         ) : null}
       </>
@@ -89,7 +90,13 @@ export function ExaminePage() {
     const norm = label.toLowerCase().slice(0, 96);
     if (seen.has(norm)) return;
     seen.add(norm);
-    rows.push({ key: `c-${claim.id}`, kind: "claim", label, claim });
+    rows.push({
+      key: `c-${claim.id}`,
+      kind: "claim",
+      label,
+      reason: dueReasonLine(claim),
+      claim,
+    });
   };
 
   for (const c of dueClaims) pushClaim(c);
@@ -125,7 +132,7 @@ export function ExaminePage() {
       <div className={styles.picker}>
         <EmptyState avatar={<SquidwardAvatar />}>
           <strong>还没有可考的题</strong>
-          <div>在资料库把笔记出成题，或先排进今日计划</div>
+          <div>先出题，或排进今日计划</div>
         </EmptyState>
       </div>
     );
@@ -140,7 +147,7 @@ export function ExaminePage() {
           </div>
           <div className={styles.pickerCopy}>
             <div className={styles.pickerTitle}>选一条开考</div>
-            <div className={styles.pickerSub}>章鱼哥追问 · 过了才算</div>
+            <div className={styles.pickerSub}>过了 / 还差点 / 欠着下次</div>
           </div>
         </header>
 
@@ -163,6 +170,11 @@ export function ExaminePage() {
                   <span className={styles.rowTitle} title={r.label}>
                     {r.label}
                   </span>
+                  {r.kind === "claim" && r.reason ? (
+                    <span className={styles.rowMeta} title={r.reason}>
+                      {r.reason}
+                    </span>
+                  ) : null}
                   {r.kind === "note" ? (
                     <span className={styles.rowMeta}>{r.count} 题</span>
                   ) : null}
@@ -174,7 +186,7 @@ export function ExaminePage() {
         </ul>
 
         {leftover > 0 ? (
-          <p className={styles.more}>另有 {leftover} 条，考完再回来</p>
+          <p className={styles.more}>还有 {leftover} 条，考完再回来</p>
         ) : null}
       </div>
     </div>

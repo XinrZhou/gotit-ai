@@ -44,27 +44,27 @@ const AGENT_UI: Record<
 > = {
   axiom: {
     label: "章鱼哥",
-    hint: "考官 · 追问验证，判过了 / 还差点 / 欠着下次",
+    hint: "考官 · 追问，判过了 / 还差点 / 欠着下次",
     avatar: () => <SquidwardAvatar />,
   },
   compass: {
     label: "海绵宝宝",
-    hint: "管家 · 从资料里抽考点、排复习、推今日该练什么",
+    hint: "管家 · 从资料抽考点，提醒今天还欠什么",
     avatar: () => <SpongeBobAvatar />,
   },
   echo: {
     label: "派大星",
-    hint: "回讲官 · 扮不懂的学生听你讲，追问为什么",
+    hint: "回讲官 · 扮学生听你讲，讲不清就接着问",
     avatar: () => <PatrickAvatar />,
   },
   sage: {
     label: "桑迪",
-    hint: "面试官 · 按轮次深挖简历项目，指出讲不清的缝隙",
+    hint: "面试官 · 按简历往下挖，指出讲不清的地方",
     avatar: () => <SandyAvatar />,
   },
   critic: {
     label: "凯伦",
-    hint: "复核官 · 冷静重审判定，专挑边界情况和反例",
+    hint: "复核官 · 冷静重看判定，专挑边界和反例",
     avatar: () => <KarenAvatar />,
   },
 };
@@ -78,9 +78,9 @@ const MODE_AGENT: Record<Mode, AgentName> = {
 };
 
 const WORKFLOWS: { mode: Exclude<Mode, "chat">; label: string; hint: string }[] = [
-  { mode: "examine", label: "考我", hint: "过了才算" },
-  { mode: "teach", label: "回讲", hint: "讲清才算" },
-  { mode: "drill", label: "项目深挖", hint: "扛住追问" },
+  { mode: "examine", label: "考我", hint: "过了 / 还差点 / 欠着" },
+  { mode: "teach", label: "回讲", hint: "讲不清他会追问" },
+  { mode: "drill", label: "项目深挖", hint: "按简历往下挖" },
 ];
 
 function agentLabel(name: string | null | undefined) {
@@ -562,8 +562,10 @@ export function ChatPage() {
   }, [pendingDelete, deleting, activeId]);
 
   const send = useCallback(async () => {
-    if (!activeId || !draft.trim() || busy) return;
-    const text = draft.trim();
+    if (!activeId || busy) return;
+    // 以 textarea 实值为准，避免 keydown 闭包拿到过期 draft
+    const text = (textareaRef.current?.value ?? draft).trim();
+    if (!text) return;
     const reqSkills = activeSkill ? [activeSkill] : [];
     const localId = `local-${Date.now()}`;
     const optimistic: ChatMessage = {
@@ -577,6 +579,8 @@ export function ChatPage() {
       created_at: new Date().toISOString(),
     };
     setDraft("");
+    setAtMenu(null);
+    atSuppressedRef.current = false;
     setErr("");
     setBusy(true);
     setMessages((prev) => [...prev, optimistic]);
@@ -806,9 +810,9 @@ export function ChatPage() {
                 />
               ) : (
                 <div className={styles.emptyIntro}>
-                  <p className={styles.emptyLead}>今天还没有待练</p>
+                  <p className={styles.emptyLead}>今天暂时没事</p>
                   <p className={styles.emptyHint}>
-                    在资料库把笔记出成题，或先开一场对话
+                    把笔记出成题，或先找搭子聊几句
                   </p>
                   <div className={styles.emptyWorkflows}>
                     {WORKFLOWS.map((w) => (
@@ -932,25 +936,52 @@ export function ChatPage() {
                   </div>
                 ) : null}
                 {!busy && messages.length === 0 ? (
-                  <div className={styles.threadEmpty}>
-                    <p className={styles.threadEmptyLead}>从一场验证开始</p>
-                    <p className={styles.threadEmptyHint}>或直接在下方发消息开聊</p>
-                    <div className={styles.workflowTabs} role="group" aria-label="验证工作流">
-                      {WORKFLOWS.map((w) => (
-                        <button
-                          key={w.mode}
-                          type="button"
-                          className={styles.chatBarTab}
-                          onClick={() => void startWorkflow(w.mode)}
-                          title={w.hint}
-                        >
-                          {w.label}
-                          {w.mode === "examine" && examineCount > 0 ? (
-                            <span className={styles.chatBarCount}>{examineCount}</span>
+                  <div
+                    className={`${styles.threadEmpty} ${hasDailyBrief ? styles.threadEmptyBrief : ""}`}
+                  >
+                    {hasDailyBrief ? (
+                      <DailyBrief
+                        variant="thread"
+                        maxItems={4}
+                        onExamineClaim={(c) => void startExamineClaim(c)}
+                        onExamineNoteId={(id) => void startExamineNote(id)}
+                        onViewAll={() => void startWorkflow("examine")}
+                      />
+                    ) : (
+                      <>
+                        <p className={styles.threadEmptyLead}>想练就挑一种</p>
+                        <p className={styles.threadEmptyHint}>也可以直接发消息</p>
+                      </>
+                    )}
+                    <nav
+                      className={
+                        hasDailyBrief ? styles.briefAltNav : styles.workflowTabs
+                      }
+                      aria-label="开练方式"
+                    >
+                      {WORKFLOWS.map((w, i) => (
+                        <span key={w.mode} className={hasDailyBrief ? styles.briefAltItem : undefined}>
+                          {hasDailyBrief && i > 0 ? (
+                            <span className={styles.briefAltSep} aria-hidden>
+                              ·
+                            </span>
                           ) : null}
-                        </button>
+                          <button
+                            type="button"
+                            className={hasDailyBrief ? styles.briefAltLink : styles.chatBarTab}
+                            onClick={() => void startWorkflow(w.mode)}
+                            title={w.hint}
+                          >
+                            {w.label}
+                            {!hasDailyBrief &&
+                            w.mode === "examine" &&
+                            examineCount > 0 ? (
+                              <span className={styles.chatBarCount}>{examineCount}</span>
+                            ) : null}
+                          </button>
+                        </span>
                       ))}
-                    </div>
+                    </nav>
                   </div>
                 ) : null}
               </div>
@@ -959,7 +990,7 @@ export function ChatPage() {
             <div className={styles.composer}>
               <div className={styles.composerInner}>
                 {messages.length > 0 ? (
-                  <div className={styles.composerWorkflows} role="group" aria-label="验证工作流">
+                  <div className={styles.composerWorkflows} role="group" aria-label="开练方式">
                     {WORKFLOWS.map((w) => (
                       <button
                         key={w.mode}
@@ -1135,6 +1166,13 @@ export function ChatPage() {
                     }}
                     placeholder={`和${AGENT_UI[mention].label}聊点什么…（@切换）`}
                     onKeyDown={(e) => {
+                      // IME 选词中的 Enter 不应触发发送 / 选人
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                        return;
+                      }
+                      const isEnter =
+                        (e.key === "Enter" || e.code === "NumpadEnter") &&
+                        !e.shiftKey;
                       if (atMenu) {
                         if (atMatches.length > 0) {
                           if (e.key === "ArrowDown") {
@@ -1162,12 +1200,16 @@ export function ChatPage() {
                           setAtMenu(null);
                           return;
                         }
-                        if (e.key === "Enter" && !e.shiftKey) {
+                        // 无匹配的 @query（如 @gmail）：勿吞掉 Enter，关掉菜单并发送
+                        if (isEnter) {
                           e.preventDefault();
+                          atSuppressedRef.current = true;
+                          setAtMenu(null);
+                          void send();
                           return;
                         }
                       }
-                      if (e.key === "Enter" && !e.shiftKey) {
+                      if (isEnter) {
                         e.preventDefault();
                         void send();
                       }
