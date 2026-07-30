@@ -65,3 +65,5 @@ Rule: `.cursor/rules/docs-sync.mdc`. Prefer editing SYSTEM over long chat dumps.
 ## Commits
 
 English Conventional Commits — see `.cursor/rules/git-commits.mdc`.
+Split by OpenSpec / user-facing story (not one mega `feat: ship A, B, and C`).
+One vertical slice for a single story may still span `core`+`api`+`web`.

@@ -1,5 +1,5 @@
 ---
-description: Git commit message convention (Conventional Commits, English)
+description: Git commit message + split granularity (Conventional Commits, English)
 alwaysApply: true
 ---
 
@@ -15,28 +15,42 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/) in **English
 [optional body]
 ```
 
-## Rules
+## Message rules
 
 - Subject in English; imperative mood (`add`, not `added` / `Adding`)
 - **Subject ≤ 72 characters** (aim ~50); one line only
 - Types: `feat` | `fix` | `docs` | `perf` | `refactor` | `test` | `chore` | `ci`
 - Scope = package or domain: `core` | `api` | `mcp` | `web` | `harness` | `openspec`
 - Body is **optional**. If present: 1–3 short sentences on **why / impact**, not a file checklist
-- Do **not** list every touched path, UI detail, or OpenSpec folder in the body — put that in the PR or `openspec/changes/`
-- Prefer several small commits over one mega-message when scopes differ
-- **Do not over-split.** Aim for a handful of commits per logical change
-  (typically 1–3), not one per file/submodule. A single refactor that touches
-  `core` + `api` + `web` together is one commit, not three — the scopes are
-  part of the same change. Split only when edits are genuinely unrelated.
-- Commit in batches by change — group related edits into one commit, separate unrelated edits into their own commits
+- Do **not** list every touched path, UI detail, or OpenSpec folder in the body
 - Pass the message via HEREDOC; no Chinese in the subject
+- Only commit when the user asks
+
+## Split granularity (default: finer)
+
+**Unit of commit = one OpenSpec change, or one coherent user-facing story.**
+Never dump the whole working tree into one “ship everything” commit.
+
+| Split when | Keep together when |
+|---|---|
+| Different OpenSpec folders / why | One feature’s vertical slice (`core`+`api`+`web`+tests for **that** story) |
+| Feature vs incidental UI polish | Pure package-boundary split of the same refactor (e.g. not one commit per `db.ops` submodule) |
+| Code vs docs-only archive (optional) | Tiny docs sync that only exists to land the same feature |
+| Unrelated bugfix riding along | — |
+
+Prefer **2–5 focused commits** over one mega-commit when the working tree mixes stories.
+Do **not** over-split into one commit per file or per package **inside** a single story.
+
+When the user says「提交」and the tree has multiple stories: **split first**, then push.
+Ask only if the split boundaries are unclear.
 
 ## Good
 
 ```text
-feat(core): add verify-loop state machine
-fix(mcp): pass bearer auth to tool handlers
-docs(adr): record postgres-over-sqlite decision
+feat(api): share examine finalize via Critic+gate
+feat(web): show daily owed/plan brief with one-tap 开考
+feat(web): switch sticky companion via composer @
+docs(openspec): archive daily-verify-loop and composer-at-mention
 ```
 
 ```text
@@ -48,6 +62,14 @@ Learners need plan/queue and notes in one place for same-day review.
 ## Bad
 
 ```text
+feat: ship daily verify loop and composer @mention
+feat: ship companion-os bridges, chat polish, and archive specs
+feat: ship mastery graph, digest prefs, and Apple plan bridge
+```
+
+(Mega-ship. Several OpenSpec / product stories in one commit — **split**.)
+
+```text
 feat(core): add daily plan, notes, chat persistence and web workspace
 
 - gotit.db: SQLAlchemy async models ...
@@ -55,16 +77,12 @@ feat(core): add daily plan, notes, chat persistence and web workspace
 - web: Apple-style ...
 ```
 
-(Too long; reads like a changelog. Split commits or move detail to the PR.)
+(Changelog subject + body file dump.)
 
 ```text
 refactor(core): split db.ops into day module
 refactor(core): split db.ops into note module
 refactor(core): split db.ops into claim module
-refactor(api): split routes health endpoint
-refactor(api): split routes ingest endpoint
-...
 ```
 
-(Over-split. One cohesive `db.ops` refactor should be a single commit, not
-one per submodule. Group related edits; split only unrelated work.)
+(Over-split of one cohesive refactor by submodule.)
