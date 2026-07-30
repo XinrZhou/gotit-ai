@@ -36,6 +36,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
 | **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
 | **Daily brief** | Empty chat shows owed + today's plan with one-tap 开考 |
+| **Cold-start calibration** | Few high-info probes to seed schedule + confuse graph; empty chat CTA when nothing owed yet |
 | **Verify loop** | Examine → Critic recheck → **deterministic gate** → trajectory / spaced review (interval grows with prior fails; due rank + confuse neighbors) / mastery-graph (same path for chat verify and `/v1/examine`) |
 | **Notes → claims** | Ingest study material into testable claims + daily plan |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |

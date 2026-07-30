@@ -37,7 +37,7 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0009 (… + interviews)
+alembic/versions/  0001…0010 (… + interviews + cold-start calibration)
 openspec/changes/  active + archive/
 ```
 
@@ -98,6 +98,12 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
     `due_claims` / fill-from-queue sort by overdue → fail severity → confuse weight;
     `/v1/today` due items carry `due_reason_code` / `due_reason_text`;
     re-examine injects top `confused_with` neighbor short labels (budgeted)
+- **Cold-start calibration** (`core/calibration.py` + `db.ops.calibration`):
+  CAT-lite (2PL info + adaptive θ + knowledge rotate + early stop ≤10);
+  binary self-check (no Critic); correct→`passed`, incorrect→`almost` +
+  `fail_event(reason=calibration)` + calibration-only confuse seed;
+  REST `/v1/calibration/*` + MCP `gotit_calibration_*` + synthetic replay;
+  empty chat CTA「先摸底一下」when owed empty but claims exist
 - **Verify surface**: examine agent turns show quiet mastery chips（过了 / 还差点 /
   欠着下次；主题考完另标）；chip 读 `metadata.verdict`，不解析气泡文案
   + **VerifyTrajectory** 考→核→门 step row from `examine_verdict` /

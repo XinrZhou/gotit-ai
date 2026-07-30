@@ -168,6 +168,46 @@ async def record_verify_mastery_writeback(
     }
 
 
+async def seed_confused_for_calibration(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    failed_claim_id: UUID,
+    topic: str | None,
+    pool_claim_ids: list[UUID],
+    limit: int = 2,
+) -> int:
+    """Seed confused_with edges for cold-start (peers need not have failed).
+
+    Links the failed claim to up to ``limit`` same-topic (or pool) neighbors that
+    were in the calibration pool. Does **not** change everyday
+    ``grow_confused_edges_for_fail`` semantics.
+    """
+    if not pool_claim_ids:
+        return 0
+    topic_norm = (topic or "").strip()
+    stmt = select(ClaimRow).where(
+        ClaimRow.user_id == user_id,
+        ClaimRow.id.in_(pool_claim_ids),
+        ClaimRow.id != failed_claim_id,
+    )
+    peers = list((await session.execute(stmt)).scalars().all())
+    if topic_norm:
+        same = [c for c in peers if (c.topic or "").strip() == topic_norm]
+        candidates = same if same else peers
+    else:
+        candidates = peers
+    # Stable order by id so seeds are deterministic.
+    candidates.sort(key=lambda c: str(c.id))
+    n = 0
+    for peer in candidates[: max(0, limit)]:
+        await increment_confused_with(
+            session, user_id=user_id, claim_a=failed_claim_id, claim_b=peer.id
+        )
+        n += 1
+    return n
+
+
 async def list_confused_edges(
     session: AsyncSession,
     *,

@@ -216,8 +216,8 @@ class DigestPrefs(BaseModel):
     item_count: int = Field(default=3, ge=1, le=20)
     morning_cron: str = "0 8 * * *"
     evening_cron: str = "0 21 * * *"
-    news_cron: str | None = None
-    news_enabled: bool = False
+    news_cron: str | None = "0 20 * * *"
+    news_enabled: bool = True
     morning_include_news: bool = False
     evening_include_news: bool = False
     keywords: list[str] = Field(default_factory=list)
@@ -309,6 +309,67 @@ class BudgetSubgraphView(BaseModel):
     confused_labels: list[str] = Field(default_factory=list)
     fail_reasons: list[str] = Field(default_factory=list)
     prompt_block: str | None = None
+
+
+# --- Cold-start calibration ---
+
+
+class CalibrationMeta(BaseModel):
+    """Per-claim item parameters for CAT selection."""
+
+    difficulty: int = 3
+    discrimination: float = 1.0
+    knowledge_key: str = "_untagged"
+
+
+class CalibrationItemView(BaseModel):
+    """Current (or next) probe shown to the learner."""
+
+    claim_id: UUID
+    text: str
+    topic: str | None = None
+    difficulty: int = 3
+    discrimination: float = 1.0
+    knowledge_key: str = "_untagged"
+    n: int = 1
+    max_items: int = 10
+
+
+class CalibrationSummary(BaseModel):
+    passed_count: int = 0
+    failed_count: int = 0
+    confused_edges_seeded: int = 0
+    due_count: int = 0
+    stop_reason: str | None = None
+    theta: float | None = None
+    se: float | None = None
+    item_count: int = 0
+
+
+class CalibrationSessionView(BaseModel):
+    id: UUID
+    user_id: str
+    status: Literal["active", "completed", "cancelled"] = "active"
+    theta: float = 3.0
+    se: float = 1.5
+    item_count: int = 0
+    stop_reason: str | None = None
+    scope: dict[str, Any] = Field(default_factory=dict)
+    trace: list[dict[str, Any]] = Field(default_factory=list)
+    summary: CalibrationSummary | None = None
+    current_item: CalibrationItemView | None = None
+    done: bool = False
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class SyntheticCalibrationResult(BaseModel):
+    true_theta: float
+    theta_hat: float
+    abs_error: float
+    item_count: int
+    stop_reason: str | None = None
+    trace: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PromptVersion(BaseModel):

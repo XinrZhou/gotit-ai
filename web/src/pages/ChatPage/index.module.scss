@@ -650,6 +650,23 @@
   color: var(--ink);
 }
 
+.emptyCalibrate {
+  border: none;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.emptyCalibrate:hover {
+  background: var(--soft);
+}
+
 .threadEmpty {
   display: flex;
   flex-direction: column;

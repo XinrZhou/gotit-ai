@@ -190,6 +190,47 @@ export type DrillSessionContinueResponse = {
 
 export type Mode = "chat" | "examine" | "teach" | "drill";
 
+export type CalibrationOutcome = "correct" | "incorrect";
+
+export type CalibrationItem = {
+  claim_id: string;
+  text: string;
+  topic: string | null;
+  difficulty: number;
+  discrimination: number;
+  knowledge_key: string;
+  n: number;
+  max_items: number;
+};
+
+export type CalibrationSummary = {
+  passed_count: number;
+  failed_count: number;
+  confused_edges_seeded: number;
+  due_count: number;
+  stop_reason: string | null;
+  theta: number | null;
+  se: number | null;
+  item_count: number;
+};
+
+export type CalibrationSession = {
+  id: string;
+  user_id: string;
+  status: "active" | "completed" | "cancelled";
+  theta: number;
+  se: number;
+  item_count: number;
+  stop_reason: string | null;
+  scope: Record<string, unknown>;
+  trace: Record<string, unknown>[];
+  summary: CalibrationSummary | null;
+  current_item: CalibrationItem | null;
+  done: boolean;
+  created_at: string | null;
+  completed_at: string | null;
+};
+
 export type ImportTab = "write" | "link" | "zip";
 
 // --- companion-arch: chat surface ---

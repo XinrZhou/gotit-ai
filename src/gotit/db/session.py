@@ -62,6 +62,7 @@ async def create_all_tables() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_sqlite_plan_due_time)
+        await conn.run_sync(_ensure_sqlite_claim_calibration)
 
 
 def _ensure_sqlite_plan_due_time(sync_conn: Connection) -> None:
@@ -73,6 +74,18 @@ def _ensure_sqlite_plan_due_time(sync_conn: Connection) -> None:
     if "due_time" not in cols and rows:
         sync_conn.exec_driver_sql(
             "ALTER TABLE plan_items ADD COLUMN due_time VARCHAR(5)"
+        )
+
+
+def _ensure_sqlite_claim_calibration(sync_conn: Connection) -> None:
+    """Dev sqlite: add claims.calibration JSON if missing."""
+    if sync_conn.dialect.name != "sqlite":
+        return
+    rows = sync_conn.exec_driver_sql("PRAGMA table_info(claims)").fetchall()
+    cols = {r[1] for r in rows}
+    if "calibration" not in cols and rows:
+        sync_conn.exec_driver_sql(
+            "ALTER TABLE claims ADD COLUMN calibration JSON DEFAULT '{}'"
         )
 
 

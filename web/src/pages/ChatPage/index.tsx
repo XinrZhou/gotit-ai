@@ -14,6 +14,7 @@ import {
   verifyPathFromMeta,
 } from "../../components/VerifyTrajectory";
 import { DailyBrief } from "../../components/DailyBrief";
+import { CalibrationPanel } from "../../components/CalibrationPanel";
 import { ModeHeader } from "./ModeHeader";
 import { MessageBody } from "./MessageBody";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
@@ -288,14 +289,18 @@ export function ChatPage() {
     onExamineStartClaim,
     dueClaims,
     items,
+    refresh,
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
   const hasDailyBrief =
     dueClaims.length > 0 ||
     items.some((i) => i.status !== "verified" && i.claim_id) ||
     notes.some((n) => n.claim_ids.length > 0);
+  /** Cold-start CTA when nothing owed yet but claims exist to probe. */
+  const showCalibrateCta = dueClaims.length === 0 && examineCount > 0;
   const inWorkflow = mode !== "chat";
 
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsReady, setThreadsReady] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -829,6 +834,15 @@ export function ChatPage() {
                   </div>
                 </div>
               )}
+              {showCalibrateCta ? (
+                <button
+                  type="button"
+                  className={styles.emptyCalibrate}
+                  onClick={() => setCalibrationOpen(true)}
+                >
+                  先摸底一下
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.emptyChatLink}
@@ -951,6 +965,15 @@ export function ChatPage() {
                       <>
                         <p className={styles.threadEmptyLead}>想练就挑一种</p>
                         <p className={styles.threadEmptyHint}>也可以直接发消息</p>
+                        {showCalibrateCta ? (
+                          <button
+                            type="button"
+                            className={styles.emptyCalibrate}
+                            onClick={() => setCalibrationOpen(true)}
+                          >
+                            先摸底一下
+                          </button>
+                        ) : null}
                       </>
                     )}
                     <nav
@@ -1284,6 +1307,12 @@ export function ChatPage() {
           </p>
         </Modal>
       ) : null}
+
+      <CalibrationPanel
+        open={calibrationOpen}
+        onClose={() => setCalibrationOpen(false)}
+        onFinished={() => void refresh()}
+      />
     </div>
   );
 }

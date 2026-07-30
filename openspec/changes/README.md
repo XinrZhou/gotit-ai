@@ -17,6 +17,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Archive | Notes |
 |---------|-------|
+| `archive/2026-07-30-cold-start-calibration/` | CAT-lite cold start → schedule / fail / confuse seed; due; trace + synthetic; minimal Web |
 | `archive/2026-07-30-companion-tools-and-schedule/` | Companion builtin tools + spaced schedule + due-reason UI + copy warmth + gold harness |
 
 Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,

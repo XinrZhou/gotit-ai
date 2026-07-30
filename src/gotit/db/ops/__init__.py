@@ -14,6 +14,12 @@ from gotit.db.ops._common import (
     _note_view,
     _plan_item_view,
 )
+from gotit.db.ops.calibration import (
+    answer_calibration,
+    get_calibration,
+    run_synthetic_calibration,
+    start_calibration,
+)
 from gotit.db.ops.claim import (
     apply_examine_result,
     apply_examine_verdict,
@@ -60,6 +66,7 @@ from gotit.db.ops.graph import (
     fail_counts_by_claim,
     list_confused_edges,
     record_verify_mastery_writeback,
+    seed_confused_for_calibration,
 )
 from gotit.db.ops.harness import (
     _harness_case_view,
@@ -217,6 +224,11 @@ __all__ = [
     "apply_examine_verdict",
     "list_topic_claims_today",
     "list_project_claims",
+    # cold-start calibration
+    "start_calibration",
+    "answer_calibration",
+    "get_calibration",
+    "run_synthetic_calibration",
     # project
     "create_project",
     "list_projects",
@@ -274,6 +286,7 @@ __all__ = [
     "build_budget_subgraph",
     "fail_counts_by_claim",
     "list_confused_edges",
+    "seed_confused_for_calibration",
     # harness
     "add_harness_run",
     "add_harness_case_result",

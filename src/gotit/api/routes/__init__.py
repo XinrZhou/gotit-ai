@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from gotit.api.routes import (
+    calibration,
     chat,
     connectors,
     day,
@@ -36,6 +37,7 @@ router.include_router(skills.router)
 router.include_router(connectors.router)
 router.include_router(ingest.router)
 router.include_router(examine.router)
+router.include_router(calibration.router)
 router.include_router(day.router)
 router.include_router(notes.router)
 router.include_router(teach.router)

@@ -125,6 +125,8 @@ class ClaimRow(Base):
     project_id: Mapped[Any | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("projects.id"), nullable=True, index=True
     )
+    # Cold-start CAT: {difficulty, discrimination, knowledge_key}
+    calibration: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 
 
 class ChatMessageRow(Base):
@@ -432,6 +434,36 @@ class McpConnectorRow(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# --- Cold-start calibration sessions ---
+
+
+class CalibrationSessionRow(Base):
+    __tablename__ = "calibration_sessions"
+
+    id: Mapped[Any] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
+    status: Mapped[str] = mapped_column(String(16), default="active", index=True)
+    theta: Mapped[float] = mapped_column(Float, default=3.0)
+    se: Mapped[float] = mapped_column(Float, default=1.5)
+    item_count: Mapped[int] = mapped_column(Integer, default=0)
+    stop_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    scope: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    pool_claim_ids: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    answered_claim_ids: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    downweight_claim_ids: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    last_knowledge_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    current_claim_id: Mapped[Any | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    recent_delta_theta: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    trace: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    summary: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
