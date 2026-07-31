@@ -32,6 +32,7 @@ import type {
   Claim,
   DayNote,
   Mode,
+  OpenDrillPayload,
   OpenExaminePayload,
   SkillInfo,
   Thread,
@@ -293,6 +294,7 @@ export function ChatPage() {
     setWorkflowThreadId,
     onExamineStart,
     onExamineStartClaim,
+    onDrillStartWithPayload,
     dueClaims,
     items,
     refresh,
@@ -486,6 +488,22 @@ export function ChatPage() {
       }
     },
     [dueClaims, startExamineClaim, startExamineNote],
+  );
+
+  const followOpenDrill = useCallback(
+    (payload: OpenDrillPayload) => {
+      void (async () => {
+        const tid = await startWorkflow("drill");
+        if (!tid) return;
+        onDrillStartWithPayload({
+          round: payload.round,
+          direction: payload.direction,
+          project_id: payload.project_id ?? null,
+          thread_id: tid,
+        });
+      })();
+    },
+    [startWorkflow, onDrillStartWithPayload],
   );
 
   const openThread = useCallback(
@@ -959,6 +977,7 @@ export function ChatPage() {
                             calls={toolCalls}
                             busy={busy || storeBusy}
                             onOpenExamine={followOpenExamine}
+                            onOpenDrill={followOpenDrill}
                           />
                         ) : null}
                         {examineVerdict ? (

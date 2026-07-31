@@ -17,6 +17,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Archive | Notes |
 |---------|-------|
+| `archive/2026-07-31-ramp-open-drill/` | Companion `start_drill` + bubble「深挖」→ `/v1/drill/sessions` |
 | `archive/2026-07-31-interview-countdown-ramp/` | P4: deterministic ramp tiers + optional nudges + Settings toggle |
 | `archive/2026-07-31-companion-tool-trail/` | Quiet `tool_calls` trail + one-tap follow `start_examine` |
 | `archive/2026-07-30-cold-start-calibration/` | CAT-lite cold start → schedule / fail / confuse seed; due; trace + synthetic; minimal Web |
@@ -33,4 +34,3 @@ Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 - Axiom harness holdout UI
 - Broad per-agent multi-model beyond Critic
 - Broad agent-as-tool against full MCP catalog
-- Auto-start drill from ramp nudge (deep link only in P4 v0)

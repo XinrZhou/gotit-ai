@@ -615,6 +615,7 @@ class InterviewUpcoming(BaseModel):
     tier_hint: str = ""
     suggest_action: str = ""
     project_name: str | None = None
+    project_id: UUID | None = None
 
 
 class InterviewRampNudge(BaseModel):
@@ -629,6 +630,7 @@ class InterviewRampNudge(BaseModel):
     ramp_tier: Literal["light", "warm"]
     suggest_action: str
     project_name: str | None = None
+    project_id: UUID | None = None
     tier_hint: str = ""
 
 

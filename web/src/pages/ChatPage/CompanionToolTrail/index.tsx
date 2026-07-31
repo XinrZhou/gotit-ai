@@ -1,10 +1,15 @@
-import type { CompanionToolCall, OpenExaminePayload } from "../../../types";
+import type {
+  CompanionToolCall,
+  OpenDrillPayload,
+  OpenExaminePayload,
+} from "../../../types";
 import styles from "./index.module.scss";
 
 const TOOL_LABEL: Record<string, string> = {
   get_today: "今日",
   list_due_claims: "欠账",
   start_examine: "开考准备",
+  start_drill: "深挖准备",
   get_failure_lessons: "教训",
   add_memory: "记下",
   get_upcoming_interview: "面试",
@@ -20,22 +25,34 @@ function isOpenExamine(v: unknown): v is OpenExaminePayload {
   return Boolean(o.claim_id || o.note_id);
 }
 
-/** Quiet companion tool chips + optional one-tap 开考. */
+function isOpenDrill(v: unknown): v is OpenDrillPayload {
+  if (!v || typeof v !== "object") return false;
+  const o = v as OpenDrillPayload;
+  return o.action === "open_drill" || Boolean(o.round);
+}
+
+/** Quiet companion tool chips + optional one-tap 开考 / 深挖. */
 export function CompanionToolTrail({
   calls,
   onOpenExamine,
+  onOpenDrill,
   busy = false,
 }: {
   calls: CompanionToolCall[];
   onOpenExamine?: (payload: OpenExaminePayload) => void;
+  onOpenDrill?: (payload: OpenDrillPayload) => void;
   busy?: boolean;
 }) {
   if (!calls.length) return null;
 
-  const open =
+  const examine =
     [...calls]
       .reverse()
       .find((c) => c.ok && isOpenExamine(c.open_examine))?.open_examine ?? null;
+  const drill =
+    [...calls]
+      .reverse()
+      .find((c) => c.ok && isOpenDrill(c.open_drill))?.open_drill ?? null;
 
   return (
     <div className={styles.wrap}>
@@ -48,14 +65,24 @@ export function CompanionToolTrail({
           {labelFor(c.name)}
         </span>
       ))}
-      {open && onOpenExamine ? (
+      {examine && onOpenExamine ? (
         <button
           type="button"
           className={styles.cta}
           disabled={busy}
-          onClick={() => onOpenExamine(open)}
+          onClick={() => onOpenExamine(examine)}
         >
           开考
+        </button>
+      ) : null}
+      {drill && onOpenDrill ? (
+        <button
+          type="button"
+          className={styles.cta}
+          disabled={busy}
+          onClick={() => onOpenDrill(drill)}
+        >
+          深挖
         </button>
       ) : null}
     </div>
@@ -79,21 +106,8 @@ export function toolCallsFromMeta(
       ok: Boolean(o.ok),
       summary: typeof o.summary === "string" ? o.summary : "",
       open_examine: isOpenExamine(o.open_examine) ? o.open_examine : null,
+      open_drill: isOpenDrill(o.open_drill) ? o.open_drill : null,
     });
   }
   return out.length ? out : null;
-}
-
-export function openExamineFromMeta(
-  meta: Record<string, unknown> | null | undefined,
-): OpenExaminePayload | null {
-  if (!meta) return null;
-  if (isOpenExamine(meta.open_examine)) return meta.open_examine;
-  const calls = toolCallsFromMeta(meta);
-  if (!calls) return null;
-  for (let i = calls.length - 1; i >= 0; i--) {
-    const c = calls[i];
-    if (c.ok && isOpenExamine(c.open_examine)) return c.open_examine;
-  }
-  return null;
 }

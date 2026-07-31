@@ -139,6 +139,12 @@ export type Store = {
   onImportMaterialFile: (file: File) => Promise<{ title: string; body: string }>;
   onDeleteMaterial: (id: string) => Promise<void>;
   onDrillStartSession: () => void;
+  onDrillStartWithPayload: (payload: {
+    round?: string;
+    direction?: string | null;
+    project_id?: string | null;
+    thread_id?: string | null;
+  }) => void;
   onDrillAnswer: () => void;
   onSelectDrillSession: (s: DrillSession) => void;
   onBackToDrillStart: () => void;

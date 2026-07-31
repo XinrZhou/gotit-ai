@@ -252,6 +252,7 @@ export type CompanionToolCall = {
   ok: boolean;
   summary: string;
   open_examine?: OpenExaminePayload | null;
+  open_drill?: OpenDrillPayload | null;
 };
 
 /** Payload from `start_examine` for one-tap follow into /v1/examine. */
@@ -266,6 +267,19 @@ export type OpenExaminePayload = {
   plan_item_id?: string;
   plan_changed?: boolean;
   thread_id?: string | null;
+};
+
+/** Payload from `start_drill` / upcoming interview for one-tap drill. */
+export type OpenDrillPayload = {
+  action?: string;
+  round?: DrillRound | string;
+  direction?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
+  interview_id?: string | null;
+  company?: string | null;
+  thread_id?: string | null;
+  has_resume?: boolean;
 };
 
 export type ChatMessage = {
@@ -404,4 +418,5 @@ export type InterviewUpcoming = {
   tier_hint: string;
   suggest_action: string;
   project_name: string | null;
+  project_id?: string | null;
 };

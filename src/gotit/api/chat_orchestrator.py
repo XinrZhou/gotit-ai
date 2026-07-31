@@ -55,13 +55,14 @@ def _stub_turn(agent_name: str, user_text: str, force_handoff: str | None) -> Ch
     )
 
 
-def _last_open_examine(
+def _last_open_payload(
     tool_calls: list[dict[str, object]],
+    key: str,
 ) -> dict[str, object] | None:
     for call in reversed(tool_calls):
         if not call.get("ok"):
             continue
-        payload = call.get("open_examine")
+        payload = call.get(key)
         if isinstance(payload, dict):
             return payload
     return None
@@ -80,9 +81,12 @@ def _agent_metadata(
         meta["handoff_reason"] = turn.reason
     if tool_calls:
         meta["tool_calls"] = tool_calls
-        open_examine = _last_open_examine(tool_calls)
+        open_examine = _last_open_payload(tool_calls, "open_examine")
         if open_examine is not None:
             meta["open_examine"] = open_examine
+        open_drill = _last_open_payload(tool_calls, "open_drill")
+        if open_drill is not None:
+            meta["open_drill"] = open_drill
     return meta
 
 
@@ -208,9 +212,12 @@ async def post_message_chain(
                     ]
                     if slice_calls:
                         err_meta["tool_calls"] = slice_calls
-                        open_examine = _last_open_examine(slice_calls)
+                        open_examine = _last_open_payload(slice_calls, "open_examine")
                         if open_examine is not None:
                             err_meta["open_examine"] = open_examine
+                        open_drill = _last_open_payload(slice_calls, "open_drill")
+                        if open_drill is not None:
+                            err_meta["open_drill"] = open_drill
                     agent_msg = await day_ops.add_message(
                         session,
                         thread_id=thread.id,

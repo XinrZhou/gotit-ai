@@ -64,15 +64,16 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
   list (no paraphrased times/items in the opener)
 - **Companion builtin tools** (whitelist, not full MCP): chat turns with an LLM key
-  inject `get_today` / `list_due_claims` / `start_examine` / `get_failure_lessons` /
-  `add_memory` / `get_upcoming_interview` via `api/companion_tools.py` → `db.ops`;
-  calls land on agent message `metadata.tool_calls` (name / args_digest / ok /
-  summary; `start_examine` ok also attaches `open_examine` + message-level
-  `metadata.open_examine`). Chat bubbles show a quiet tool trail; one-tap「开考」
-  follows into examine (same `/v1/examine` path). Stub (no `LLM_API_KEY`) skips
-  tools and does not fake writes. `start_examine` only prepares open-examine
-  (+ soft plan/in_progress); mastery still Critic + gate.
-  REST + MCP `gotit_post_message` share `chat_orchestrator` (same tools).
+  inject `get_today` / `list_due_claims` / `start_examine` / `start_drill` /
+  `get_failure_lessons` / `add_memory` / `get_upcoming_interview` via
+  `api/companion_tools.py` → `db.ops`; calls land on agent message
+  `metadata.tool_calls` (name / args_digest / ok / summary; `start_examine` /
+  `start_drill` attach `open_examine` / `open_drill` + message-level lift).
+  Chat bubbles show a quiet tool trail; one-tap「开考」→ `/v1/examine`,
+  「深挖」→ `/v1/drill/sessions` (same paths as workflow UIs). Stub (no
+  `LLM_API_KEY`) skips tools and does not fake writes. Prepare-only tools do
+  not run Critic/gate/Sage. REST + MCP `gotit_post_message` share
+  `chat_orchestrator` (same tools).
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
   conversation top bar)
 - Library = left **drawer overlay** (notes / projects only)
@@ -149,7 +150,6 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   MCP connectors (no auto-mount of the full gotit MCP catalog into chat)
 - Rich profile / full KG store beyond mastery confuse edges (depends_on later)
 - Axiom harness holdout UI
-- Auto-start drill from ramp nudge（v0 只建议 + 深链到「项目深挖」）
 
 ## Commands
 

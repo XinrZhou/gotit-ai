@@ -311,16 +311,16 @@ async def put_interview_ramp_prefs(
     return cleaned
 
 
-async def _primary_project_name(
+async def _primary_project(
     session: AsyncSession, *, user_id: str
-) -> str | None:
+) -> tuple[UUID | None, str | None]:
     from gotit.db.ops.project import list_projects
 
     projects = await list_projects(session, user_id=user_id, include_archived=False)
     if not projects:
-        return None
-    name = (projects[0].name or "").strip()
-    return name or None
+        return None, None
+    name = (projects[0].name or "").strip() or None
+    return projects[0].id, name
 
 
 def _hours_until(scheduled: datetime, now: datetime) -> float:
@@ -346,7 +346,7 @@ async def list_upcoming_interviews(
         .order_by(InterviewEventRow.scheduled_at.asc())
     )
     rows = list((await session.execute(stmt)).scalars().all())
-    project_name = await _primary_project_name(session, user_id=user_id)
+    project_id, project_name = await _primary_project(session, user_id=user_id)
     out: list[InterviewUpcoming] = []
     for row in rows:
         scheduled = _ensure_utc(row.scheduled_at)
@@ -364,6 +364,7 @@ async def list_upcoming_interviews(
                 tier_hint=tier_hint_zh(tier),
                 suggest_action=suggest_action(round=row.round, project_name=project_name),
                 project_name=project_name,
+                project_id=project_id,
             )
         )
     return out
@@ -432,6 +433,7 @@ async def list_interview_ramp_nudges(
                 ramp_tier=tier,
                 suggest_action=u.suggest_action,
                 project_name=u.project_name,
+                project_id=u.project_id,
                 tier_hint=u.tier_hint,
             )
         ]

@@ -122,21 +122,30 @@ export function useDrill({
     [run],
   );
 
-  const onDrillStartSession = useCallback(() => {
-    void (async () => {
+  const startDrillSession = useCallback(
+    async (opts: {
+      round: DrillRound;
+      direction: string | null;
+      project_id: string | null;
+      thread_id?: string | null;
+    }) => {
       setBusy(true);
       setError("");
+      const tid = opts.thread_id ?? workflowThreadId;
       try {
         const res = await api<DrillSessionStartResponse>("/v1/drill/sessions", {
           method: "POST",
           body: JSON.stringify({
-            round: drillRound,
-            direction: drillDirection.trim() || null,
-            project_id: drillFocusProjectId,
-            ...(workflowThreadId ? { thread_id: workflowThreadId } : {}),
+            round: opts.round,
+            direction: opts.direction,
+            project_id: opts.project_id,
+            ...(tid ? { thread_id: tid } : {}),
           }),
         });
         setActiveDrillSession(res.session);
+        setDrillRound(opts.round);
+        setDrillDirection(opts.direction ?? "");
+        setDrillFocusProjectId(opts.project_id);
         const v = res.verdict;
         if (v.done) {
           const gaps = v.gaps.length ? `\n缺口：${v.gaps.join("；")}` : "";
@@ -159,16 +168,44 @@ export function useDrill({
       } finally {
         setBusy(false);
       }
-    })();
-  }, [
-    drillRound,
-    drillDirection,
-    drillFocusProjectId,
-    refresh,
-    setBusy,
-    setError,
-    workflowThreadId,
-  ]);
+    },
+    [refresh, setBusy, setError, workflowThreadId],
+  );
+
+  const onDrillStartSession = useCallback(() => {
+    void startDrillSession({
+      round: drillRound,
+      direction: drillDirection.trim() || null,
+      project_id: drillFocusProjectId,
+    });
+  }, [drillRound, drillDirection, drillFocusProjectId, startDrillSession]);
+
+  const onDrillStartWithPayload = useCallback(
+    (payload: {
+      round?: string;
+      direction?: string | null;
+      project_id?: string | null;
+      thread_id?: string | null;
+    }) => {
+      const rounds: DrillRound[] = [
+        "tech_1",
+        "tech_2",
+        "tech_3",
+        "tech_4",
+        "hr",
+      ];
+      const round = rounds.includes(payload.round as DrillRound)
+        ? (payload.round as DrillRound)
+        : "tech_1";
+      void startDrillSession({
+        round,
+        direction: (payload.direction || "").trim() || null,
+        project_id: payload.project_id ?? null,
+        thread_id: payload.thread_id,
+      });
+    },
+    [startDrillSession],
+  );
 
   const onDrillAnswer = useCallback(() => {
     if (!activeDrillSession || !drillAnswer.trim() || drillDone) return;
@@ -259,6 +296,7 @@ export function useDrill({
     onImportMaterialFile,
     onDeleteMaterial,
     onDrillStartSession,
+    onDrillStartWithPayload,
     onDrillAnswer,
     onSelectDrillSession,
     onBackToDrillStart,

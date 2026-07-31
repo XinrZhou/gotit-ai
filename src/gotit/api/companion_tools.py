@@ -4,8 +4,8 @@ Thin wrappers over ``db.ops`` (same surface REST/MCP use). Lives in ``api/`` so
 ``gotit.core`` stays free of session / FastAPI / MCP imports. Tool call digests
 are recorded for message ``metadata.tool_calls`` (explainable / replayable).
 
-``start_examine`` prepares an open-examine payload and may soft-mark a claim
-in_progress / on today's plan — it does **not** run Critic or the mastery gate.
+``start_examine`` / ``start_drill`` prepare open-* payloads for the Web CTA —
+they do **not** run Critic, the mastery gate, or Sage.
 """
 
 from __future__ import annotations
@@ -18,14 +18,15 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gotit.core.models import MasteryStatus, PlanItemSource, PlanItemStatus
+from gotit.core.models import DrillRound, MasteryStatus, PlanItemSource, PlanItemStatus
 from gotit.db import ops as day_ops
-from gotit.db.models import ClaimRow, DayNoteRow, LearningDayRow
+from gotit.db.models import ClaimRow, DayNoteRow, InterviewEventRow, LearningDayRow
 
 _MEMORY_NOTE_MAX = 400
 _SUMMARY_MAX = 240
 _ARGS_DIGEST_MAX = 160
 _DUE_LIST_CAP = 12
+_VALID_DRILL_ROUNDS = {r.value for r in DrillRound}
 
 
 @dataclass
@@ -35,6 +36,7 @@ class ToolCallRecord:
     ok: bool
     summary: str
     open_examine: dict[str, object] | None = None
+    open_drill: dict[str, object] | None = None
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -45,6 +47,8 @@ class ToolCallRecord:
         }
         if self.open_examine is not None:
             out["open_examine"] = self.open_examine
+        if self.open_drill is not None:
+            out["open_drill"] = self.open_drill
         return out
 
 
@@ -62,6 +66,7 @@ class ToolCallRecorder:
         ok: bool,
         summary: str,
         open_examine: dict[str, object] | None = None,
+        open_drill: dict[str, object] | None = None,
     ) -> None:
         self.calls.append(
             ToolCallRecord(
@@ -70,6 +75,7 @@ class ToolCallRecorder:
                 ok=ok,
                 summary=_clip(summary, _SUMMARY_MAX),
                 open_examine=open_examine,
+                open_drill=open_drill,
             )
         )
 
@@ -81,6 +87,13 @@ class ToolCallRecorder:
         for call in reversed(self.calls):
             if call.ok and call.open_examine is not None:
                 return call.open_examine
+        return None
+
+    def last_open_drill(self) -> dict[str, object] | None:
+        """Most recent successful open-drill payload in this recorder."""
+        for call in reversed(self.calls):
+            if call.ok and call.open_drill is not None:
+                return call.open_drill
         return None
 
 
@@ -106,6 +119,75 @@ def _claim_brief(claim: Any) -> dict[str, object]:
         "topic": claim.topic,
         "next_review_at": (claim.next_review_at.isoformat() if claim.next_review_at else None),
     }
+
+
+def _normalize_drill_round(raw: str | None) -> str:
+    if raw and str(raw).strip() in _VALID_DRILL_ROUNDS:
+        return str(raw).strip()
+    return DrillRound.TECH_1.value
+
+
+async def _build_open_drill(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    thread_id: UUID | None,
+    round: str | None = None,
+    project_id: str | None = None,
+    interview_id: str | None = None,
+    direction: str | None = None,
+) -> tuple[dict[str, object], bool, str]:
+    """Return (open_drill payload, has_resume, summary). Pure prepare — no Sage."""
+    resume = await day_ops.get_resume(session, user_id=user_id)
+    has_resume = resume is not None
+
+    company: str | None = None
+    resolved_round = round
+    if interview_id:
+        row = await session.get(InterviewEventRow, UUID(interview_id))
+        if row is None or row.user_id != user_id:
+            raise KeyError(f"interview not found: {interview_id}")
+        company = row.company
+        if not resolved_round:
+            resolved_round = row.round
+
+    drill_round = _normalize_drill_round(resolved_round)
+
+    resolved_project_id: UUID | None = UUID(project_id) if project_id else None
+    project_name: str | None = None
+    if resolved_project_id is not None:
+        try:
+            proj = await day_ops.get_project(
+                session, resolved_project_id, user_id=user_id
+            )
+            project_name = (proj.name or "").strip() or None
+        except KeyError as exc:
+            raise KeyError(f"project not found: {project_id}") from exc
+    else:
+        projects = await day_ops.list_projects(
+            session, user_id=user_id, include_archived=False
+        )
+        if projects:
+            resolved_project_id = projects[0].id
+            project_name = (projects[0].name or "").strip() or None
+
+    dir_text = (direction or "").strip() or None
+    payload: dict[str, object] = {
+        "action": "open_drill",
+        "round": drill_round,
+        "direction": dir_text,
+        "project_id": str(resolved_project_id) if resolved_project_id else None,
+        "project_name": project_name,
+        "interview_id": str(UUID(interview_id)) if interview_id else None,
+        "company": company,
+        "thread_id": str(thread_id) if thread_id else None,
+        "has_resume": has_resume,
+    }
+    label = company or project_name or drill_round
+    summary = f"可深挖：{_clip(str(label), 40)} · {drill_round}"
+    if not has_resume:
+        summary = "可备深挖，但尚未导入简历"
+    return payload, has_resume, summary
 
 
 def build_companion_tools(
@@ -437,7 +519,7 @@ def build_companion_tools(
             return {"ok": False, "error": str(exc)}
 
     async def get_upcoming_interview() -> dict[str, object]:
-        """Read nearest upcoming interview (7d) with ramp tier + drill suggestion."""
+        """Read nearest upcoming interview (7d) with ramp tier + open_drill CTA."""
         from datetime import UTC, datetime
 
         args: dict[str, Any] = {}
@@ -461,11 +543,20 @@ def build_companion_tools(
                 )
                 return out
             nearest = rows[0]
+            open_drill, _has_resume, _sum = await _build_open_drill(
+                session,
+                user_id=user_id,
+                thread_id=thread_id,
+                round=nearest.round,
+                project_id=str(nearest.project_id) if nearest.project_id else None,
+                interview_id=str(nearest.interview_id),
+            )
             payload = {
                 "ok": True,
                 "count": len(rows),
                 "nearest": nearest.model_dump(mode="json"),
                 "upcoming": [r.model_dump(mode="json") for r in rows[:5]],
+                "open_drill": open_drill,
             }
             rec.record(
                 "get_upcoming_interview",
@@ -475,11 +566,62 @@ def build_companion_tools(
                     f"{nearest.company} · {nearest.ramp_tier} · "
                     f"约 {nearest.hours_until:.0f}h"
                 ),
+                open_drill=open_drill,
             )
             return payload
         except Exception as exc:  # noqa: BLE001
             rec.record(
                 "get_upcoming_interview",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
+    async def start_drill(
+        round: str | None = None,
+        project_id: str | None = None,
+        interview_id: str | None = None,
+        direction: str | None = None,
+    ) -> dict[str, object]:
+        """Prepare an open-drill payload. Does not create a session or run Sage."""
+        args: dict[str, Any] = {
+            "round": round,
+            "project_id": project_id,
+            "interview_id": interview_id,
+            "direction": direction,
+            "thread_id": str(thread_id) if thread_id else None,
+        }
+        try:
+            open_payload, has_resume, summary = await _build_open_drill(
+                session,
+                user_id=user_id,
+                thread_id=thread_id,
+                round=round,
+                project_id=project_id,
+                interview_id=interview_id,
+                direction=direction,
+            )
+            out: dict[str, object] = {
+                **open_payload,
+                "ok": True,
+                "hint": (
+                    "可在气泡下点「深挖」开练；尚未导入简历时会提示先导入。"
+                    if has_resume
+                    else "请先导入简历，再点气泡下「深挖」。"
+                ),
+            }
+            rec.record(
+                "start_drill",
+                args=args,
+                ok=True,
+                summary=summary,
+                open_drill=open_payload,
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "start_drill",
                 args=args,
                 ok=False,
                 summary=f"{type(exc).__name__}: {exc}",
@@ -533,8 +675,17 @@ def build_companion_tools(
             name="get_upcoming_interview",
             description=(
                 "Read upcoming real-world interviews (next 7 days) with "
-                "countdown ramp_tier and a short project-drill suggestion. "
+                "countdown ramp_tier and an open_drill payload for one-tap drill. "
                 "Use for「快面试了 / 下周有面试练什么」."
+            ),
+        ),
+        Tool(
+            start_drill,
+            name="start_drill",
+            description=(
+                "Prepare an open-drill payload (round / project / interview). "
+                "Does not create a drill session or run Sage — the learner "
+                "taps「深挖」in the bubble to start."
             ),
         ),
     ]
@@ -542,14 +693,15 @@ def build_companion_tools(
 
 COMPANION_TOOL_HINT = (
     "【办事工具】你可以调用：get_today、list_due_claims、start_examine、"
-    "get_failure_lessons、add_memory、get_upcoming_interview。\n"
+    "get_failure_lessons、add_memory、get_upcoming_interview、start_drill。\n"
     "- 问「今天欠什么 / 今日计划 / 还欠几道」时：先调 get_today 或 list_due_claims，"
     "用真实结果回答，不要编造。\n"
     "- 「帮我开考 / 考我这条」：调 start_examine（可传 claim_id / note_id；"
     "都不传则挑第一条欠账）；告知对方已备好开考，可点气泡下「开考」。"
     "不要假装自己已经判过分——掌握门不在这里。\n"
-    "- 「快面试了 / 面试练什么」：调 get_upcoming_interview，用真实日程与 "
-    "suggest_action 回答；可引导去顶栏「项目深挖」，不要自动假装已开练。\n"
+    "- 「快面试了 / 面试练什么」：调 get_upcoming_interview；需要开练时再调 "
+    "start_drill（可传 interview_id / round / project_id）。告知可点气泡下「深挖」，"
+    "不要假装已经开练或判过分。\n"
     "- 需要带着上次教训：get_failure_lessons。\n"
     "- 该记的短教训：add_memory（会截断）。写操作要克制。"
 )
