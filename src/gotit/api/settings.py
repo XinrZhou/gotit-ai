@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     critic_base_url: str = ""
     critic_api_key: str = ""
 
+    # Optional STT for voice teach-back (OpenAI-compatible /audio/transcriptions).
+    # Empty STT_* falls back to LLM_*; no key → text-only teach path.
+    stt_api_key: str = ""
+    stt_base_url: str = ""
+    stt_model: str = ""
+    stt_stub: bool = False
+    stt_stub_text: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
