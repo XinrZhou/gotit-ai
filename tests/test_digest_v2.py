@@ -183,3 +183,12 @@ def test_open_titles_skips_done() -> None:
         }
     )
     assert picks == ["A"]
+
+
+def test_iri_to_uri_encodes_cjk_path() -> None:
+    fd = _load_fd()
+    raw = "https://www.qbitai.com/category/资讯/feed"
+    encoded = fd._iri_to_uri(raw)
+    assert "资讯" not in encoded
+    assert "%E8%B5%84%E8%AE%AF" in encoded
+    assert fd._iri_to_uri(encoded) == encoded  # idempotent

@@ -34,7 +34,7 @@ DEFAULT_DIGEST_FEEDS: list[DigestFeed] = [
     DigestFeed(
         id="qbitai",
         label="量子位",
-        url="https://www.qbitai.com/category/资讯/feed",
+        url="https://www.qbitai.com/category/%E8%B5%84%E8%AE%AF/feed",
     ),
     DigestFeed(
         id="hf-blog",

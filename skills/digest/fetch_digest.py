@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 USER_AGENT = "GotitDigest/0.2 (+https://github.com/gotit-ai; OpenClaw skill)"
@@ -80,9 +81,37 @@ def _parse_date(value: str) -> datetime | None:
     return None
 
 
+def _iri_to_uri(url: str) -> str:
+    """Percent-encode non-ASCII so http.client can ASCII-encode the request line.
+
+    Feed URLs like ``…/category/资讯/feed`` are valid IRIs but crash urllib
+    with UnicodeEncodeError unless path/query/fragment are percent-encoded.
+    ``%`` is left in ``safe`` so already-encoded URLs are not double-encoded.
+    """
+    parts = urlsplit((url or "").strip())
+    host = parts.hostname or ""
+    netloc = parts.netloc
+    if host:
+        try:
+            host_ascii = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            host_ascii = host
+        if host_ascii != host:
+            netloc = netloc.replace(host, host_ascii, 1)
+    # Keep structural delimiters; encode everything else (incl. CJK).
+    path = quote(parts.path, safe="/%:@!$&'()*+,;=-._~")
+    query = quote(parts.query, safe="=&%:@!$&'()*+,;=-._~/")
+    fragment = quote(parts.fragment, safe="=&%:@!$&'()*+,;=-._~/")
+    return urlunsplit((parts.scheme, netloc, path, query, fragment))
+
+
 def _fetch_bytes(url: str) -> tuple[bytes | None, str | None]:
+    try:
+        uri = _iri_to_uri(url)
+    except Exception as exc:  # noqa: BLE001 — soft-fail one feed
+        return None, f"bad url: {exc}"
     req = urllib.request.Request(
-        url,
+        uri,
         headers={
             "User-Agent": USER_AGENT,
             "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
@@ -91,7 +120,7 @@ def _fetch_bytes(url: str) -> tuple[bytes | None, str | None]:
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
             return resp.read(), None
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+    except (urllib.error.URLError, TimeoutError, OSError, UnicodeEncodeError) as exc:
         return None, f"{type(exc).__name__}: {exc}"
 
 
