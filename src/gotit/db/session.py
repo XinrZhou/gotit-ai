@@ -95,6 +95,9 @@ async def dispose_engine() -> None:
         await _engine.dispose()
     _engine = None
     _session_factory = None
+    from gotit.db.runtime import reset_ensure_db_flag
+
+    reset_ensure_db_flag()
 
 
 @asynccontextmanager

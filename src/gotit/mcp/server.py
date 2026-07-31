@@ -12,11 +12,10 @@ from gotit import __version__
 from gotit.api.deps import (
     SessionMemoryReader,
     SessionPromptReader,
-    get_critic_model,
     get_model,
-    resolve_critic_binding,
 )
 from gotit.api.settings import Settings, get_settings
+from gotit.api.verify_finalize import finalize_examine_with_gate
 from gotit.api.workflow_persist import (
     drill_agent_text,
     examine_agent_text,
@@ -65,6 +64,47 @@ def _user_id() -> str:
     return get_settings().gotit_user_id
 
 
+def _verify_meta(finalized: dict[str, object]) -> dict[str, object]:
+    """Examine / recheck / gate fields for MCP responses (REST parity)."""
+    return {
+        "examine_verdict": finalized["examine_verdict"],
+        "recheck_verdict": finalized["recheck_verdict"],
+        "gate_verdict": finalized["gate_verdict"],
+        "verdict": finalized["gate_verdict"],
+    }
+
+
+async def _finalize_claim_mcp(
+    *,
+    claim_id: UUID,
+    examine_verdict: str,
+    user_id: str,
+    settings: Settings,
+    answer: str | None = None,
+    thread_id: UUID | None = None,
+    examine_score: float | None = None,
+    examine_evidence: str | None = None,
+) -> dict[str, object]:
+    """Critic → gate → writeback (shared with REST `/v1/examine`)."""
+    async with session_scope() as session:
+        claim = await session.get(ClaimRow, claim_id)
+        if claim is None or claim.user_id != user_id:
+            raise KeyError(f"claim not found: {claim_id}")
+        return await finalize_examine_with_gate(
+            session,
+            claim_id=claim_id,
+            claim_text=claim.text,
+            topic=claim.topic,
+            examine_verdict=examine_verdict,
+            examine_score=examine_score,
+            examine_evidence=examine_evidence,
+            learner_answer=answer,
+            user_id=user_id,
+            settings=settings,
+            thread_id=thread_id,
+        )
+
+
 @mcp.tool()
 def gotit_health() -> dict[str, str]:
     """Return gotit-ai service health and version."""
@@ -108,8 +148,12 @@ async def gotit_examine(
     """Examine a claim (multi-turn). Pass `note_id` for note-session mode or
     `topic` for topic-session mode (Axiom shuttles across the claims); pass
     `verdict` to bypass the agent (stub/tests, single-claim mode only).
-    Optional `thread_id` appends turns to the companion thread stream."""
+    Optional `thread_id` appends turns to the companion thread stream.
+
+    Claim-close runs Critic + deterministic gate via shared finalize (REST parity).
+    """
     await ensure_db()
+    settings = get_settings()
     user_id = _user_id()
     tid = UUID(thread_id) if thread_id else None
 
@@ -144,23 +188,33 @@ async def gotit_examine(
                 claims = await day_ops.list_topic_claims_today(
                     session, topic, user_id=user_id
                 )
-        if not get_settings().llm_api_key:
+        if not settings.llm_api_key:
             session_result = stub_topic_examine(
                 claims=claims, answer=answer, history=history
             )
         else:
             async with session_scope() as session:
+                from gotit.db.ops.graph import build_budget_subgraph
                 from gotit.db.ops.memory import build_failure_lesson_block
 
                 lesson_block: str | None = None
+                budget_block: str | None = None
                 if claims:
                     focus = claims[0]
+                    budget = await build_budget_subgraph(
+                        session, user_id=user_id, claim_id=focus.id
+                    )
+                    budget_block = budget.prompt_block
+                    neighbor_ids = list(budget.confused_claim_ids)
+                    for c in claims[1:]:
+                        if c.id not in neighbor_ids:
+                            neighbor_ids.append(c.id)
                     lesson_block = await build_failure_lesson_block(
                         session,
                         user_id=user_id,
                         claim_id=focus.id,
                         topic=topic or focus.topic,
-                        neighbor_claim_ids=[c.id for c in claims[1:]],
+                        neighbor_claim_ids=neighbor_ids,
                     )
                 prompt = await SessionPromptReader(session).get_active_prompt("axiom")
                 system_prompt = prompt.system_prompt if prompt else ""
@@ -176,20 +230,30 @@ async def gotit_examine(
                 history=history or [],
                 answer=answer,
                 failure_lesson_block=lesson_block,
+                budget_block=budget_block,
             )
         writeback: dict[str, object] | None = None
+        verify: dict[str, object] | None = None
+        gate_verdict = session_result.verdict
         if (
             session_result.done
             and session_result.verdict is not None
             and session_result.current_claim_id
         ):
-            async with session_scope() as session:
-                writeback = await day_ops.apply_examine_verdict(
-                    session,
-                    session_result.current_claim_id,
-                    verdict=session_result.verdict,
+            try:
+                finalized = await _finalize_claim_mcp(
+                    claim_id=session_result.current_claim_id,
+                    examine_verdict=session_result.verdict,
                     user_id=user_id,
+                    settings=settings,
+                    answer=answer,
+                    thread_id=tid,
                 )
+            except KeyError as exc:
+                return {"error": str(exc)}
+            writeback = finalized["writeback"]  # type: ignore[assignment]
+            verify = _verify_meta(finalized)
+            gate_verdict = finalized["gate_verdict"]  # type: ignore[assignment]
         extra: dict[str, object] = {"session_done": session_result.session_done}
         if note_id is not None:
             extra["note_id"] = note_id
@@ -197,38 +261,58 @@ async def gotit_examine(
             extra["topic"] = topic
         if session_result.current_claim_id:
             extra["claim_id"] = str(session_result.current_claim_id)
-        if session_result.verdict:
-            extra["verdict"] = session_result.verdict
+        if gate_verdict:
+            extra["verdict"] = gate_verdict
+        if verify:
+            extra.update(verify)
         err = await _persist(
             agent_text=examine_agent_text(
                 follow_up=session_result.follow_up,
                 done=session_result.done,
-                verdict=session_result.verdict,
+                verdict=gate_verdict if session_result.done else session_result.verdict,
             ),
             extra=extra,
         )
         if err:
             return err
-        return {
-            "verdict": session_result.model_dump(mode="json"),
+        verdict_payload = session_result.model_dump(mode="json")
+        if gate_verdict is not None and session_result.done:
+            verdict_payload["verdict"] = gate_verdict
+        out: dict[str, object] = {
+            "verdict": verdict_payload,
             "writeback": writeback,
         }
+        if verify:
+            out["verify"] = verify
+        return out
 
     # --- Single-claim mode ---
     if claim_id is None:
         return {"error": "one of `note_id`, `topic`, or `claim_id` is required"}
 
     if verdict is not None:
-        async with session_scope() as session:
-            direct_writeback = await day_ops.apply_examine_verdict(
-                session, UUID(claim_id), verdict=verdict, user_id=user_id
+        try:
+            finalized = await _finalize_claim_mcp(
+                claim_id=UUID(claim_id),
+                examine_verdict=verdict,
+                user_id=user_id,
+                settings=settings,
+                answer=answer,
+                thread_id=tid,
             )
+        except KeyError as exc:
+            return {"error": str(exc)}
+        except ValueError as exc:
+            return {"error": str(exc)}
+        verify = _verify_meta(finalized)
         err = await _persist(
-            agent_text=examine_agent_text(follow_up="", done=True, verdict=verdict),
+            agent_text=examine_agent_text(
+                follow_up="", done=True, verdict=finalized["gate_verdict"]
+            ),
             extra={
                 "claim_id": claim_id,
-                "verdict": verdict,
                 "session_done": True,
+                **verify,
             },
         )
         if err:
@@ -236,25 +320,31 @@ async def gotit_examine(
         return {
             "verdict": {
                 "done": True,
-                "verdict": verdict,
+                "verdict": finalized["gate_verdict"],
                 "score": None,
                 "evidence": None,
                 "follow_up": "",
             },
-            "writeback": direct_writeback,
+            "writeback": finalized["writeback"],
+            "verify": verify,
         }
 
     async with session_scope() as session:
         claim = await session.get(ClaimRow, UUID(claim_id))
         if claim is None or claim.user_id != user_id:
             return {"error": f"claim not found: {claim_id}"}
+        from gotit.db.ops.graph import build_budget_subgraph
         from gotit.db.ops.memory import build_failure_lesson_block
 
+        budget = await build_budget_subgraph(
+            session, user_id=user_id, claim_id=UUID(claim_id)
+        )
         lesson_block = await build_failure_lesson_block(
             session,
             user_id=user_id,
             claim_id=UUID(claim_id),
             topic=claim.topic,
+            neighbor_claim_ids=budget.confused_claim_ids,
         )
         prompt = await SessionPromptReader(session).get_active_prompt("axiom")
         system_prompt = prompt.system_prompt if prompt else ""
@@ -266,30 +356,58 @@ async def gotit_examine(
             claim_text=claim.text,
             history=history or [],
             answer=answer,
+            budget_block=budget.prompt_block,
             failure_lesson_block=lesson_block,
         )
 
     writeback = None
+    verify = None
+    gate_verdict = result.verdict
     if result.done and result.verdict is not None:
-        async with session_scope() as session:
-            writeback = await day_ops.apply_examine_verdict(
-                session, UUID(claim_id), verdict=result.verdict, user_id=user_id
+        try:
+            finalized = await _finalize_claim_mcp(
+                claim_id=UUID(claim_id),
+                examine_verdict=result.verdict,
+                examine_score=result.score,
+                examine_evidence=result.evidence,
+                user_id=user_id,
+                settings=settings,
+                answer=answer,
+                thread_id=tid,
             )
+        except KeyError as exc:
+            return {"error": str(exc)}
+        writeback = finalized["writeback"]
+        verify = _verify_meta(finalized)
+        gate_verdict = finalized["gate_verdict"]  # type: ignore[assignment]
+    extra_single: dict[str, object] = {
+        "claim_id": claim_id,
+        "session_done": bool(result.done),
+    }
+    if gate_verdict:
+        extra_single["verdict"] = gate_verdict
+    if verify:
+        extra_single.update(verify)
     err = await _persist(
         agent_text=examine_agent_text(
             follow_up=result.follow_up,
             done=result.done,
-            verdict=result.verdict,
+            verdict=gate_verdict if result.done else result.verdict,
         ),
-        extra={
-            "claim_id": claim_id,
-            **({"verdict": result.verdict} if result.verdict else {}),
-            "session_done": bool(result.done),
-        },
+        extra=extra_single,
     )
     if err:
         return err
-    return {"verdict": result.model_dump(mode="json"), "writeback": writeback}
+    verdict_out = result.model_dump(mode="json")
+    if gate_verdict is not None and result.done:
+        verdict_out["verdict"] = gate_verdict
+    out_single: dict[str, object] = {
+        "verdict": verdict_out,
+        "writeback": writeback,
+    }
+    if verify:
+        out_single["verify"] = verify
+    return out_single
 
 
 @mcp.tool()
@@ -1694,14 +1812,12 @@ async def gotit_start_verify(
     """Run the verify-loop (examine → recheck → gate) for one claim in a thread.
 
     The gate is deterministic code (no LLM): stricter of examiner's and critic's
-    verdicts. Recheck is done by Critic, a different agent from Axiom.
+    verdicts. Recheck + gate + writeback share finalize with REST / examine.
     """
     await ensure_db()
     settings = get_settings()
     user_id = _user_id()
     from gotit.core.agents.axiom import build_axiom_agent, run_axiom
-    from gotit.core.agents.critic import build_critic_agent, run_critic, stub_critic
-    from gotit.core.loop import VerifyWorkflow
 
     async with session_scope() as session:
         tid = UUID(thread_id)
@@ -1710,18 +1826,12 @@ async def gotit_start_verify(
         if claim is None or claim.user_id != user_id:
             return {"error": "claim not found"}
 
-        from gotit.db.ops.graph import build_budget_subgraph, record_verify_mastery_writeback
-        from gotit.db.ops.memory import (
-            append_trajectory,
-            build_failure_lesson_block,
-            count_prior_failures,
-            list_trajectory,
-        )
+        from gotit.db.ops.graph import build_budget_subgraph
+        from gotit.db.ops.memory import build_failure_lesson_block, list_trajectory
 
         trajectory = await list_trajectory(
             session, user_id=user_id, topic=claim.topic, claim_id=cid
         )
-        prior_failures = count_prior_failures(trajectory, claim_id=cid)
         budget = await build_budget_subgraph(session, user_id=user_id, claim_id=cid)
         lesson_block = await build_failure_lesson_block(
             session,
@@ -1745,8 +1855,11 @@ async def gotit_start_verify(
             reader = SessionMemoryReader(session, user_id=user_id)
             agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
             ev = await run_axiom(
-                agent, reader, claim_text=claim.text,
-                answer=answer, trajectory=trajectory,
+                agent,
+                reader,
+                claim_text=claim.text,
+                answer=answer,
+                trajectory=trajectory,
                 budget_block=budget.prompt_block,
                 failure_lesson_block=lesson_block,
             )
@@ -1754,71 +1867,44 @@ async def gotit_start_verify(
             ex_score = ev.score
             ex_evidence = ev.evidence
 
-        ball = VerifyWorkflow.start(tid, cid)
-        ball = VerifyWorkflow.on_examine(
-            ball, verdict=ex_verdict, score=ex_score, evidence=ex_evidence
-        )
-        await day_ops.set_ball(
-            session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
-        )
-
-        critic_identity = await day_ops.get_identity(session, "critic")
-        critic_cfg = critic_identity.llm_config if critic_identity else None
-        critic_binding = resolve_critic_binding(critic_cfg, settings=settings)
-        if not critic_binding.api_key:
-            recheck = stub_critic(examine_verdict=ex_verdict)
-        else:
-            cprompt = await SessionPromptReader(session).get_active_prompt("critic")
-            csystem = cprompt.system_prompt if cprompt else ""
-            creader = SessionMemoryReader(session, user_id=user_id)
-            cagent = build_critic_agent(
-                get_critic_model(critic_cfg, settings=settings),
-                system_prompt=csystem,
-            )
-            recheck = await run_critic(
-                cagent, creader,
+        try:
+            finalized = await finalize_examine_with_gate(
+                session,
+                claim_id=cid,
                 claim_text=claim.text,
+                topic=claim.topic,
                 examine_verdict=ex_verdict,
                 examine_score=ex_score,
                 examine_evidence=ex_evidence,
                 learner_answer=answer,
+                user_id=user_id,
+                settings=settings,
+                thread_id=tid,
             )
+        except KeyError as exc:
+            return {"error": str(exc)}
 
-        ball = VerifyWorkflow.on_recheck(ball, verdict=recheck.verdict)
-        await day_ops.set_ball(
-            session, thread_id=tid, holder=ball.holder, stage=ball.stage, context=ball.context
-        )
-        gate = VerifyWorkflow.gate(ball, prior_failures=prior_failures)
-        writeback = await day_ops.apply_examine_verdict(
-            session, cid, verdict=gate.verdict, user_id=user_id,
-            prior_failures=prior_failures,
-        )
-        await day_ops.clear_ball(session, tid)
-        await append_trajectory(
-            session, user_id=user_id, claim_id=cid, topic=claim.topic,
-            verdict=ex_verdict, gate_verdict=gate.verdict,
-            score=ex_score, reason=gate.reason,
-        )
-        mastery = await record_verify_mastery_writeback(
-            session,
-            user_id=user_id,
-            claim_id=cid,
-            topic=claim.topic,
-            gate_verdict=gate.verdict,
-            score=ex_score,
-            reason=gate.reason,
-        )
+        gate = finalized["gate"]
         await day_ops.add_message(
-            session, thread_id=tid, role="agent", agent_name="gate",
-            text=f"验证完成：{gate.reason}",
-            metadata={"claim_id": str(cid), "gate_verdict": gate.verdict},
+            session,
+            thread_id=tid,
+            role="agent",
+            agent_name="gate",
+            text=f"验证完成：{gate['reason']}",
+            metadata={
+                "claim_id": str(cid),
+                "examine_verdict": finalized["examine_verdict"],
+                "recheck_verdict": finalized["recheck_verdict"],
+                "gate_verdict": finalized["gate_verdict"],
+                "verdict": finalized["gate_verdict"],
+            },
         )
         return {
-            "examine_verdict": ex_verdict,
-            "recheck_verdict": recheck.verdict,
-            "gate": gate.model_dump(mode="json"),
-            "writeback": writeback,
-            "mastery_graph": mastery,
+            "examine_verdict": finalized["examine_verdict"],
+            "recheck_verdict": finalized["recheck_verdict"],
+            "gate": gate,
+            "writeback": finalized["writeback"],
+            "mastery_graph": finalized["mastery_graph"],
         }
 
 

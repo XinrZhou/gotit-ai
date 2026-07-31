@@ -94,8 +94,9 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   + Critic may bind a distinct OpenAI-compatible model via
     `agent_identities.llm_config` (`model` / `base_url` / `api_key_env`) or
     `CRITIC_MODEL` / `CRITIC_BASE_URL` / `CRITIC_API_KEY` (fallback: global `LLM_*`)
-  + Shared finalize (`api/verify_finalize.py`) for **thread verify and `/v1/examine`**
-    claim-close (note/topic/single) — same Critic + gate + trajectory path
+  + Shared finalize (`api/verify_finalize.py`) for **thread verify, `/v1/examine`,
+    and MCP `gotit_examine` / `gotit_start_verify`** claim-close — same Critic +
+    gate + trajectory path (REST↔MCP parity)
   + **Spaced review** (`core/schedule.py`, deterministic — never LLM):
     `passed` clears due; `almost` stays due today; `owe_next` →
     `next_review_at = as_of + min(30, 1+2×prior_failures)`;

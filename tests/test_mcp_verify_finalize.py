@@ -1,22 +1,21 @@
-"""Daily verify loop: examine finalize shares Critic + gate with thread verify."""
+"""MCP examine / verify share Critic + gate finalize with REST."""
 
 from __future__ import annotations
-
-from datetime import date
 
 import pytest
 from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_examine_direct_verdict_runs_gate_path(
+async def test_mcp_examine_direct_verdict_runs_gate_path(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    day = date.today().isoformat()
+    """gotit_examine(verdict=) must not bypass Critic + deterministic gate."""
+    day = "2026-07-31"
     r = await client.post(
         f"/v1/days/{day}/notes",
         headers=auth_headers,
-        json={"body": "Attention is a weighted sum.", "title": "attn"},
+        json={"body": "Mastery is gated in code.", "title": "gate"},
     )
     assert r.status_code == 200
     note_id = r.json()["id"]
@@ -28,13 +27,10 @@ async def test_examine_direct_verdict_runs_gate_path(
     assert r.status_code == 200
     claim_id = r.json()["claims"][0]["id"]
 
-    r = await client.post(
-        "/v1/examine",
-        headers=auth_headers,
-        json={"claim_id": claim_id, "verdict": "almost"},
-    )
-    assert r.status_code == 200
-    body = r.json()
+    from gotit.mcp.server import gotit_examine
+
+    body = await gotit_examine(claim_id=claim_id, verdict="almost")
+    assert "error" not in body
     assert body["writeback"]["claim"]["status"] == "in_progress"
     assert body["verify"]["examine_verdict"] == "almost"
     assert body["verify"]["recheck_verdict"] == "almost"
@@ -43,14 +39,14 @@ async def test_examine_direct_verdict_runs_gate_path(
 
 
 @pytest.mark.asyncio
-async def test_today_due_claims_surface(
+async def test_mcp_start_verify_uses_shared_finalize(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    day = date.today().isoformat()
+    day = "2026-07-31"
     r = await client.post(
         f"/v1/days/{day}/notes",
         headers=auth_headers,
-        json={"body": "Context on a budget.", "title": "P4"},
+        json={"body": "Thread verify shares finalize.", "title": "tv"},
     )
     note_id = r.json()["id"]
     r = await client.post(
@@ -59,14 +55,19 @@ async def test_today_due_claims_surface(
         json={"add_plan_item": True},
     )
     claim_id = r.json()["claims"][0]["id"]
-    await client.post(
-        "/v1/examine",
-        headers=auth_headers,
-        json={"claim_id": claim_id, "verdict": "almost"},
-    )
 
-    r = await client.get("/v1/today", headers=auth_headers, params={"day": day})
+    r = await client.post("/v1/threads", headers=auth_headers, json={})
     assert r.status_code == 200
-    due = r.json()["due_claims"]
-    assert any(c["id"] == claim_id for c in due)
-    assert any(i.get("claim_id") == claim_id for i in r.json()["plan"]["items"])
+    thread_id = r.json()["id"]
+
+    from gotit.mcp.server import gotit_start_verify
+
+    body = await gotit_start_verify(
+        thread_id=thread_id, claim_id=claim_id, examine_verdict="owe_next"
+    )
+    assert "error" not in body
+    assert body["examine_verdict"] == "owe_next"
+    assert body["recheck_verdict"] == "owe_next"
+    assert body["gate"]["verdict"] == "owe_next"
+    assert body["writeback"]["claim"]["status"] == "queued"
+    assert "mastery_graph" in body
