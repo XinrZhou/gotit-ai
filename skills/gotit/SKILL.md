@@ -94,11 +94,14 @@ Import Reminders / Notes into gotit plan via **`skills/apple-plan/`**
 (osascript on Mac). See **[docs/openclaw-apple-plan.md](../../docs/openclaw-apple-plan.md)**.
 Do **not** call Apple APIs from gotit core.
 
-## Interviews (P3d)
+## Interviews (P3d + P4 ramp)
 
 - `gotit_list_interviews` / `gotit_upsert_interview` / `gotit_update_interview_status`
 - `gotit_list_due_interview_reminders` / `gotit_mark_interview_reminded`
-- Delivery skill: `skills/interview-remind/`
+- Upcoming + ramp: `gotit_list_upcoming_interviews` /
+  `gotit_list_interview_ramp_nudges` / `gotit_mark_interview_ramp_nudged` /
+  `gotit_get_interview_ramp_prefs` / `gotit_put_interview_ramp_prefs`
+- Delivery skill: `skills/interview-remind/`（offset + ramp 同 cron）
 
 ## Failure digest (P3b)
 

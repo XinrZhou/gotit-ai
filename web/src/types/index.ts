@@ -245,6 +245,29 @@ export type Thread = {
   updated_at: string;
 };
 
+/** Companion whitelist tool trail on agent message metadata. */
+export type CompanionToolCall = {
+  name: string;
+  args_digest: string;
+  ok: boolean;
+  summary: string;
+  open_examine?: OpenExaminePayload | null;
+};
+
+/** Payload from `start_examine` for one-tap follow into /v1/examine. */
+export type OpenExaminePayload = {
+  action?: string;
+  claim_id?: string;
+  claim_text?: string;
+  topic?: string | null;
+  note_id?: string;
+  note_title?: string | null;
+  claim_ids?: string[];
+  plan_item_id?: string;
+  plan_changed?: boolean;
+  thread_id?: string | null;
+};
+
 export type ChatMessage = {
   id: string;
   thread_id: string;
@@ -360,6 +383,25 @@ export type InterviewEvent = {
   notes: string | null;
   remind_offsets_hours: number[];
   last_reminded_at: string | null;
+  last_ramp_nudge_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type InterviewRampPrefs = {
+  enabled: boolean;
+  max_nudges_per_week: number;
+};
+
+export type InterviewUpcoming = {
+  interview_id: string;
+  company: string;
+  role_title: string;
+  scheduled_at: string;
+  round: string | null;
+  hours_until: number;
+  ramp_tier: "past" | "urgent" | "warm" | "light" | "silent";
+  tier_hint: string;
+  suggest_action: string;
+  project_name: string | null;
 };

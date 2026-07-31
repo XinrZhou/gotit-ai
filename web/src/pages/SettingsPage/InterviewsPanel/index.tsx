@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../api";
 import { parseApiDate } from "../../../lib/format";
 import { useStore } from "../../../store";
-import type { InterviewEvent, InterviewStatus } from "../../../types";
+import type {
+  InterviewEvent,
+  InterviewRampPrefs,
+  InterviewStatus,
+  InterviewUpcoming,
+} from "../../../types";
 import styles from "./index.module.scss";
 
 const ROUNDS: { id: string; label: string }[] = [
@@ -62,6 +67,13 @@ const emptyDraft = (): Draft => ({
 export function InterviewsPanel() {
   const { setFlash, setError } = useStore();
   const [items, setItems] = useState<InterviewEvent[]>([]);
+  const [upcomingById, setUpcomingById] = useState<
+    Record<string, InterviewUpcoming>
+  >({});
+  const [rampPrefs, setRampPrefs] = useState<InterviewRampPrefs>({
+    enabled: true,
+    max_nudges_per_week: 2,
+  });
   const [includeDone, setIncludeDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -71,8 +83,16 @@ export function InterviewsPanel() {
   const refresh = useCallback(async () => {
     try {
       const q = includeDone ? "?include_done=true" : "";
-      const data = await api<InterviewEvent[]>(`/v1/interviews${q}`);
+      const [data, upcoming, prefs] = await Promise.all([
+        api<InterviewEvent[]>(`/v1/interviews${q}`),
+        api<InterviewUpcoming[]>("/v1/interviews/upcoming"),
+        api<InterviewRampPrefs>("/v1/interviews/ramp-prefs"),
+      ]);
       setItems(data);
+      const map: Record<string, InterviewUpcoming> = {};
+      for (const u of upcoming) map[u.interview_id] = u;
+      setUpcomingById(map);
+      setRampPrefs(prefs);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -94,6 +114,18 @@ export function InterviewsPanel() {
       setBusy(false);
     }
   };
+
+  const onToggleRamp = () =>
+    void run(async () => {
+      const next = {
+        ...rampPrefs,
+        enabled: !rampPrefs.enabled,
+      };
+      await api<InterviewRampPrefs>("/v1/interviews/ramp-prefs", {
+        method: "PUT",
+        body: JSON.stringify(next),
+      });
+    }, rampPrefs.enabled ? "已关闭倒计时升温" : "已开启倒计时升温");
 
   const openCreate = () => {
     setEditingId(null);
@@ -260,10 +292,26 @@ export function InterviewsPanel() {
         </div>
       </div>
       <p className={styles.hint}>
-        记录真实面试时间；OpenClaw 会按提前 24h / 2h 推送提醒。
+        记录真实面试时间；OpenClaw 会按提前 24h / 2h 推送提醒。临近 3～7
+        天可另发低频「升温」提示（可关），建议练项目深挖。
       </p>
+      <div className={styles.rampRow}>
+        <button
+          type="button"
+          className={`${styles.filterChip} ${rampPrefs.enabled ? styles.filterActive : ""}`}
+          disabled={busy}
+          onClick={onToggleRamp}
+        >
+          倒计时升温 {rampPrefs.enabled ? "开" : "关"}
+        </button>
+        <span className={styles.rampMeta}>
+          每周最多 {rampPrefs.max_nudges_per_week} 条 · 关了仍保留 24h/2h 提醒
+        </span>
+      </div>
       <ul className={styles.list}>
-        {items.map((item) => (
+        {items.map((item) => {
+          const ramp = upcomingById[item.id];
+          return (
           <li key={item.id} className={styles.listItem}>
             <button
               type="button"
@@ -277,6 +325,7 @@ export function InterviewsPanel() {
                 {fmtScheduled(item.scheduled_at)}
                 {item.round ? ` · ${roundLabel(item.round)}` : ""}
                 {item.status !== "scheduled" ? ` · ${item.status}` : ""}
+                {ramp?.tier_hint ? ` · ${ramp.tier_hint}` : ""}
               </span>
             </button>
             <div className={styles.listActions}>
@@ -310,7 +359,8 @@ export function InterviewsPanel() {
               </button>
             </div>
           </li>
-        ))}
+          );
+        })}
         {items.length === 0 ? (
           <li className={styles.empty}>暂无面试安排</li>
         ) : null}

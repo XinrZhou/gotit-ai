@@ -1152,6 +1152,91 @@ async def gotit_mark_interview_reminded(
 
 
 @mcp.tool()
+async def gotit_list_upcoming_interviews(
+    now: str | None = None,
+) -> list[dict[str, object]]:
+    """Upcoming interviews (7d) with deterministic ramp_tier + suggest_action."""
+    await ensure_db()
+    from datetime import UTC, datetime
+
+    at = (
+        datetime.fromisoformat(now.replace("Z", "+00:00"))
+        if now
+        else datetime.now(UTC)
+    )
+    async with session_scope() as session:
+        rows = await day_ops.list_upcoming_interviews(
+            session, at, user_id=_user_id()
+        )
+    return [r.model_dump(mode="json") for r in rows]
+
+
+@mcp.tool()
+async def gotit_list_interview_ramp_nudges(
+    now: str | None = None,
+) -> list[dict[str, object]]:
+    """Due countdown-ramp nudges (light/warm; prefs + cooldown). ≤1 item."""
+    await ensure_db()
+    from datetime import UTC, datetime
+
+    at = (
+        datetime.fromisoformat(now.replace("Z", "+00:00"))
+        if now
+        else datetime.now(UTC)
+    )
+    async with session_scope() as session:
+        rows = await day_ops.list_interview_ramp_nudges(
+            session, at, user_id=_user_id()
+        )
+    return [r.model_dump(mode="json") for r in rows]
+
+
+@mcp.tool()
+async def gotit_mark_interview_ramp_nudged(
+    interview_id: str,
+    at: str | None = None,
+) -> dict[str, object]:
+    """Mark a ramp nudge as delivered (updates last_ramp_nudge_at)."""
+    await ensure_db()
+    from datetime import datetime
+
+    nudged_at = (
+        datetime.fromisoformat(at.replace("Z", "+00:00")) if at else None
+    )
+    async with session_scope() as session:
+        row = await day_ops.mark_interview_ramp_nudged(
+            session,
+            UUID(interview_id),
+            at=nudged_at,
+            user_id=_user_id(),
+        )
+    return row.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_get_interview_ramp_prefs() -> dict[str, object]:
+    """Read interview countdown-ramp prefs (enabled / weekly cap)."""
+    await ensure_db()
+    async with session_scope() as session:
+        prefs = await day_ops.get_interview_ramp_prefs(session, user_id=_user_id())
+    return prefs.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_put_interview_ramp_prefs(prefs: dict[str, object]) -> dict[str, object]:
+    """Update interview countdown-ramp prefs."""
+    await ensure_db()
+    from gotit.core.models import InterviewRampPrefs
+
+    body = InterviewRampPrefs.model_validate(prefs)
+    async with session_scope() as session:
+        saved = await day_ops.put_interview_ramp_prefs(
+            session, body, user_id=_user_id()
+        )
+    return saved.model_dump(mode="json")
+
+
+@mcp.tool()
 async def gotit_list_drill_sessions() -> list[dict[str, object]]:
     """List all mock-interview drill sessions (newest first)."""
     await ensure_db()

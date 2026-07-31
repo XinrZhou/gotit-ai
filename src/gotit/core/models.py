@@ -578,6 +578,7 @@ class InterviewEventView(BaseModel):
         default_factory=lambda: list(DEFAULT_REMIND_OFFSETS_HOURS)
     )
     last_reminded_at: datetime | None = None
+    last_ramp_nudge_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -592,6 +593,43 @@ class DueInterviewReminder(BaseModel):
     round: str | None = None
     offset_hours: int
     fire_at: datetime
+
+
+class InterviewRampPrefs(BaseModel):
+    """Optional countdown-ramp nudges (P4). Offset reminders always stay on."""
+
+    enabled: bool = True
+    max_nudges_per_week: int = Field(default=2, ge=0, le=14)
+
+
+class InterviewUpcoming(BaseModel):
+    """Nearest / upcoming interviews with deterministic ramp tier."""
+
+    interview_id: UUID
+    company: str
+    role_title: str
+    scheduled_at: datetime
+    round: str | None = None
+    hours_until: float
+    ramp_tier: Literal["past", "urgent", "warm", "light", "silent"]
+    tier_hint: str = ""
+    suggest_action: str = ""
+    project_name: str | None = None
+
+
+class InterviewRampNudge(BaseModel):
+    """Deliverable ramp nudge for OpenClaw (light/warm only)."""
+
+    interview_id: UUID
+    company: str
+    role_title: str
+    scheduled_at: datetime
+    round: str | None = None
+    hours_until: float
+    ramp_tier: Literal["light", "warm"]
+    suggest_action: str
+    project_name: str | None = None
+    tier_hint: str = ""
 
 
 # --- Companion-arch: identity / messaging / loop ---

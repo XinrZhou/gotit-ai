@@ -12,7 +12,14 @@ from pydantic import BaseModel, Field
 from gotit.api.auth import require_api_key
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
-from gotit.core.models import DueInterviewReminder, InterviewEventView, InterviewStatus
+from gotit.core.models import (
+    DueInterviewReminder,
+    InterviewEventView,
+    InterviewRampNudge,
+    InterviewRampPrefs,
+    InterviewStatus,
+    InterviewUpcoming,
+)
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 
@@ -103,6 +110,67 @@ async def list_due_interview_reminders(
         )
 
 
+@router.get(
+    "/v1/interviews/upcoming",
+    response_model=list[InterviewUpcoming],
+    dependencies=[Depends(require_api_key)],
+)
+async def list_upcoming_interviews(
+    settings: Annotated[Settings, Depends(get_settings)],
+    now: Annotated[datetime | None, Query()] = None,
+) -> list[InterviewUpcoming]:
+    at = now or datetime.now(UTC)
+    async with session_scope() as session:
+        return await day_ops.list_upcoming_interviews(
+            session, at, user_id=_user_id(settings)
+        )
+
+
+@router.get(
+    "/v1/interviews/ramp-nudges",
+    response_model=list[InterviewRampNudge],
+    dependencies=[Depends(require_api_key)],
+)
+async def list_interview_ramp_nudges(
+    settings: Annotated[Settings, Depends(get_settings)],
+    now: Annotated[datetime | None, Query()] = None,
+) -> list[InterviewRampNudge]:
+    at = now or datetime.now(UTC)
+    async with session_scope() as session:
+        return await day_ops.list_interview_ramp_nudges(
+            session, at, user_id=_user_id(settings)
+        )
+
+
+@router.get(
+    "/v1/interviews/ramp-prefs",
+    response_model=InterviewRampPrefs,
+    dependencies=[Depends(require_api_key)],
+)
+async def get_interview_ramp_prefs(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> InterviewRampPrefs:
+    async with session_scope() as session:
+        return await day_ops.get_interview_ramp_prefs(
+            session, user_id=_user_id(settings)
+        )
+
+
+@router.put(
+    "/v1/interviews/ramp-prefs",
+    response_model=InterviewRampPrefs,
+    dependencies=[Depends(require_api_key)],
+)
+async def put_interview_ramp_prefs(
+    body: InterviewRampPrefs,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> InterviewRampPrefs:
+    async with session_scope() as session:
+        return await day_ops.put_interview_ramp_prefs(
+            session, body, user_id=_user_id(settings)
+        )
+
+
 @router.patch(
     "/v1/interviews/{interview_id}",
     response_model=InterviewEventView,
@@ -155,6 +223,26 @@ async def mark_interview_reminded(
     async with session_scope() as session:
         try:
             return await day_ops.mark_interview_reminded(
+                session, interview_id, at=at, user_id=_user_id(settings)
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/v1/interviews/{interview_id}/ramp-nudged",
+    response_model=InterviewEventView,
+    dependencies=[Depends(require_api_key)],
+)
+async def mark_interview_ramp_nudged(
+    interview_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+    body: RemindedIn | None = None,
+) -> InterviewEventView:
+    at = body.at if body else None
+    async with session_scope() as session:
+        try:
+            return await day_ops.mark_interview_ramp_nudged(
                 session, interview_id, at=at, user_id=_user_id(settings)
             )
         except KeyError as exc:

@@ -84,11 +84,17 @@ from gotit.db.ops.identity import (
     upsert_identity,
 )
 from gotit.db.ops.interview import (
+    default_interview_ramp_prefs,
     delete_interview,
+    get_interview_ramp_prefs,
     list_due_interview_reminders,
+    list_interview_ramp_nudges,
     list_interviews,
+    list_upcoming_interviews,
+    mark_interview_ramp_nudged,
     mark_interview_reminded,
     patch_interview,
+    put_interview_ramp_prefs,
     update_interview_status,
     upsert_interview,
 )
@@ -249,7 +255,7 @@ __all__ = [
     "finish_drill_session",
     "list_drill_sessions",
     "get_drill_session",
-    # interviews (companion-os P3d)
+    # interviews (companion-os P3d + P4 ramp)
     "list_interviews",
     "upsert_interview",
     "patch_interview",
@@ -257,6 +263,12 @@ __all__ = [
     "delete_interview",
     "list_due_interview_reminders",
     "mark_interview_reminded",
+    "list_upcoming_interviews",
+    "list_interview_ramp_nudges",
+    "mark_interview_ramp_nudged",
+    "get_interview_ramp_prefs",
+    "put_interview_ramp_prefs",
+    "default_interview_ramp_prefs",
     # prompt
     "register_prompts",
     "get_active_prompt",
