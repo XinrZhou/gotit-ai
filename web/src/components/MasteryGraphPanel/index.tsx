@@ -63,11 +63,13 @@ function shortLabel(text: string, max = 10): string {
   return `${t.slice(0, max)}…`;
 }
 
-/** 薄弱：优先易混簇；去掉无边孤立点，避免全屏大片空白. */
+/** 薄弱：优先易混 / 前置依赖簇；去掉无边孤立点，避免全屏大片空白. */
 function filterWeakGraph(raw: GraphView): GraphView {
-  const confused = raw.edges.filter((e) => e.rel === "confused_with");
+  const claimLinks = raw.edges.filter(
+    (e) => e.rel === "confused_with" || e.rel === "depends_on",
+  );
   const keepClaim = new Set<string>();
-  for (const e of confused) {
+  for (const e of claimLinks) {
     keepClaim.add(e.source);
     keepClaim.add(e.target);
   }
@@ -95,7 +97,9 @@ function filterWeakGraph(raw: GraphView): GraphView {
       nodes,
       edges: raw.edges.filter(
         (e) =>
-          (e.rel === "has_topic" || e.rel === "confused_with") &&
+          (e.rel === "has_topic" ||
+            e.rel === "confused_with" ||
+            e.rel === "depends_on") &&
           nodeIds.has(e.source) &&
           nodeIds.has(e.target),
       ),
@@ -116,7 +120,9 @@ function filterWeakGraph(raw: GraphView): GraphView {
     nodes,
     edges: raw.edges.filter(
       (e) =>
-        (e.rel === "confused_with" || e.rel === "has_topic") &&
+        (e.rel === "confused_with" ||
+          e.rel === "depends_on" ||
+          e.rel === "has_topic") &&
         nodeIds.has(e.source) &&
         nodeIds.has(e.target),
     ),
@@ -130,7 +136,9 @@ function filterAllGraph(raw: GraphView): GraphView {
     nodes,
     edges: raw.edges.filter(
       (e) =>
-        (e.rel === "confused_with" || e.rel === "has_topic") &&
+        (e.rel === "confused_with" ||
+          e.rel === "depends_on" ||
+          e.rel === "has_topic") &&
         nodeIds.has(e.source) &&
         nodeIds.has(e.target),
     ),
@@ -238,12 +246,14 @@ export function MasteryGraphPanel({
           if (l.rel === "confused_with") {
             return l.active || l.weight >= 2 ? 52 : 64;
           }
+          if (l.rel === "depends_on") return 58;
           return 78;
         })
         .strength((l) => {
           if (l.rel === "confused_with") {
             return l.active || l.weight >= 2 ? 0.95 : 0.65;
           }
+          if (l.rel === "depends_on") return 0.55;
           return 0.4;
         }),
     );
@@ -346,7 +356,10 @@ export function MasteryGraphPanel({
             nodeId="id"
             nodeVal="val"
             nodeLabel={(n) => (n as FGNode).clean}
-            linkDirectionalArrowLength={0}
+            linkDirectionalArrowLength={(link) =>
+              (link as FGLink).rel === "depends_on" ? 4 : 0
+            }
+            linkDirectionalArrowRelPos={0.85}
             cooldownTicks={180}
             warmupTicks={60}
             enableNodeDrag
@@ -375,6 +388,11 @@ export function MasteryGraphPanel({
                 ctx.lineWidth =
                   (active ? Math.min(3.2, 1.6 + l.weight * 0.35) : 1.2) / globalScale;
                 ctx.setLineDash([]);
+              } else if (l.rel === "depends_on") {
+                // Distinct from confuse: quieter dash + arrow (directional prereq).
+                ctx.strokeStyle = "rgba(29,29,31,0.35)";
+                ctx.lineWidth = 1.35 / globalScale;
+                ctx.setLineDash([4 / globalScale, 4 / globalScale]);
               } else {
                 // topic spokes stay nearly invisible — structure without noise
                 ctx.strokeStyle = "rgba(0,0,0,0.08)";

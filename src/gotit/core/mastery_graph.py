@@ -6,7 +6,10 @@ from uuid import UUID
 
 CONFUSED_THRESHOLD = 2
 BUDGET_CONFUSED_MAX = 2
+BUDGET_DEPENDS_MAX = 2
 BUDGET_FAIL_REASONS_MAX = 3
+# Max outbound ``depends_on`` edges per claim (edge explosion guard).
+DEPENDS_OUT_MAX = 3
 FAIL_VERDICTS = frozenset({"almost", "owe_next"})
 
 
@@ -42,10 +45,15 @@ def format_budget_block(
     *,
     confused_labels: list[str],
     fail_reasons: list[str],
+    depends_labels: list[str] | None = None,
     max_chars: int = 600,
 ) -> str | None:
     """Prompt section for Axiom; None when empty. Caps total size near failure-lesson budget."""
     parts: list[str] = []
+    deps = list(depends_labels or [])[:BUDGET_DEPENDS_MAX]
+    if deps:
+        lines = "\n".join(f"- {t}" for t in deps)
+        parts.append(f"## Prerequisites not yet passed\n{lines}")
     if confused_labels:
         lines = "\n".join(f"- {t}" for t in confused_labels)
         parts.append(f"## Easy to confuse with\n{lines}")

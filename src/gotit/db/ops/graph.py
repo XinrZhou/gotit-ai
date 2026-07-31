@@ -1,4 +1,4 @@
-"""Mastery graph: fail events, confused_with edges, budget subgraph."""
+"""Mastery graph: fail events, confused_with / depends_on edges, budget subgraph."""
 
 from __future__ import annotations
 
@@ -10,14 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.mastery_graph import (
     BUDGET_CONFUSED_MAX,
+    BUDGET_DEPENDS_MAX,
     BUDGET_FAIL_REASONS_MAX,
     CONFUSED_THRESHOLD,
+    DEPENDS_OUT_MAX,
     FAIL_VERDICTS,
     canonical_claim_pair,
     format_budget_block,
     pick_confused_neighbors,
 )
-from gotit.core.models import BudgetSubgraphView, FailEventView
+from gotit.core.models import BudgetSubgraphView, FailEventView, MasteryStatus
 from gotit.db.models import ClaimRow, FailEventRow, GraphEdgeRow
 from gotit.db.ops._common import DEFAULT_USER_ID
 
@@ -222,6 +224,127 @@ async def list_confused_edges(
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def list_depends_edges(
+    session: AsyncSession,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+    claim_id: UUID | None = None,
+) -> list[GraphEdgeRow]:
+    """Directed ``depends_on``: source depends on target (prereq)."""
+    stmt = select(GraphEdgeRow).where(
+        GraphEdgeRow.user_id == user_id,
+        GraphEdgeRow.rel == "depends_on",
+    )
+    if claim_id is not None:
+        stmt = stmt.where(GraphEdgeRow.source_claim_id == claim_id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def count_depends_out(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+) -> int:
+    stmt = select(func.count()).where(
+        GraphEdgeRow.user_id == user_id,
+        GraphEdgeRow.source_claim_id == claim_id,
+        GraphEdgeRow.rel == "depends_on",
+    )
+    return int((await session.execute(stmt)).scalar_one())
+
+
+async def add_depends_on(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+    prereq_claim_id: UUID,
+) -> GraphEdgeRow:
+    """Add directed edge claim → prereq. Raises ValueError on guard failures."""
+    if claim_id == prereq_claim_id:
+        raise ValueError("claim cannot depend on itself")
+    claim = await session.get(ClaimRow, claim_id)
+    prereq = await session.get(ClaimRow, prereq_claim_id)
+    if claim is None or claim.user_id != user_id:
+        raise KeyError(f"claim not found: {claim_id}")
+    if prereq is None or prereq.user_id != user_id:
+        raise KeyError(f"claim not found: {prereq_claim_id}")
+
+    existing = (
+        await session.execute(
+            select(GraphEdgeRow).where(
+                GraphEdgeRow.user_id == user_id,
+                GraphEdgeRow.source_claim_id == claim_id,
+                GraphEdgeRow.target_claim_id == prereq_claim_id,
+                GraphEdgeRow.rel == "depends_on",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    out_n = await count_depends_out(session, user_id=user_id, claim_id=claim_id)
+    if out_n >= DEPENDS_OUT_MAX:
+        raise ValueError(f"depends_on out-degree cap ({DEPENDS_OUT_MAX}) reached")
+
+    row = GraphEdgeRow(
+        id=uuid4(),
+        user_id=user_id,
+        source_claim_id=claim_id,
+        target_claim_id=prereq_claim_id,
+        rel="depends_on",
+        weight=1,
+        updated_at=datetime.now(UTC),
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def remove_depends_on(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+    prereq_claim_id: UUID,
+) -> bool:
+    """Delete directed depends_on edge; return True if a row was removed."""
+    row = (
+        await session.execute(
+            select(GraphEdgeRow).where(
+                GraphEdgeRow.user_id == user_id,
+                GraphEdgeRow.source_claim_id == claim_id,
+                GraphEdgeRow.target_claim_id == prereq_claim_id,
+                GraphEdgeRow.rel == "depends_on",
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return False
+    await session.delete(row)
+    await session.flush()
+    return True
+
+
+async def mastered_claim_ids(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_ids: list[UUID] | None = None,
+) -> set[UUID]:
+    """Claim ids whose mastery status is ``mastered`` (gate-passed)."""
+    stmt = select(ClaimRow.id).where(
+        ClaimRow.user_id == user_id,
+        ClaimRow.status == MasteryStatus.MASTERED.value,
+    )
+    if claim_ids is not None:
+        if not claim_ids:
+            return set()
+        stmt = stmt.where(ClaimRow.id.in_(claim_ids))
+    return set((await session.execute(stmt)).scalars().all())
+
+
 async def fail_counts_by_claim(
     session: AsyncSession,
     *,
@@ -241,13 +364,35 @@ async def fail_counts_by_claim(
     return {cid: int(n) for cid, n in rows}
 
 
+async def _claim_labels(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_ids: list[UUID],
+) -> dict[UUID, str]:
+    if not claim_ids:
+        return {}
+    rows = list(
+        (
+            await session.execute(
+                select(ClaimRow).where(
+                    ClaimRow.id.in_(claim_ids), ClaimRow.user_id == user_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {c.id: c.text for c in rows}
+
+
 async def build_budget_subgraph(
     session: AsyncSession,
     *,
     user_id: str,
     claim_id: UUID,
 ) -> BudgetSubgraphView:
-    from gotit.core.schedule import top_confuse_neighbor_ids
+    from gotit.core.schedule import top_confuse_neighbor_ids, unmet_depends_prereq_ids
 
     edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
     tuples = [
@@ -274,24 +419,26 @@ async def build_budget_subgraph(
         if len(merged) >= BUDGET_CONFUSED_MAX:
             break
     neighbor_ids = merged
-    labels: list[str] = []
-    if neighbor_ids:
-        claims = list(
-            (
-                await session.execute(
-                    select(ClaimRow).where(
-                        ClaimRow.id.in_(neighbor_ids), ClaimRow.user_id == user_id
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        by_id = {c.id: c for c in claims}
-        for nid in neighbor_ids:
-            c = by_id.get(nid)
-            if c is not None:
-                labels.append(c.text[:200])
+    labels_by_id = await _claim_labels(session, user_id=user_id, claim_ids=neighbor_ids)
+    labels = [labels_by_id[nid][:200] for nid in neighbor_ids if nid in labels_by_id]
+
+    depends_rows = await list_depends_edges(session, user_id=user_id)
+    depends_tuples = [
+        (r.source_claim_id, r.target_claim_id) for r in depends_rows
+    ]
+    all_prereq_ids = list({pre for _, pre in depends_tuples})
+    mastered = await mastered_claim_ids(
+        session, user_id=user_id, claim_ids=all_prereq_ids
+    )
+    unmet = unmet_depends_prereq_ids(
+        claim_id=claim_id,
+        depends_edges=depends_tuples,
+        mastered_ids=mastered,
+    )[:BUDGET_DEPENDS_MAX]
+    dep_labels_by_id = await _claim_labels(session, user_id=user_id, claim_ids=unmet)
+    depends_labels = [
+        dep_labels_by_id[nid][:200] for nid in unmet if nid in dep_labels_by_id
+    ]
 
     fail_stmt = (
         select(FailEventRow)
@@ -306,11 +453,17 @@ async def build_budget_subgraph(
         if (f.reason or f.gate_verdict)
     ]
 
-    block = format_budget_block(confused_labels=labels, fail_reasons=reasons)
+    block = format_budget_block(
+        confused_labels=labels,
+        fail_reasons=reasons,
+        depends_labels=depends_labels,
+    )
     return BudgetSubgraphView(
         claim_id=claim_id,
         confused_claim_ids=neighbor_ids,
         confused_labels=labels,
+        depends_claim_ids=unmet,
+        depends_labels=depends_labels,
         fail_reasons=reasons,
         prompt_block=block,
     )

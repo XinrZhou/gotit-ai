@@ -39,10 +39,13 @@ def test_format_budget_block() -> None:
     block = format_budget_block(
         confused_labels=["pointer vs array"],
         fail_reasons=["owe_next: mixed up free"],
+        depends_labels=["malloc basics"],
     )
     assert block is not None
     assert "Easy to confuse" in block
     assert "pointer" in block
+    assert "Prerequisites" in block
+    assert "malloc" in block
 
 
 @pytest.mark.asyncio

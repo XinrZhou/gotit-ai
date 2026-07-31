@@ -13,11 +13,13 @@ from gotit.core.schedule import (
     MAX_INTERVAL_DAYS,
     compute_next_review,
     confuse_weights_from_edges,
+    depends_blocked_map,
     due_sort_key,
     explain_due_reason,
     owe_interval_days,
     schedule_after_verdict,
     top_confuse_neighbor_ids,
+    unmet_depends_prereq_ids,
 )
 from gotit.db import ops as day_ops
 from gotit.db.models import Base, ClaimRow, GraphEdgeRow
@@ -126,7 +128,7 @@ def test_explain_due_reason_codes() -> None:
         next_review_at=day,
     )
     assert code == "almost_today"
-    assert "还差点" in text or "接着" in text
+    assert "还差点" in text
 
     code, text = explain_due_reason(
         as_of=day,
@@ -135,6 +137,7 @@ def test_explain_due_reason_codes() -> None:
     )
     assert code == "overdue"
     assert "2" in text
+    assert "建议复习日" in text
 
     code, text = explain_due_reason(
         as_of=day,
@@ -145,6 +148,67 @@ def test_explain_due_reason_codes() -> None:
     )
     assert code == "confuse_boost"
     assert "pointer" in text
+    assert "易与" in text
+
+    code, text = explain_due_reason(
+        as_of=day,
+        status="queued",
+        next_review_at=day,
+        depends_prereq_label="malloc basics",
+        fail_count=2,
+    )
+    assert code == "depends"
+    assert "malloc" in text
+    assert "尚未过关" in text
+
+    code, text = explain_due_reason(
+        as_of=day,
+        status="queued",
+        next_review_at=day - timedelta(days=1),
+        fail_count=3,
+    )
+    assert code == "overdue"
+    assert "曾挂过 3 次" in text
+
+
+def test_depends_helpers_and_sort_demote() -> None:
+    day = date(2026, 7, 30)
+    a, b, pre = uuid4(), uuid4(), uuid4()
+    edges = [(a, pre)]  # a depends on pre
+    unmet = unmet_depends_prereq_ids(
+        claim_id=a, depends_edges=edges, mastered_ids=set()
+    )
+    assert unmet == [pre]
+    assert (
+        unmet_depends_prereq_ids(
+            claim_id=a, depends_edges=edges, mastered_ids={pre}
+        )
+        == []
+    )
+    blocked = depends_blocked_map(
+        [a, b], depends_edges=edges, mastered_ids=set()
+    )
+    assert blocked[a] is True
+    assert blocked[b] is False
+
+    # Same overdue: unmet-depends demotes behind clear claim.
+    key_a = due_sort_key(
+        as_of=day,
+        next_review_at=day,
+        fail_count=0,
+        confuse_weight=0,
+        depends_blocked=True,
+        claim_id=a,
+    )
+    key_b = due_sort_key(
+        as_of=day,
+        next_review_at=day,
+        fail_count=0,
+        confuse_weight=0,
+        depends_blocked=False,
+        claim_id=b,
+    )
+    assert key_b < key_a
 
 
 @pytest.mark.asyncio
@@ -238,3 +302,102 @@ async def test_due_sort_prefers_confuse_when_equal_overdue(
     assert by_id[high].due_reason_code == "confuse_boost"
     assert by_id[high].due_reason_text
     assert by_id[low].due_reason_code == "owe_scheduled"
+
+@pytest.mark.asyncio
+async def test_depends_on_demotes_and_marks_reason(session: AsyncSession) -> None:
+    day = date(2026, 7, 30)
+    blocked = uuid4()
+    clear = uuid4()
+    prereq = uuid4()
+    session.add_all(
+        [
+            ClaimRow(
+                id=blocked,
+                user_id="local",
+                text="needs prereq",
+                status=MasteryStatus.QUEUED.value,
+                next_review_at=day,
+            ),
+            ClaimRow(
+                id=clear,
+                user_id="local",
+                text="unlocked",
+                status=MasteryStatus.QUEUED.value,
+                next_review_at=day,
+            ),
+            ClaimRow(
+                id=prereq,
+                user_id="local",
+                text="malloc basics",
+                status=MasteryStatus.NOT_YET.value,
+                next_review_at=None,
+            ),
+            GraphEdgeRow(
+                id=uuid4(),
+                user_id="local",
+                source_claim_id=blocked,
+                target_claim_id=prereq,
+                rel="depends_on",
+                weight=1,
+            ),
+        ]
+    )
+    await session.flush()
+
+    due = await day_ops.list_due_claims(session, day, user_id="local")
+    ids = [c.id for c in due]
+    assert clear in ids and blocked in ids
+    assert ids.index(clear) < ids.index(blocked)
+
+    today = await day_ops.get_today(session, day, user_id="local")
+    by_id = {c.id: c for c in today.due_claims}
+    assert by_id[blocked].due_reason_code == "depends"
+    assert "malloc" in (by_id[blocked].due_reason_text or "")
+
+
+@pytest.mark.asyncio
+async def test_depends_out_cap_and_budget_inject(session: AsyncSession) -> None:
+    from gotit.core.mastery_graph import DEPENDS_OUT_MAX
+    from gotit.db.ops import graph as graph_ops
+
+    day = date(2026, 7, 30)
+    claim = uuid4()
+    prereqs = [uuid4() for _ in range(DEPENDS_OUT_MAX + 1)]
+    session.add(
+        ClaimRow(
+            id=claim,
+            user_id="local",
+            text="dependent claim",
+            status=MasteryStatus.QUEUED.value,
+            next_review_at=day,
+        )
+    )
+    for i, pid in enumerate(prereqs):
+        session.add(
+            ClaimRow(
+                id=pid,
+                user_id="local",
+                text=f"prereq {i}",
+                status=MasteryStatus.NOT_YET.value,
+            )
+        )
+    await session.flush()
+
+    for pid in prereqs[:DEPENDS_OUT_MAX]:
+        await graph_ops.add_depends_on(
+            session, user_id="local", claim_id=claim, prereq_claim_id=pid
+        )
+    with pytest.raises(ValueError, match="out-degree"):
+        await graph_ops.add_depends_on(
+            session,
+            user_id="local",
+            claim_id=claim,
+            prereq_claim_id=prereqs[DEPENDS_OUT_MAX],
+        )
+
+    budget = await graph_ops.build_budget_subgraph(
+        session, user_id="local", claim_id=claim
+    )
+    assert len(budget.depends_claim_ids) >= 1
+    assert budget.prompt_block is not None
+    assert "Prerequisites" in budget.prompt_block

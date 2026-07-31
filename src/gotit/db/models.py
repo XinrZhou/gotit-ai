@@ -48,6 +48,12 @@ class LearningDayRow(Base):
     user_id: Mapped[str] = mapped_column(String(64), default="local", index=True)
     day: Mapped[date] = mapped_column(Date, index=True)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    close_passed_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    close_still_owed_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    close_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     plan_items: Mapped[list[PlanItemRow]] = relationship(back_populates="learning_day")
     notes: Mapped[list[DayNoteRow]] = relationship(back_populates="learning_day")
@@ -491,7 +497,11 @@ class FailEventRow(Base):
 
 
 class GraphEdgeRow(Base):
-    """Undirected mastery edges; endpoints stored in canonical UUID order."""
+    """Mastery edges on ``graph_edges``.
+
+    ``confused_with`` is undirected (endpoints stored in canonical UUID order).
+    ``depends_on`` is directed: source depends on target (prereq).
+    """
 
     __tablename__ = "graph_edges"
     __table_args__ = (

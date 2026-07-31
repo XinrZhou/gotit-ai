@@ -34,7 +34,7 @@ export function dueReasonLine(claim: {
   const text = claim.due_reason_text?.trim();
   if (text) return text;
   const status = (claim.status || "").toLowerCase();
-  if (status === "in_progress") return "上次还差点，今天接着练";
+  if (status === "in_progress") return "上次还差点，今天接着";
   if (claim.next_review_at) return "按计划该复习";
   return null;
 }

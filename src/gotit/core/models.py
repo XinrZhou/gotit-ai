@@ -109,11 +109,54 @@ class ChatMessageView(BaseModel):
     created_at: datetime
 
 
+class DayCloseSummary(BaseModel):
+    """Short wrap after the learner closes the day (digest may reuse counts)."""
+
+    passed_count: int = 0
+    still_owed_count: int = 0
+    note: str = ""
+    closed_at: datetime | None = None
+
+
+class InterviewFocusHint(BaseModel):
+    """Quiet / featured drill suggestion for today's brief (ramp light|warm|urgent)."""
+
+    interview_id: UUID
+    company: str
+    role_title: str = ""
+    hours_until: float
+    ramp_tier: Literal["urgent", "warm", "light"]
+    prompt: str
+    prominence: Literal["quiet", "featured"] = "quiet"
+    project_name: str | None = None
+    project_id: UUID | None = None
+    round: str | None = None
+    open_drill: dict[str, Any] = Field(default_factory=dict)
+
+
+class BootcampView(BaseModel):
+    """First-pass empty-library guide (SessionStart). Read via ``/v1/today``."""
+
+    status: Literal["none", "in_progress", "done", "skipped"] = "none"
+    show: bool = False
+    step: Literal["ingest", "verify", "celebrate"] | None = None
+    claim_count: int = 0
+    note_count: int = 0
+    claim_id: UUID | None = None
+    claim_text: str | None = None
+    gate_verdict: Literal["passed", "almost", "owe_next"] | None = None
+
+
 class TodayView(BaseModel):
     date: date
     plan: DayPlanView
     notes: list[DayNoteView] = Field(default_factory=list)
     due_claims: list[Claim] = Field(default_factory=list)
+    day_closed: bool = False
+    close_suggested: bool = False
+    close_summary: DayCloseSummary | None = None
+    interview_focus: InterviewFocusHint | None = None
+    bootcamp: BootcampView | None = None
 
 
 # --- Agent rewrite: verdicts, memory, prompts, harness ---
@@ -200,6 +243,19 @@ class ShellDigestItem(BaseModel):
     label: str | None = None
 
 
+class InterestPromoteResult(BaseModel):
+    """Result of promoting an interest (「有用」) into testable claims + today plan."""
+
+    ok: bool
+    interest_id: UUID
+    already_promoted: bool = False
+    reason: str | None = None
+    rewrite_suggestion: str | None = None
+    note_id: UUID | None = None
+    claims: list[Claim] = Field(default_factory=list)
+    plan_item_ids: list[UUID] = Field(default_factory=list)
+
+
 class DigestFeed(BaseModel):
     """One configurable RSS / YouTube Atom source for digest news."""
 
@@ -279,13 +335,19 @@ class GraphNode(BaseModel):
 class GraphEdge(BaseModel):
     source: str
     target: str
-    rel: Literal["has_topic", "in_project", "interest_topic", "confused_with"]
+    rel: Literal[
+        "has_topic",
+        "in_project",
+        "interest_topic",
+        "confused_with",
+        "depends_on",
+    ]
     weight: int = 1
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphView(BaseModel):
-    """Mastery / obs graph: claim–topic–project + confused_with (+ interest)."""
+    """Mastery / obs graph: claim–topic–project + confuse/depends (+ interest)."""
 
     nodes: list[GraphNode] = Field(default_factory=list)
     edges: list[GraphEdge] = Field(default_factory=list)
@@ -307,6 +369,8 @@ class BudgetSubgraphView(BaseModel):
     claim_id: UUID
     confused_claim_ids: list[UUID] = Field(default_factory=list)
     confused_labels: list[str] = Field(default_factory=list)
+    depends_claim_ids: list[UUID] = Field(default_factory=list)
+    depends_labels: list[str] = Field(default_factory=list)
     fail_reasons: list[str] = Field(default_factory=list)
     prompt_block: str | None = None
 

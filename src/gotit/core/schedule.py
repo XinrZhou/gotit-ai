@@ -17,8 +17,9 @@ non-passed verifies on this claim, before the current attempt):
 
 ## Due sort key
 
-``(-overdue_days, -severity, -confuse_weight, id)`` — earlier in the list =
-more urgent. ``overdue_days`` treats missing ``next_review_at`` as highly overdue.
+``(-overdue_days, depends_blocked, -severity, -confuse_weight, id)`` —
+earlier in the list = more urgent. Claims with unmet ``depends_on`` prereqs
+are demoted (``depends_blocked=1``) so unlocked / prereq work can surface first.
 ``severity`` is fail-event count; ``confuse_weight`` is max ``confused_with``
 edge weight touching the claim (0 if none).
 """
@@ -32,7 +33,12 @@ from uuid import UUID
 
 ScheduleReasonCode = Literal["passed_clear", "almost_today", "owe_scheduled"]
 DueReasonCode = Literal[
-    "overdue", "almost_today", "owe_scheduled", "confuse_boost", "queued"
+    "overdue",
+    "almost_today",
+    "owe_scheduled",
+    "confuse_boost",
+    "depends",
+    "queued",
 ]
 
 MAX_INTERVAL_DAYS = 30
@@ -108,11 +114,13 @@ def due_sort_key(
     next_review_at: date | None,
     fail_count: int = 0,
     confuse_weight: int = 0,
+    depends_blocked: bool = False,
     claim_id: UUID | str,
-) -> tuple[int, int, int, str]:
+) -> tuple[int, int, int, int, str]:
     """Sort key for due lists / fill-from-queue (ascending = highest priority)."""
     return (
         -overdue_days(as_of=as_of, next_review_at=next_review_at),
+        1 if depends_blocked else 0,
         -max(int(fail_count), 0),
         -max(int(confuse_weight), 0),
         str(claim_id),
@@ -166,13 +174,58 @@ def top_confuse_neighbor_ids(
     return [cid for _, cid in scored[: max(0, limit)]]
 
 
+def unmet_depends_prereq_ids(
+    *,
+    claim_id: UUID,
+    depends_edges: list[tuple[UUID, UUID]],
+    mastered_ids: set[UUID],
+) -> list[UUID]:
+    """Directed ``depends_on``: ``(dependent, prereq)``; return unmet prereqs.
+
+    Stable order by prereq id string. Empty when all prereqs are mastered.
+    """
+    unmet = [
+        pre
+        for dep, pre in depends_edges
+        if dep == claim_id and pre not in mastered_ids
+    ]
+    unmet.sort(key=str)
+    return unmet
+
+
+def depends_blocked_map(
+    claim_ids: list[UUID],
+    *,
+    depends_edges: list[tuple[UUID, UUID]],
+    mastered_ids: set[UUID],
+) -> dict[UUID, bool]:
+    """True when the claim has at least one unmet ``depends_on`` prereq."""
+    return {
+        cid: bool(
+            unmet_depends_prereq_ids(
+                claim_id=cid,
+                depends_edges=depends_edges,
+                mastered_ids=mastered_ids,
+            )
+        )
+        for cid in claim_ids
+    }
+
+
 _DUE_REASON_TEXT: dict[DueReasonCode, str] = {
-    "almost_today": "上次还差点，今天接着练",
-    "overdue": "已到期，该复习了",
+    "almost_today": "上次还差点，今天接着",
+    "overdue": "已过建议复习日",
     "owe_scheduled": "按计划该复习",
-    "confuse_boost": "和易混点一起练",
+    "confuse_boost": "易与邻近点搞混",
+    "depends": "前置尚未过关",
     "queued": "还在队列里，轮到了",
 }
+
+
+def _with_fail_hint(text: str, fail_count: int) -> str:
+    if fail_count <= 0:
+        return text
+    return f"{text}（曾挂过 {fail_count} 次）"
 
 
 def explain_due_reason(
@@ -183,23 +236,32 @@ def explain_due_reason(
     confuse_weight: int = 0,
     confuse_threshold: int = 2,
     confuse_neighbor_label: str | None = None,
+    depends_prereq_label: str | None = None,
+    fail_count: int = 0,
 ) -> tuple[DueReasonCode, str]:
     """Human-facing due reason for today views (server-assembled; UI does not parse formula)."""
     status_l = (status or "").lower()
+    fails = max(int(fail_count), 0)
     if status_l == "in_progress":
-        return "almost_today", _DUE_REASON_TEXT["almost_today"]
+        return "almost_today", _with_fail_hint(_DUE_REASON_TEXT["almost_today"], fails)
+    if depends_prereq_label:
+        label = depends_prereq_label.strip()[:40]
+        return "depends", f"前置「{label}」尚未过关"
     if next_review_at is not None and next_review_at < as_of:
         days = (as_of - next_review_at).days
-        return "overdue", f"已到期 {days} 天，该复习了"
+        base = f"已过建议复习日 {days} 天"
+        return "overdue", _with_fail_hint(base, fails)
     if confuse_weight >= confuse_threshold and confuse_neighbor_label:
         label = confuse_neighbor_label.strip()[:40]
-        return "confuse_boost", f"与「{label}」易混，一起练更稳"
+        return "confuse_boost", f"易与「{label}」搞混"
     if confuse_weight >= confuse_threshold:
         return "confuse_boost", _DUE_REASON_TEXT["confuse_boost"]
     if next_review_at is not None and next_review_at <= as_of:
-        return "owe_scheduled", _DUE_REASON_TEXT["owe_scheduled"]
+        return "owe_scheduled", _with_fail_hint(
+            _DUE_REASON_TEXT["owe_scheduled"], fails
+        )
     if next_review_at is None:
-        return "queued", _DUE_REASON_TEXT["queued"]
+        return "queued", _with_fail_hint(_DUE_REASON_TEXT["queued"], fails)
     return "owe_scheduled", _DUE_REASON_TEXT["owe_scheduled"]
 
 
