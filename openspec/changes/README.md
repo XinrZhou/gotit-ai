@@ -17,20 +17,28 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Archive | Notes |
 |---------|-------|
-| `archive/2026-07-31-ramp-open-drill/` | Companion `start_drill` + bubble「深挖」→ `/v1/drill/sessions` |
-| `archive/2026-07-31-interview-countdown-ramp/` | P4: deterministic ramp tiers + optional nudges + Settings toggle |
-| `archive/2026-07-31-companion-tool-trail/` | Quiet `tool_calls` trail + one-tap follow `start_examine` |
-| `archive/2026-07-30-cold-start-calibration/` | CAT-lite cold start → schedule / fail / confuse seed; due; trace + synthetic; minimal Web |
-| `archive/2026-07-30-digest-evening-wrap/` | Evening = today wrap + tomorrow Q&A; news default on 20:00 separate |
-| `archive/2026-07-30-companion-tools-and-schedule/` | Companion builtin tools + spaced schedule + due-reason UI + copy warmth + gold harness |
+| `archive/2026-07-31-day-close-ritual/` | Today close ritual + companion `close_day` |
+| `archive/2026-07-31-digest-to-claim/` | Interest → promotable claims → plan |
+| `archive/2026-07-31-chat-action-blocks/` | `metadata.action_blocks` + Chat ActionBlocks |
+| `archive/2026-07-31-first-pass-bootcamp/` | Empty-library first-pass guide |
+| `archive/2026-07-31-voice-teachback-verify/` | Voice/text teach-back via shared finalize |
+| `archive/2026-07-31-explainable-schedule/` | due_reason templates + `depends_on` |
+| `archive/2026-07-31-interview-learning-arc/` | Today `interview_focus` deep-drill hint |
+| `archive/2026-07-31-ramp-open-drill/` | Companion `start_drill` + bubble「深挖」 |
+| `archive/2026-07-31-interview-countdown-ramp/` | Deterministic ramp tiers + nudges |
+| `archive/2026-07-31-companion-tool-trail/` | Quiet tool trail + one-tap examine |
+| `archive/2026-07-31-mcp-verify-finalize-parity/` | Shared verify finalize REST↔MCP |
+| `archive/2026-07-30-cold-start-calibration/` | CAT-lite cold start |
+| `archive/2026-07-30-digest-evening-wrap/` | Evening wrap + news separate |
+| `archive/2026-07-30-companion-tools-and-schedule/` | Builtin tools + spaced schedule |
 
 Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 `notes-batch-delete`, `profile-center`, `resume-import`, `workflow-in-thread`,
 `companion-os`, `verify-surface`, `daily-verify-loop`, `composer-at-mention`
 → `openspec/changes/archive/2026-07-30-*`.
 
-## Next candidates (not opened yet)
+## Later (not opened yet)
 
-- Axiom harness holdout UI
+- Axiom harness holdout UI / user-visible harness adopts
 - Broad per-agent multi-model beyond Critic
 - Broad agent-as-tool against full MCP catalog

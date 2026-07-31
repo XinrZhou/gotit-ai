@@ -35,10 +35,12 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded; whitelist tools (`get_today` / due / open-examine / open-drill / failure lessons / memory / upcoming interview) with quiet bubble trail + one-tap「开考」/「深挖」 |
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
 | **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
-| **Daily brief** | Empty chat shows owed + today's plan with one-tap 开考 |
+| **Daily brief** | Empty chat shows owed + plan with one-tap 开考; optional day close; quiet interview deep-drill hint when ramp is on |
 | **Cold-start calibration** | Few high-info probes to seed schedule + confuse graph; empty chat CTA when nothing owed yet |
-| **Verify loop** | Examine → Critic recheck → **deterministic gate** → trajectory / spaced review (interval grows with prior fails; due rank + confuse neighbors) / mastery-graph (same path for chat verify and `/v1/examine`) |
-| **Notes → claims** | Ingest study material into testable claims + daily plan |
+| **First-pass bootcamp** | Empty library: note → claim → examine/calibration → see the gate |
+| **Verify loop** | Examine → Critic → **deterministic gate** → trajectory / spaced review (due rank + confuse / `depends_on`) / mastery-graph; chat `action_blocks` for one-tap 开考 |
+| **Notes → claims** | Ingest into testable claims + plan; digest「有用」can promote to examinable claims |
+| **Teach-back** | Text or voice transcription; same finalize path as examine |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
 | **Settings** | 资料 / Skills / MCP / 计划推送 / 动态 — profile, DIY skills, plan push prefs, OpenClaw activity |
 | **OpenClaw via MCP** | Optional channel; gotit exposes the same domain ops as REST |
