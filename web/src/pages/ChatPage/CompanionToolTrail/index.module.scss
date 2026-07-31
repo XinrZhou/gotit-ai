@@ -1,0 +1,50 @@
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+
+.chip {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--ink);
+  border: none;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fail {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.cta {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.cta:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.cta:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

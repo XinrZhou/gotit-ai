@@ -55,6 +55,18 @@ def _stub_turn(agent_name: str, user_text: str, force_handoff: str | None) -> Ch
     )
 
 
+def _last_open_examine(
+    tool_calls: list[dict[str, object]],
+) -> dict[str, object] | None:
+    for call in reversed(tool_calls):
+        if not call.get("ok"):
+            continue
+        payload = call.get("open_examine")
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
 def _agent_metadata(
     turn: ChatTurn,
     *,
@@ -68,6 +80,9 @@ def _agent_metadata(
         meta["handoff_reason"] = turn.reason
     if tool_calls:
         meta["tool_calls"] = tool_calls
+        open_examine = _last_open_examine(tool_calls)
+        if open_examine is not None:
+            meta["open_examine"] = open_examine
     return meta
 
 
@@ -193,6 +208,9 @@ async def post_message_chain(
                     ]
                     if slice_calls:
                         err_meta["tool_calls"] = slice_calls
+                        open_examine = _last_open_examine(slice_calls)
+                        if open_examine is not None:
+                            err_meta["open_examine"] = open_examine
                     agent_msg = await day_ops.add_message(
                         session,
                         thread_id=thread.id,

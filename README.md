@@ -32,7 +32,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 
 | Capability | What it means |
 |-----------|---------------|
-| **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded; whitelist tools (`get_today` / due / open-examine / failure lessons / memory) with `metadata.tool_calls` |
+| **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded; whitelist tools (`get_today` / due / open-examine / failure lessons / memory) with quiet bubble trail + one-tap「开考」on `start_examine` |
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
 | **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
 | **Daily brief** | Empty chat shows owed + today's plan with one-tap 开考 |
@@ -142,8 +142,10 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | Mastery graph (fail events, confused_with, fullscreen from chat top bar) | Done |
 | Persist workflow turns into thread history | Done |
 | Interview schedule + due reminders | Done (P3d) |
+| Interview countdown ramp (tier + optional nudge) | Done (P4) |
 | Failure digest / voice-teach / coding skills | Done (P3b/P3c/P2) |
 | Companion builtin tools (today/due/examine/memory + tool trail) | Done |
+| Chat UI for tool trail + one-tap follow start_examine | Done |
 | Real agent tool-calling against full MCP catalog | Next |
 | Per-agent multi-model binding | Next |
 

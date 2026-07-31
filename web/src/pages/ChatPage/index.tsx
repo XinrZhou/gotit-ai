@@ -17,6 +17,10 @@ import { DailyBrief } from "../../components/DailyBrief";
 import { CalibrationPanel } from "../../components/CalibrationPanel";
 import { ModeHeader } from "./ModeHeader";
 import { MessageBody } from "./MessageBody";
+import {
+  CompanionToolTrail,
+  toolCallsFromMeta,
+} from "./CompanionToolTrail";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import { useStore } from "../../store";
 import { fmtDate, parseApiDate } from "../../lib/format";
@@ -26,7 +30,9 @@ import type {
   AgentReply,
   ChatMessage,
   Claim,
+  DayNote,
   Mode,
+  OpenExaminePayload,
   SkillInfo,
   Thread,
 } from "../../types";
@@ -438,13 +444,48 @@ export function ChatPage() {
   );
 
   const startExamineNote = useCallback(
-    async (noteId: string) => {
+    async (noteId: string, fallback?: Partial<DayNote>) => {
       const tid = await startWorkflow("examine");
       if (!tid) return;
-      const note = notes.find((n) => n.id === noteId);
-      if (note) onExamineStart(note);
+      const found = notes.find((n) => n.id === noteId);
+      const note: DayNote = found ?? {
+        id: noteId,
+        title: fallback?.title ?? null,
+        body: fallback?.body ?? "",
+        excerpt: fallback?.excerpt ?? "",
+        tags: fallback?.tags ?? [],
+        claim_ids: fallback?.claim_ids ?? [],
+        created_at: fallback?.created_at ?? "",
+        day: fallback?.day ?? null,
+      };
+      onExamineStart(note);
     },
     [startWorkflow, notes, onExamineStart],
+  );
+
+  const followOpenExamine = useCallback(
+    (payload: OpenExaminePayload) => {
+      if (payload.claim_id) {
+        const found = dueClaims.find((c) => c.id === payload.claim_id);
+        const claim: Claim = found ?? {
+          id: payload.claim_id,
+          text: (payload.claim_text || "开考").trim() || "开考",
+          status: "in_progress",
+          topic: payload.topic ?? null,
+          source_note_id: null,
+          next_review_at: null,
+        };
+        void startExamineClaim(claim);
+        return;
+      }
+      if (payload.note_id) {
+        void startExamineNote(payload.note_id, {
+          title: payload.note_title ?? null,
+          claim_ids: payload.claim_ids ?? [],
+        });
+      }
+    },
+    [dueClaims, startExamineClaim, startExamineNote],
   );
 
   const openThread = useCallback(
@@ -861,6 +902,7 @@ export function ChatPage() {
                   const thinking = !isUser ? messageThinking(m) : null;
                   const wfBadge = messageWorkflowBadge(m);
                   const examineVerdict = !isUser ? messageExamineVerdict(m) : null;
+                  const toolCalls = !isUser ? toolCallsFromMeta(m.metadata) : null;
                   const isError = Boolean(m.metadata?.error);
                   const timeLabel = fmtMsgTime(m.created_at);
                   return (
@@ -912,6 +954,13 @@ export function ChatPage() {
                           >
                             <MessageBody text={m.text} markdown={!isUser && !isError} />
                           </div>
+                        {toolCalls ? (
+                          <CompanionToolTrail
+                            calls={toolCalls}
+                            busy={busy || storeBusy}
+                            onOpenExamine={followOpenExamine}
+                          />
+                        ) : null}
                         {examineVerdict ? (
                           <VerifyVerdictChip
                             verdict={examineVerdict.verdict}

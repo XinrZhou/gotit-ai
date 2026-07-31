@@ -34,14 +34,18 @@ class ToolCallRecord:
     args_digest: str
     ok: bool
     summary: str
+    open_examine: dict[str, object] | None = None
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        out: dict[str, object] = {
             "name": self.name,
             "args_digest": self.args_digest,
             "ok": self.ok,
             "summary": self.summary,
         }
+        if self.open_examine is not None:
+            out["open_examine"] = self.open_examine
+        return out
 
 
 @dataclass
@@ -57,6 +61,7 @@ class ToolCallRecorder:
         args: dict[str, Any],
         ok: bool,
         summary: str,
+        open_examine: dict[str, object] | None = None,
     ) -> None:
         self.calls.append(
             ToolCallRecord(
@@ -64,11 +69,19 @@ class ToolCallRecorder:
                 args_digest=_args_digest(args),
                 ok=ok,
                 summary=_clip(summary, _SUMMARY_MAX),
+                open_examine=open_examine,
             )
         )
 
     def as_metadata(self) -> list[dict[str, object]]:
         return [c.as_dict() for c in self.calls]
+
+    def last_open_examine(self) -> dict[str, object] | None:
+        """Most recent successful open-examine payload in this recorder."""
+        for call in reversed(self.calls):
+            if call.ok and call.open_examine is not None:
+                return call.open_examine
+        return None
 
 
 def _clip(text: str, limit: int) -> str:
@@ -207,20 +220,24 @@ def build_companion_tools(
                 claim_ids = [str(c) for c in (note.claim_ids or [])]
                 if not claim_ids:
                     raise ValueError("note has no claims yet — ingest or curate first")
-                out: dict[str, object] = {
-                    "ok": True,
+                open_payload: dict[str, object] = {
                     "action": "open_examine",
                     "note_id": str(nid),
                     "note_title": note.title,
                     "claim_ids": claim_ids,
                     "thread_id": str(thread_id) if thread_id else None,
-                    "hint": "请在对话顶栏打开「考我」，或用 note_id 调用 /v1/examine。",
+                }
+                out: dict[str, object] = {
+                    **open_payload,
+                    "ok": True,
+                    "hint": "可在气泡下点「开考」，或用 note_id 调用 /v1/examine。",
                 }
                 rec.record(
                     "start_examine",
                     args=args,
                     ok=True,
                     summary=f"可开考笔记「{_clip(note.title or str(nid), 40)}」",
+                    open_examine=open_payload,
                 )
                 return out
 
@@ -282,8 +299,7 @@ def build_companion_tools(
                 claim_row.status = MasteryStatus.IN_PROGRESS.value
                 await session.flush()
 
-            out = {
-                "ok": True,
+            open_payload = {
                 "action": "open_examine",
                 "claim_id": str(cid),
                 "claim_text": _clip(claim_row.text, 160),
@@ -291,13 +307,18 @@ def build_companion_tools(
                 "plan_item_id": plan_item_id,
                 "plan_changed": plan_changed,
                 "thread_id": str(thread_id) if thread_id else None,
-                "hint": "请在对话顶栏打开「考我」，或用 claim_id 调用 /v1/examine。",
+            }
+            out = {
+                **open_payload,
+                "ok": True,
+                "hint": "可在气泡下点「开考」，或用 claim_id 调用 /v1/examine。",
             }
             rec.record(
                 "start_examine",
                 args=args,
                 ok=True,
                 summary=f"可开考：{_clip(claim_row.text, 60)}",
+                open_examine=open_payload,
             )
             return out
         except Exception as exc:  # noqa: BLE001
@@ -415,6 +436,56 @@ def build_companion_tools(
             )
             return {"ok": False, "error": str(exc)}
 
+    async def get_upcoming_interview() -> dict[str, object]:
+        """Read nearest upcoming interview (7d) with ramp tier + drill suggestion."""
+        from datetime import UTC, datetime
+
+        args: dict[str, Any] = {}
+        try:
+            now = datetime.now(UTC)
+            rows = await day_ops.list_upcoming_interviews(
+                session, now, user_id=user_id
+            )
+            if not rows:
+                out: dict[str, object] = {
+                    "ok": True,
+                    "count": 0,
+                    "nearest": None,
+                    "upcoming": [],
+                }
+                rec.record(
+                    "get_upcoming_interview",
+                    args=args,
+                    ok=True,
+                    summary="近 7 天无面试安排",
+                )
+                return out
+            nearest = rows[0]
+            payload = {
+                "ok": True,
+                "count": len(rows),
+                "nearest": nearest.model_dump(mode="json"),
+                "upcoming": [r.model_dump(mode="json") for r in rows[:5]],
+            }
+            rec.record(
+                "get_upcoming_interview",
+                args=args,
+                ok=True,
+                summary=(
+                    f"{nearest.company} · {nearest.ramp_tier} · "
+                    f"约 {nearest.hours_until:.0f}h"
+                ),
+            )
+            return payload
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "get_upcoming_interview",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
     return [
         Tool(
             get_today,
@@ -457,17 +528,28 @@ def build_companion_tools(
                 "Use only when the learner asks to remember something."
             ),
         ),
+        Tool(
+            get_upcoming_interview,
+            name="get_upcoming_interview",
+            description=(
+                "Read upcoming real-world interviews (next 7 days) with "
+                "countdown ramp_tier and a short project-drill suggestion. "
+                "Use for「快面试了 / 下周有面试练什么」."
+            ),
+        ),
     ]
 
 
 COMPANION_TOOL_HINT = (
     "【办事工具】你可以调用：get_today、list_due_claims、start_examine、"
-    "get_failure_lessons、add_memory。\n"
+    "get_failure_lessons、add_memory、get_upcoming_interview。\n"
     "- 问「今天欠什么 / 今日计划 / 还欠几道」时：先调 get_today 或 list_due_claims，"
     "用真实结果回答，不要编造。\n"
     "- 「帮我开考 / 考我这条」：调 start_examine（可传 claim_id / note_id；"
-    "都不传则挑第一条欠账）；告知对方已备好开考，引导去顶栏「考我」。"
+    "都不传则挑第一条欠账）；告知对方已备好开考，可点气泡下「开考」。"
     "不要假装自己已经判过分——掌握门不在这里。\n"
+    "- 「快面试了 / 面试练什么」：调 get_upcoming_interview，用真实日程与 "
+    "suggest_action 回答；可引导去顶栏「项目深挖」，不要自动假装已开练。\n"
     "- 需要带着上次教训：get_failure_lessons。\n"
     "- 该记的短教训：add_memory（会截断）。写操作要克制。"
 )

@@ -106,6 +106,11 @@ async def test_start_examine_puts_claim_on_plan(session: AsyncSession) -> None:
 
     trail = recorder.as_metadata()
     assert trail[-1]["name"] == "start_examine" and trail[-1]["ok"] is True
+    open_ex = trail[-1].get("open_examine")
+    assert isinstance(open_ex, dict)
+    assert open_ex["claim_id"] == str(claim.id)
+    assert open_ex["action"] == "open_examine"
+    assert recorder.last_open_examine() == open_ex
 
 
 @pytest.mark.asyncio
@@ -165,6 +170,34 @@ def test_stub_metadata_omits_tool_calls() -> None:
     meta = _agent_metadata(turn, tool_calls=None)
     assert "tool_calls" not in meta
     assert "桩回复" in turn.text
+
+
+def test_agent_metadata_lifts_open_examine() -> None:
+    from gotit.api.chat_orchestrator import _agent_metadata, _stub_turn
+
+    turn = _stub_turn("axiom", "开考", None)
+    tool_calls: list[dict[str, object]] = [
+        {
+            "name": "get_today",
+            "args_digest": "{}",
+            "ok": True,
+            "summary": "欠账 1",
+        },
+        {
+            "name": "start_examine",
+            "args_digest": "{}",
+            "ok": True,
+            "summary": "可开考",
+            "open_examine": {
+                "action": "open_examine",
+                "claim_id": "c-1",
+                "claim_text": "softmax",
+            },
+        },
+    ]
+    meta = _agent_metadata(turn, tool_calls=tool_calls)
+    assert meta["tool_calls"] == tool_calls
+    assert meta["open_examine"] == tool_calls[-1]["open_examine"]
 
 
 @pytest.mark.asyncio

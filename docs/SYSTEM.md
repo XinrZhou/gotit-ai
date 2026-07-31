@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-07-30.
+> Last reviewed: 2026-07-31.
 
 ## Product (one line)
 
@@ -37,7 +37,7 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0010 (… + interviews + cold-start calibration)
+alembic/versions/  0001…0011 (… + interviews + calibration + interview ramp)
 openspec/changes/  active + archive/
 ```
 
@@ -65,10 +65,13 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   list (no paraphrased times/items in the opener)
 - **Companion builtin tools** (whitelist, not full MCP): chat turns with an LLM key
   inject `get_today` / `list_due_claims` / `start_examine` / `get_failure_lessons` /
-  `add_memory` via `api/companion_tools.py` → `db.ops`; calls land on agent message
-  `metadata.tool_calls` (name / args_digest / ok / summary). Stub (no `LLM_API_KEY`)
-  skips tools and does not fake writes. `start_examine` only prepares open-examine
-  payload (+ soft plan/in_progress); mastery still Critic + gate via `/v1/examine`.
+  `add_memory` / `get_upcoming_interview` via `api/companion_tools.py` → `db.ops`;
+  calls land on agent message `metadata.tool_calls` (name / args_digest / ok /
+  summary; `start_examine` ok also attaches `open_examine` + message-level
+  `metadata.open_examine`). Chat bubbles show a quiet tool trail; one-tap「开考」
+  follows into examine (same `/v1/examine` path). Stub (no `LLM_API_KEY`) skips
+  tools and does not fake writes. `start_examine` only prepares open-examine
+  (+ soft plan/in_progress); mastery still Critic + gate.
   REST + MCP `gotit_post_message` share `chat_orchestrator` (same tools).
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
   conversation top bar)
@@ -128,8 +131,11 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（`due_time`；upsert/delete
   自动 sync；早推 import→push reconcile）；`gotit.bridge.reminders` + `skills/apple-plan/`
   （osascript；**不**进 `gotit.core`）
-- **Interviews**（P3d）：`InterviewEvent` + REST/MCP due-reminders；Settings「资料」列表；
-  投递 `skills/interview-remind/`
+- **Interviews**（P3d + P4）：`InterviewEvent` + REST/MCP due-reminders；
+  countdown ramp（deterministic `ramp_tier`：silent/light/warm/urgent；
+  light/warm 低频 nudge + `last_ramp_nudge_at` 去重；prefs 可关）；
+  Settings「资料」列表 + 升温开关；companion `get_upcoming_interview`；
+  投递 `skills/interview-remind/`（offset + ramp 同 cron）
 - **Failure digest**（P3b）：examine `almost|owe_next` → `failure_digest` memory（同 claim+verdict
   去重）；`skills/failure-digest/` 推微信；再考时 **budgeted** 注入 Axiom（同 claim /
   confuse 邻居 / 同 topic；`FAILURE_LESSON_MAX_ITEMS=3` · `MAX_CHARS=600`）
@@ -142,7 +148,8 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Broad agent-as-tool beyond the companion **builtin whitelist** + optional user
   MCP connectors (no auto-mount of the full gotit MCP catalog into chat)
 - Rich profile / full KG store beyond mastery confuse edges (depends_on later)
-- Interview countdown ramp（P4；另开 change）
+- Axiom harness holdout UI
+- Auto-start drill from ramp nudge（v0 只建议 + 深链到「项目深挖」）
 
 ## Commands
 
