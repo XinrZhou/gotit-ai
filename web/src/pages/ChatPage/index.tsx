@@ -21,6 +21,9 @@ import {
   CompanionToolTrail,
   toolCallsFromMeta,
 } from "./CompanionToolTrail";
+import { ActionBlocks, actionBlocksFromMeta } from "./ActionBlocks";
+import { BootcampPanel } from "./BootcampPanel";
+import { InterviewFocusBrief } from "./InterviewFocusBrief";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import { useStore } from "../../store";
 import { fmtDate, parseApiDate } from "../../lib/format";
@@ -239,7 +242,8 @@ function messageExamineVerdict(m: ChatMessage): {
   sessionDone: boolean;
 } | null {
   if (m.role !== "agent") return null;
-  if (m.metadata?.workflow !== "examine") return null;
+  const wf = m.metadata?.workflow;
+  if (wf !== "examine" && wf !== "teach") return null;
   if (m.metadata?.step === "answer") return null;
   if (!isMasteryVerdict(m.metadata?.verdict)) return null;
   return {
@@ -298,17 +302,40 @@ export function ChatPage() {
     dueClaims,
     items,
     refresh,
+    dayClosed,
+    closeSuggested,
+    closeSummary,
+    closeToday,
+    interviewFocus,
+    bootcamp,
+    setBootcampStatus,
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
+  const showBootcamp = Boolean(bootcamp?.show);
   const hasDailyBrief =
-    dueClaims.length > 0 ||
-    items.some((i) => i.status !== "verified" && i.claim_id) ||
-    notes.some((n) => n.claim_ids.length > 0);
+    !dayClosed &&
+    !showBootcamp &&
+    (dueClaims.length > 0 ||
+      items.some((i) => i.status !== "verified" && i.claim_id) ||
+      notes.some((n) => n.claim_ids.length > 0));
+  const showInterviewFocus = Boolean(interviewFocus) && !showBootcamp;
+  const showFeaturedInterview =
+    showInterviewFocus &&
+    !dayClosed &&
+    interviewFocus?.prominence === "featured";
+  const showQuietInterview =
+    showInterviewFocus &&
+    !dayClosed &&
+    interviewFocus?.prominence === "quiet";
   /** Cold-start CTA when nothing owed yet but claims exist to probe. */
-  const showCalibrateCta = dueClaims.length === 0 && examineCount > 0;
+  const showCalibrateCta =
+    !dayClosed && !showBootcamp && dueClaims.length === 0 && examineCount > 0;
+  /** Soft-hide close during first-pass bootcamp (design: Bootcamp 日不强调收工). */
+  const showCloseCta = !dayClosed && !showBootcamp;
   const inWorkflow = mode !== "chat";
 
   const [calibrationOpen, setCalibrationOpen] = useState(false);
+  const [closingDay, setClosingDay] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsReady, setThreadsReady] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -464,6 +491,22 @@ export function ChatPage() {
     },
     [startWorkflow, notes, onExamineStart],
   );
+
+  const onCloseDay = useCallback(async () => {
+    if (closingDay || dayClosed) return;
+    setClosingDay(true);
+    try {
+      await closeToday();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setClosingDay(false);
+    }
+  }, [closingDay, dayClosed, closeToday]);
+
+  const quietContinuePractice = useCallback(() => {
+    void startWorkflow("examine");
+  }, [startWorkflow]);
 
   const followOpenExamine = useCallback(
     (payload: OpenExaminePayload) => {
@@ -864,7 +907,24 @@ export function ChatPage() {
                   </span>
                 ))}
               </div>
-              {hasDailyBrief ? (
+              {showFeaturedInterview && interviewFocus ? (
+                <InterviewFocusBrief
+                  focus={interviewFocus}
+                  busy={busy || storeBusy}
+                  onOpenDrill={followOpenDrill}
+                />
+              ) : null}
+              {showBootcamp && bootcamp ? (
+                <BootcampPanel
+                  bootcamp={bootcamp}
+                  day={day}
+                  busy={busy || storeBusy}
+                  onStatus={setBootcampStatus}
+                  onRefresh={refresh}
+                  onOpenExamine={followOpenExamine}
+                  onCalibrate={() => setCalibrationOpen(true)}
+                />
+              ) : hasDailyBrief ? (
                 <DailyBrief
                   variant="home"
                   maxItems={4}
@@ -872,7 +932,29 @@ export function ChatPage() {
                   onExamineNoteId={(id) => void startExamineNote(id)}
                   onViewAll={() => void startWorkflow("examine")}
                 />
-              ) : (
+              ) : dayClosed ? (
+                <div className={styles.emptyIntro}>
+                  <p className={styles.emptyLead}>今天收工了</p>
+                  <p className={styles.emptyHint}>
+                    {closeSummary?.note?.trim() || "还想练随时可以继续"}
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.emptyChatLink}
+                    onClick={quietContinuePractice}
+                  >
+                    继续练
+                  </button>
+                  {interviewFocus ? (
+                    <InterviewFocusBrief
+                      focus={interviewFocus}
+                      busy={busy || storeBusy}
+                      quiet
+                      onOpenDrill={followOpenDrill}
+                    />
+                  ) : null}
+                </div>
+              ) : showInterviewFocus ? null : (
                 <div className={styles.emptyIntro}>
                   <p className={styles.emptyLead}>今天暂时没事</p>
                   <p className={styles.emptyHint}>
@@ -893,6 +975,13 @@ export function ChatPage() {
                   </div>
                 </div>
               )}
+              {showQuietInterview && interviewFocus ? (
+                <InterviewFocusBrief
+                  focus={interviewFocus}
+                  busy={busy || storeBusy}
+                  onOpenDrill={followOpenDrill}
+                />
+              ) : null}
               {showCalibrateCta ? (
                 <button
                   type="button"
@@ -900,6 +989,18 @@ export function ChatPage() {
                   onClick={() => setCalibrationOpen(true)}
                 >
                   先摸底一下
+                </button>
+              ) : null}
+              {showCloseCta ? (
+                <button
+                  type="button"
+                  className={
+                    closeSuggested ? styles.emptyCalibrate : styles.emptyChatLink
+                  }
+                  disabled={closingDay || storeBusy}
+                  onClick={() => void onCloseDay()}
+                >
+                  今天收工
                 </button>
               ) : null}
               <button
@@ -921,6 +1022,12 @@ export function ChatPage() {
                   const wfBadge = messageWorkflowBadge(m);
                   const examineVerdict = !isUser ? messageExamineVerdict(m) : null;
                   const toolCalls = !isUser ? toolCallsFromMeta(m.metadata) : null;
+                  const actionBlocks = !isUser
+                    ? actionBlocksFromMeta(m.metadata)
+                    : null;
+                  const hasVerdictBlock = Boolean(
+                    actionBlocks?.some((b) => b.type === "verdict"),
+                  );
                   const isError = Boolean(m.metadata?.error);
                   const timeLabel = fmtMsgTime(m.created_at);
                   return (
@@ -980,7 +1087,15 @@ export function ChatPage() {
                             onOpenDrill={followOpenDrill}
                           />
                         ) : null}
-                        {examineVerdict ? (
+                        {actionBlocks ? (
+                          <ActionBlocks
+                            blocks={actionBlocks}
+                            busy={busy || storeBusy}
+                            onOpenExamine={followOpenExamine}
+                            onOpenDrill={followOpenDrill}
+                          />
+                        ) : null}
+                        {examineVerdict && !hasVerdictBlock ? (
                           <VerifyVerdictChip
                             verdict={examineVerdict.verdict}
                             sessionDone={examineVerdict.sessionDone}
@@ -1019,9 +1134,26 @@ export function ChatPage() {
                 ) : null}
                 {!busy && messages.length === 0 ? (
                   <div
-                    className={`${styles.threadEmpty} ${hasDailyBrief ? styles.threadEmptyBrief : ""}`}
+                    className={`${styles.threadEmpty} ${hasDailyBrief || dayClosed || showInterviewFocus || showBootcamp ? styles.threadEmptyBrief : ""}`}
                   >
-                    {hasDailyBrief ? (
+                    {showFeaturedInterview && interviewFocus ? (
+                      <InterviewFocusBrief
+                        focus={interviewFocus}
+                        busy={busy || storeBusy}
+                        onOpenDrill={followOpenDrill}
+                      />
+                    ) : null}
+                    {showBootcamp && bootcamp ? (
+                      <BootcampPanel
+                        bootcamp={bootcamp}
+                        day={day}
+                        busy={busy || storeBusy}
+                        onStatus={setBootcampStatus}
+                        onRefresh={refresh}
+                        onOpenExamine={followOpenExamine}
+                        onCalibrate={() => setCalibrationOpen(true)}
+                      />
+                    ) : hasDailyBrief ? (
                       <DailyBrief
                         variant="thread"
                         maxItems={4}
@@ -1029,7 +1161,29 @@ export function ChatPage() {
                         onExamineNoteId={(id) => void startExamineNote(id)}
                         onViewAll={() => void startWorkflow("examine")}
                       />
-                    ) : (
+                    ) : dayClosed ? (
+                      <>
+                        <p className={styles.threadEmptyLead}>今天收工了</p>
+                        <p className={styles.threadEmptyHint}>
+                          {closeSummary?.note?.trim() || "还想练随时可以继续"}
+                        </p>
+                        <button
+                          type="button"
+                          className={styles.emptyChatLink}
+                          onClick={quietContinuePractice}
+                        >
+                          继续练
+                        </button>
+                        {interviewFocus ? (
+                          <InterviewFocusBrief
+                            focus={interviewFocus}
+                            busy={busy || storeBusy}
+                            quiet
+                            onOpenDrill={followOpenDrill}
+                          />
+                        ) : null}
+                      </>
+                    ) : showInterviewFocus ? null : (
                       <>
                         <p className={styles.threadEmptyLead}>想练就挑一种</p>
                         <p className={styles.threadEmptyHint}>也可以直接发消息</p>
@@ -1044,35 +1198,58 @@ export function ChatPage() {
                         ) : null}
                       </>
                     )}
-                    <nav
-                      className={
-                        hasDailyBrief ? styles.briefAltNav : styles.workflowTabs
-                      }
-                      aria-label="开练方式"
-                    >
-                      {WORKFLOWS.map((w, i) => (
-                        <span key={w.mode} className={hasDailyBrief ? styles.briefAltItem : undefined}>
-                          {hasDailyBrief && i > 0 ? (
-                            <span className={styles.briefAltSep} aria-hidden>
-                              ·
-                            </span>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={hasDailyBrief ? styles.briefAltLink : styles.chatBarTab}
-                            onClick={() => void startWorkflow(w.mode)}
-                            title={w.hint}
-                          >
-                            {w.label}
-                            {!hasDailyBrief &&
-                            w.mode === "examine" &&
-                            examineCount > 0 ? (
-                              <span className={styles.chatBarCount}>{examineCount}</span>
+                    {showQuietInterview && interviewFocus ? (
+                      <InterviewFocusBrief
+                        focus={interviewFocus}
+                        busy={busy || storeBusy}
+                        onOpenDrill={followOpenDrill}
+                      />
+                    ) : null}
+                    {showCloseCta ? (
+                      <button
+                        type="button"
+                        className={
+                          closeSuggested && !hasDailyBrief
+                            ? styles.emptyCalibrate
+                            : styles.emptyChatLink
+                        }
+                        disabled={closingDay || storeBusy}
+                        onClick={() => void onCloseDay()}
+                      >
+                        今天收工
+                      </button>
+                    ) : null}
+                    {!dayClosed && !showBootcamp ? (
+                      <nav
+                        className={
+                          hasDailyBrief ? styles.briefAltNav : styles.workflowTabs
+                        }
+                        aria-label="开练方式"
+                      >
+                        {WORKFLOWS.map((w, i) => (
+                          <span key={w.mode} className={hasDailyBrief ? styles.briefAltItem : undefined}>
+                            {hasDailyBrief && i > 0 ? (
+                              <span className={styles.briefAltSep} aria-hidden>
+                                ·
+                              </span>
                             ) : null}
-                          </button>
-                        </span>
-                      ))}
-                    </nav>
+                            <button
+                              type="button"
+                              className={hasDailyBrief ? styles.briefAltLink : styles.chatBarTab}
+                              onClick={() => void startWorkflow(w.mode)}
+                              title={w.hint}
+                            >
+                              {w.label}
+                              {!hasDailyBrief &&
+                              w.mode === "examine" &&
+                              examineCount > 0 ? (
+                                <span className={styles.chatBarCount}>{examineCount}</span>
+                              ) : null}
+                            </button>
+                          </span>
+                        ))}
+                      </nav>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

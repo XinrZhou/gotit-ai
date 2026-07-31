@@ -1,0 +1,106 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-width: 100%;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--soft);
+  text-align: left;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.reason {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--faint);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verdictRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verdictChip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.passed {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.almost,
+.owe_next {
+  background: var(--fill);
+  color: var(--muted);
+}
+
+.cta {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--fill);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.cta:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--ink);
+  filter: brightness(0.97);
+}
+
+.cta:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

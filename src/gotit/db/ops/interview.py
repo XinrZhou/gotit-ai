@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -21,6 +21,7 @@ from gotit.core.models import (
     DEFAULT_REMIND_OFFSETS_HOURS,
     DueInterviewReminder,
     InterviewEventView,
+    InterviewFocusHint,
     InterviewRampNudge,
     InterviewRampPrefs,
     InterviewStatus,
@@ -32,6 +33,9 @@ from gotit.db.ops._common import DEFAULT_USER_ID
 STALE_REMINDER_HOURS = 6
 KIND_INTERVIEW_RAMP_PREFS = "interview_ramp_prefs"
 UPCOMING_WITHIN_HOURS = LIGHT_HOURS  # 7d window for companion / Settings
+# Brief bias tiers — same window as companion upcoming; silent/past excluded.
+BRIEF_FOCUS_TIERS: frozenset[str] = frozenset({"light", "warm", "urgent"})
+_DRILL_ROUNDS = frozenset({"tech_1", "tech_2", "tech_3", "tech_4", "hr"})
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -325,6 +329,73 @@ async def _primary_project(
 
 def _hours_until(scheduled: datetime, now: datetime) -> float:
     return (scheduled - now).total_seconds() / 3600.0
+
+
+def _normalize_drill_round(round: str | None) -> str:
+    key = (round or "").strip()
+    if key in _DRILL_ROUNDS:
+        return key
+    return "tech_1"
+
+
+def interview_brief_prompt(*, hours_until: float, project_name: str | None) -> str:
+    """Short, quiet copy for today's brief — no hype."""
+    focus = (project_name or "").strip() or "简历项目"
+    if hours_until <= 24:
+        return f"面试快到了，今天要不要抠一下「{focus}」？"
+    days = max(1, int(round(hours_until / 24.0)))
+    return f"面试还有 {days} 天，今天要不要抠一下「{focus}」？"
+
+
+def _focus_from_upcoming(u: InterviewUpcoming) -> InterviewFocusHint | None:
+    if u.ramp_tier not in BRIEF_FOCUS_TIERS:
+        return None
+    tier = cast(Literal["urgent", "warm", "light"], u.ramp_tier)
+    drill_round = _normalize_drill_round(u.round)
+    return InterviewFocusHint(
+        interview_id=u.interview_id,
+        company=u.company,
+        role_title=u.role_title,
+        hours_until=u.hours_until,
+        ramp_tier=tier,
+        prompt=interview_brief_prompt(
+            hours_until=u.hours_until, project_name=u.project_name
+        ),
+        prominence="featured" if tier in ("warm", "urgent") else "quiet",
+        project_name=u.project_name,
+        project_id=u.project_id,
+        round=drill_round,
+        open_drill={
+            "action": "open_drill",
+            "round": drill_round,
+            "direction": None,
+            "project_id": str(u.project_id) if u.project_id else None,
+            "project_name": u.project_name,
+            "interview_id": str(u.interview_id),
+            "company": u.company,
+        },
+    )
+
+
+async def interview_focus_for_today(
+    session: AsyncSession,
+    now: datetime,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> InterviewFocusHint | None:
+    """Nearest light/warm/urgent interview for today's brief, or None.
+
+    Respects ramp prefs ``enabled``; does not rewrite ramp tiers or auto-start drill.
+    """
+    prefs = await get_interview_ramp_prefs(session, user_id=user_id)
+    if not prefs.enabled:
+        return None
+    upcoming = await list_upcoming_interviews(session, now, user_id=user_id)
+    for u in upcoming:
+        hint = _focus_from_upcoming(u)
+        if hint is not None:
+            return hint
+    return None
 
 
 async def list_upcoming_interviews(

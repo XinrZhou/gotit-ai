@@ -13,6 +13,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_failure_lessons: "教训",
   add_memory: "记下",
   get_upcoming_interview: "面试",
+  close_day: "收工",
 };
 
 function labelFor(name: string): string {

@@ -1,10 +1,13 @@
 import type {
+  BootcampView,
   Claim,
+  DayCloseSummary,
   DayNote,
   DayPlan,
   DrillMaterial,
   DrillRound,
   DrillSession,
+  InterviewFocusHint,
   MasteryVerdict,
   Mode,
   Project,
@@ -35,6 +38,15 @@ export type Store = {
   plan: DayPlan | null;
   notes: DayNote[];
   dueClaims: Claim[];
+  dayClosed: boolean;
+  closeSuggested: boolean;
+  closeSummary: DayCloseSummary | null;
+  closeToday: (note?: string) => Promise<void>;
+  interviewFocus: InterviewFocusHint | null;
+  bootcamp: BootcampView | null;
+  setBootcampStatus: (
+    status: "in_progress" | "done" | "skipped",
+  ) => Promise<void>;
   noteScope: "today" | "all";
   setNoteScope: (s: "today" | "all") => void;
   projects: Project[];
@@ -102,12 +114,18 @@ export type Store = {
   onExamineAnswer: () => void;
   teachTopic: string;
   setTeachTopic: (s: string) => void;
+  teachClaimId: string | null;
+  setTeachClaimId: (id: string | null) => void;
   teachChat: ChatTurn[];
   teachAnswer: string;
   setTeachAnswer: (s: string) => void;
   teachDone: boolean;
+  teachSttAvailable: boolean;
+  teachTranscribing: boolean;
   onTeachStart: () => void;
+  onTeachStartClaim: (claim: Claim) => void;
   onTeachAnswer: () => void;
+  onTeachTranscribe: (file: File) => Promise<void>;
   resume: ResumeRecord | null;
   drillMaterials: DrillMaterial[];
   drillSessions: DrillSession[];

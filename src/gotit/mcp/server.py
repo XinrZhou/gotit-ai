@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit import __version__
+from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.deps import (
     SessionMemoryReader,
     SessionPromptReader,
@@ -265,6 +266,12 @@ async def gotit_examine(
             extra["verdict"] = gate_verdict
         if verify:
             extra.update(verify)
+        if verify and gate_verdict:
+            attach_verdict_blocks(
+                extra,
+                gate_verdict=str(gate_verdict),
+                claim_id=session_result.current_claim_id,
+            )
         err = await _persist(
             agent_text=examine_agent_text(
                 follow_up=session_result.follow_up,
@@ -305,15 +312,21 @@ async def gotit_examine(
         except ValueError as exc:
             return {"error": str(exc)}
         verify = _verify_meta(finalized)
+        extra_direct: dict[str, object] = {
+            "claim_id": claim_id,
+            "session_done": True,
+            **verify,
+        }
+        attach_verdict_blocks(
+            extra_direct,
+            gate_verdict=str(finalized["gate_verdict"]),
+            claim_id=claim_id,
+        )
         err = await _persist(
             agent_text=examine_agent_text(
                 follow_up="", done=True, verdict=finalized["gate_verdict"]
             ),
-            extra={
-                "claim_id": claim_id,
-                "session_done": True,
-                **verify,
-            },
+            extra=extra_direct,
         )
         if err:
             return err
@@ -388,6 +401,12 @@ async def gotit_examine(
         extra_single["verdict"] = gate_verdict
     if verify:
         extra_single.update(verify)
+    if verify and gate_verdict:
+        attach_verdict_blocks(
+            extra_single,
+            gate_verdict=str(gate_verdict),
+            claim_id=claim_id,
+        )
     err = await _persist(
         agent_text=examine_agent_text(
             follow_up=result.follow_up,
@@ -412,12 +431,27 @@ async def gotit_examine(
 
 @mcp.tool()
 async def gotit_today(day: str | None = None) -> dict[str, object]:
-    """Aggregate today's plan, truncated notes, and due claims."""
+    """Aggregate today's plan, truncated notes, due claims, and day-close state."""
     await ensure_db()
     target = date.fromisoformat(day) if day else None
     async with session_scope() as session:
         view = await day_ops.get_today(session, target, user_id=_user_id())
     return view.model_dump(mode="json")
+
+
+@mcp.tool()
+async def gotit_close_day(
+    day: str | None = None,
+    note: str | None = None,
+) -> dict[str, object]:
+    """Close the learning day (idempotent). Returns wrap counts for evening digest."""
+    await ensure_db()
+    target = date.fromisoformat(day) if day else None
+    async with session_scope() as session:
+        summary = await day_ops.close_today(
+            session, target, user_id=_user_id(), note=note
+        )
+    return summary.model_dump(mode="json")
 
 
 @mcp.tool()
@@ -705,20 +739,38 @@ async def gotit_teach(
     answer: str | None = None,
     history: list[dict[str, str]] | None = None,
     you_taught_well: bool | None = None,
+    claim_id: str | None = None,
     thread_id: str | None = None,
 ) -> dict[str, object]:
     """Teach-back mode (Echo). Pass `you_taught_well` to bypass the agent (stub/tests).
+    Optional `claim_id` on close runs Critic + deterministic gate (REST parity).
     Optional `thread_id` appends turns to the companion thread stream."""
+    from gotit.core.teach_verify import teach_examine_verdict
+
     await ensure_db()
+    settings = get_settings()
     user_id = _user_id()
     tid = UUID(thread_id) if thread_id else None
+    cid = UUID(claim_id) if claim_id else None
 
-    async def _persist(verdict: TeachVerdict) -> dict[str, object] | None:
+    async def _persist(
+        verdict: TeachVerdict,
+        *,
+        verify: dict[str, object] | None = None,
+        gate_verdict: str | None = None,
+    ) -> dict[str, object] | None:
         if tid is None:
             return None
         extra: dict[str, object] = {"topic": topic, "session_done": verdict.done}
-        if verdict.you_taught_well is not None:
-            extra["verdict"] = "passed" if verdict.you_taught_well else "owe_next"
+        if cid is not None:
+            extra["claim_id"] = str(cid)
+        display = gate_verdict
+        if display is None and verdict.you_taught_well is not None:
+            display = teach_examine_verdict(verdict.you_taught_well)
+        if display is not None:
+            extra["verdict"] = display
+        if verify:
+            extra.update(verify)
         try:
             await persist_workflow_exchange(
                 thread_id=tid,
@@ -737,6 +789,25 @@ async def gotit_teach(
             return {"error": str(exc)}
         return None
 
+    async def _maybe_finalize(
+        you_taught: bool,
+    ) -> tuple[dict[str, object] | None, dict[str, object] | None, str | None]:
+        if cid is None:
+            return None, None, None
+        try:
+            finalized = await _finalize_claim_mcp(
+                claim_id=cid,
+                examine_verdict=teach_examine_verdict(you_taught),
+                user_id=user_id,
+                settings=settings,
+                answer=answer,
+                thread_id=tid,
+            )
+        except KeyError as exc:
+            return {"error": str(exc)}, None, None  # type: ignore[return-value]
+        verify = _verify_meta(finalized)
+        return finalized["writeback"], verify, finalized["gate_verdict"]  # type: ignore[return-value]
+
     if you_taught_well is not None:
         verdict = TeachVerdict(
             done=True,
@@ -744,10 +815,18 @@ async def gotit_teach(
             gaps=[],
             next_question=None,
         )
-        err = await _persist(verdict)
+        writeback, verify, gate_verdict = await _maybe_finalize(you_taught_well)
+        if isinstance(writeback, dict) and writeback.get("error"):
+            return writeback
+        err = await _persist(verdict, verify=verify, gate_verdict=gate_verdict)
         if err:
             return err
-        return {"verdict": verdict.model_dump(mode="json")}
+        out: dict[str, object] = {"verdict": verdict.model_dump(mode="json")}
+        if writeback is not None:
+            out["writeback"] = writeback
+        if verify is not None:
+            out["verify"] = verify
+        return out
 
     async with session_scope() as session:
         prompt = await SessionPromptReader(session).get_active_prompt("echo")
@@ -761,10 +840,23 @@ async def gotit_teach(
             history=history or [],
             answer=answer,
         )
-    err = await _persist(verdict)
+
+    writeback = None
+    verify = None
+    gate_verdict = None
+    if verdict.done and verdict.you_taught_well is not None and cid is not None:
+        writeback, verify, gate_verdict = await _maybe_finalize(verdict.you_taught_well)
+        if isinstance(writeback, dict) and writeback.get("error"):
+            return writeback
+    err = await _persist(verdict, verify=verify, gate_verdict=gate_verdict)
     if err:
         return err
-    return {"verdict": verdict.model_dump(mode="json")}
+    result: dict[str, object] = {"verdict": verdict.model_dump(mode="json")}
+    if writeback is not None:
+        result["writeback"] = writeback
+    if verify is not None:
+        result["verify"] = verify
+    return result
 
 
 @mcp.tool()
@@ -896,6 +988,24 @@ async def gotit_record_interest(
 
 
 @mcp.tool()
+async def gotit_promote_interest(
+    interest_id: str,
+    claim_texts: list[str] | None = None,
+) -> dict[str, object]:
+    """Promote a marked-useful interest into 1–3 claims on today's plan."""
+    await ensure_db()
+    texts = [t.strip() for t in (claim_texts or []) if str(t).strip()][:3]
+    async with session_scope() as session:
+        result = await day_ops.promote_interest(
+            session,
+            UUID(interest_id),
+            user_id=_user_id(),
+            claim_texts=texts or None,
+        )
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
 async def gotit_list_shell_activity(
     kinds: str | None = None,
     limit: int = 50,
@@ -952,12 +1062,76 @@ async def gotit_obs_profile() -> dict[str, object]:
 
 @mcp.tool()
 async def gotit_obs_graph() -> dict[str, object]:
-    """Graph v0: claim–topic–project edges; interest→topic only."""
+    """Graph v0: claim–topic–project edges; confuse + depends; interest→topic."""
     await ensure_db()
     async with session_scope() as session:
         view = await day_ops.build_graph_v0(session, user_id=_user_id())
     return view.model_dump(mode="json")
 
+
+@mcp.tool()
+async def gotit_add_depends_on(claim_id: str, prereq_claim_id: str) -> dict[str, object]:
+    """Add directed depends_on: claim must wait on prereq (out-degree cap 3)."""
+    from uuid import UUID
+
+    await ensure_db()
+    try:
+        async with session_scope() as session:
+            row = await day_ops.add_depends_on(
+                session,
+                user_id=_user_id(),
+                claim_id=UUID(claim_id),
+                prereq_claim_id=UUID(prereq_claim_id),
+            )
+    except KeyError as exc:
+        return {"ok": False, "error": str(exc)}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "claim_id": str(row.source_claim_id),
+        "prereq_claim_id": str(row.target_claim_id),
+        "rel": "depends_on",
+    }
+
+
+@mcp.tool()
+async def gotit_remove_depends_on(
+    claim_id: str, prereq_claim_id: str
+) -> dict[str, object]:
+    """Remove a depends_on edge."""
+    from uuid import UUID
+
+    await ensure_db()
+    async with session_scope() as session:
+        removed = await day_ops.remove_depends_on(
+            session,
+            user_id=_user_id(),
+            claim_id=UUID(claim_id),
+            prereq_claim_id=UUID(prereq_claim_id),
+        )
+    return {"ok": removed, "removed": removed}
+
+
+@mcp.tool()
+async def gotit_list_depends_on(claim_id: str | None = None) -> list[dict[str, object]]:
+    """List depends_on edges (optionally for one dependent claim)."""
+    from uuid import UUID
+
+    await ensure_db()
+    cid = UUID(claim_id) if claim_id else None
+    async with session_scope() as session:
+        rows = await day_ops.list_depends_edges(
+            session, user_id=_user_id(), claim_id=cid
+        )
+    return [
+        {
+            "claim_id": str(r.source_claim_id),
+            "prereq_claim_id": str(r.target_claim_id),
+            "rel": "depends_on",
+        }
+        for r in rows
+    ]
 
 @mcp.tool()
 async def gotit_list_prompts(
@@ -1885,19 +2059,25 @@ async def gotit_start_verify(
             return {"error": str(exc)}
 
         gate = finalized["gate"]
+        verify_meta: dict[str, object] = {
+            "claim_id": str(cid),
+            "examine_verdict": finalized["examine_verdict"],
+            "recheck_verdict": finalized["recheck_verdict"],
+            "gate_verdict": finalized["gate_verdict"],
+            "verdict": finalized["gate_verdict"],
+        }
+        attach_verdict_blocks(
+            verify_meta,
+            gate_verdict=str(finalized["gate_verdict"]),
+            claim_id=cid,
+        )
         await day_ops.add_message(
             session,
             thread_id=tid,
             role="agent",
             agent_name="gate",
             text=f"验证完成：{gate['reason']}",
-            metadata={
-                "claim_id": str(cid),
-                "examine_verdict": finalized["examine_verdict"],
-                "recheck_verdict": finalized["recheck_verdict"],
-                "gate_verdict": finalized["gate_verdict"],
-                "verdict": finalized["gate_verdict"],
-            },
+            metadata=verify_meta,
         )
         return {
             "examine_verdict": finalized["examine_verdict"],

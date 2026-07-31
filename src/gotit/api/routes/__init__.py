@@ -9,8 +9,10 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from gotit.api.routes import (
+    bootcamp,
     calibration,
     chat,
+    claims,
     connectors,
     day,
     drill,
@@ -38,8 +40,10 @@ router.include_router(connectors.router)
 router.include_router(ingest.router)
 router.include_router(examine.router)
 router.include_router(calibration.router)
+router.include_router(bootcamp.router)
 router.include_router(day.router)
 router.include_router(notes.router)
+router.include_router(claims.router)
 router.include_router(teach.router)
 router.include_router(memory.router)
 router.include_router(shell.router)

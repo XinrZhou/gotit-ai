@@ -15,6 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.auth import require_api_key
 from gotit.api.chat_orchestrator import post_message_chain
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
@@ -248,19 +249,25 @@ async def start_verify(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
         gate = finalized["gate"]
+        verify_meta: dict[str, object] = {
+            "claim_id": str(body.claim_id),
+            "examine_verdict": finalized["examine_verdict"],
+            "recheck_verdict": finalized["recheck_verdict"],
+            "gate_verdict": finalized["gate_verdict"],
+            "verdict": finalized["gate_verdict"],
+        }
+        attach_verdict_blocks(
+            verify_meta,
+            gate_verdict=str(finalized["gate_verdict"]),
+            claim_id=body.claim_id,
+        )
         await day_ops.add_message(
             session,
             thread_id=thread_id,
             role="agent",
             agent_name="gate",
             text=f"验证完成：{gate['reason']}",
-            metadata={
-                "claim_id": str(body.claim_id),
-                "examine_verdict": finalized["examine_verdict"],
-                "recheck_verdict": finalized["recheck_verdict"],
-                "gate_verdict": finalized["gate_verdict"],
-                "verdict": finalized["gate_verdict"],
-            },
+            metadata=verify_meta,
         )
         return {
             "examine_verdict": finalized["examine_verdict"],

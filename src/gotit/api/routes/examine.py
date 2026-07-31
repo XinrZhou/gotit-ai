@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.auth import require_api_key
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
@@ -226,6 +227,12 @@ async def examine(
             extra["verdict"] = gate_verdict
         if verify:
             extra.update(verify)
+        if verify and gate_verdict:
+            attach_verdict_blocks(
+                extra,
+                gate_verdict=str(gate_verdict),
+                claim_id=session_verdict.current_claim_id,
+            )
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -275,6 +282,16 @@ async def examine(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
             ) from exc
         verify = _verify_meta(finalized)
+        extra_direct: dict[str, object] = {
+            "claim_id": str(body.claim_id),
+            "session_done": True,
+            **verify,
+        }
+        attach_verdict_blocks(
+            extra_direct,
+            gate_verdict=str(finalized["gate_verdict"]),
+            claim_id=body.claim_id,
+        )
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -284,11 +301,7 @@ async def examine(
                 done=True,
                 verdict=finalized["gate_verdict"],
             ),
-            extra={
-                "claim_id": str(body.claim_id),
-                "session_done": True,
-                **verify,
-            },
+            extra=extra_direct,
         )
         return {
             "verdict": {
@@ -371,6 +384,12 @@ async def examine(
         extra_single["verdict"] = gate_verdict
     if verify:
         extra_single.update(verify)
+    if verify and gate_verdict:
+        attach_verdict_blocks(
+            extra_single,
+            gate_verdict=str(gate_verdict),
+            claim_id=body.claim_id,
+        )
     await _persist_examine(
         thread_id=body.thread_id,
         user_id=user_id,

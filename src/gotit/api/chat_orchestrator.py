@@ -73,6 +73,8 @@ def _agent_metadata(
     *,
     tool_calls: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
+    from gotit.api.action_blocks import collect_action_blocks
+
     meta: dict[str, object] = {}
     if turn.thinking:
         meta["thinking"] = turn.thinking
@@ -87,6 +89,9 @@ def _agent_metadata(
         open_drill = _last_open_payload(tool_calls, "open_drill")
         if open_drill is not None:
             meta["open_drill"] = open_drill
+        blocks = collect_action_blocks(tool_calls)
+        if blocks:
+            meta["action_blocks"] = blocks
     return meta
 
 

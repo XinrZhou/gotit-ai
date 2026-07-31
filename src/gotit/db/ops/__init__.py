@@ -14,6 +14,11 @@ from gotit.db.ops._common import (
     _note_view,
     _plan_item_view,
 )
+from gotit.db.ops.bootcamp import (
+    get_bootcamp_status,
+    put_bootcamp_status,
+    resolve_bootcamp,
+)
 from gotit.db.ops.calibration import (
     answer_calibration,
     get_calibration,
@@ -39,6 +44,7 @@ from gotit.db.ops.connectors import (
 )
 from gotit.db.ops.day import (
     add_chat_message,
+    close_today,
     delete_plan_item,
     ensure_day,
     fill_today_from_queue,
@@ -62,10 +68,13 @@ from gotit.db.ops.drill import (
     upsert_drill_material,
 )
 from gotit.db.ops.graph import (
+    add_depends_on,
     build_budget_subgraph,
     fail_counts_by_claim,
     list_confused_edges,
+    list_depends_edges,
     record_verify_mastery_writeback,
+    remove_depends_on,
     seed_confused_for_calibration,
 )
 from gotit.db.ops.harness import (
@@ -87,6 +96,7 @@ from gotit.db.ops.interview import (
     default_interview_ramp_prefs,
     delete_interview,
     get_interview_ramp_prefs,
+    interview_focus_for_today,
     list_due_interview_reminders,
     list_interview_ramp_nudges,
     list_interviews,
@@ -149,9 +159,12 @@ from gotit.db.ops.resume import (
 from gotit.db.ops.shell import (
     build_graph_v0,
     build_profile_v0,
+    claim_reject_reason,
     default_digest_prefs,
     get_digest_prefs,
+    interest_material,
     list_shell_activity,
+    promote_interest,
     put_digest_prefs,
     record_interest,
     record_shell_event,
@@ -211,6 +224,7 @@ __all__ = [
     "list_due_claims",
     "fill_today_from_queue",
     "get_today",
+    "close_today",
     "list_chat_messages",
     "add_chat_message",
     # note / ingest
@@ -230,6 +244,10 @@ __all__ = [
     "apply_examine_verdict",
     "list_topic_claims_today",
     "list_project_claims",
+    # first-pass bootcamp
+    "get_bootcamp_status",
+    "put_bootcamp_status",
+    "resolve_bootcamp",
     # cold-start calibration
     "start_calibration",
     "answer_calibration",
@@ -269,6 +287,7 @@ __all__ = [
     "get_interview_ramp_prefs",
     "put_interview_ramp_prefs",
     "default_interview_ramp_prefs",
+    "interview_focus_for_today",
     # prompt
     "register_prompts",
     "get_active_prompt",
@@ -286,6 +305,9 @@ __all__ = [
     # shell / obs (OpenClaw bridge)
     "record_shell_event",
     "record_interest",
+    "promote_interest",
+    "claim_reject_reason",
+    "interest_material",
     "list_shell_activity",
     "get_digest_prefs",
     "put_digest_prefs",
@@ -298,6 +320,9 @@ __all__ = [
     "build_budget_subgraph",
     "fail_counts_by_claim",
     "list_confused_edges",
+    "list_depends_edges",
+    "add_depends_on",
+    "remove_depends_on",
     "seed_confused_for_calibration",
     # harness
     "add_harness_run",

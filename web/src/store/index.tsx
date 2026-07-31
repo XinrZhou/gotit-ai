@@ -48,6 +48,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
 
   const teach = useTeach({
+    refresh: ws.refresh,
     setBusy: shell.setBusy,
     setError: shell.setError,
     workflowThreadId: shell.workflowThreadId,
@@ -70,6 +71,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     plan: ws.plan,
     notes: ws.notes,
     dueClaims: ws.dueClaims,
+    dayClosed: ws.dayClosed,
+    closeSuggested: ws.closeSuggested,
+    closeSummary: ws.closeSummary,
+    closeToday: ws.closeToday,
+    interviewFocus: ws.interviewFocus,
+    bootcamp: ws.bootcamp,
+    setBootcampStatus: ws.setBootcampStatus,
     noteScope: ws.noteScope,
     setNoteScope: ws.setNoteScope,
     projects: ws.projects,

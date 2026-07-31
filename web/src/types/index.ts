@@ -22,6 +22,40 @@ export type DayNote = {
   day: string | null;
 };
 
+export type DayCloseSummary = {
+  passed_count: number;
+  still_owed_count: number;
+  note: string;
+  closed_at: string | null;
+};
+
+/** First-pass empty-library guide from `/v1/today`. */
+export type BootcampView = {
+  status: "none" | "in_progress" | "done" | "skipped";
+  show: boolean;
+  step: "ingest" | "verify" | "celebrate" | null;
+  claim_count: number;
+  note_count: number;
+  claim_id: string | null;
+  claim_text: string | null;
+  gate_verdict: MasteryVerdict | null;
+};
+
+/** Quiet / featured drill hint from `/v1/today` when interview ramp is on. */
+export type InterviewFocusHint = {
+  interview_id: string;
+  company: string;
+  role_title: string;
+  hours_until: number;
+  ramp_tier: "urgent" | "warm" | "light";
+  prompt: string;
+  prominence: "quiet" | "featured";
+  project_name: string | null;
+  project_id: string | null;
+  round: string | null;
+  open_drill: OpenDrillPayload;
+};
+
 export type DayPlan = {
   date: string;
   user_id: string;
@@ -102,6 +136,8 @@ export type TeachVerdict = {
 
 export type TeachResponse = {
   verdict: TeachVerdict;
+  writeback?: { claim: { status: string }; plan_items: unknown[] } | null;
+  verify?: VerifyPath | null;
 };
 
 export type SageVerdict = {
@@ -255,6 +291,29 @@ export type CompanionToolCall = {
   open_drill?: OpenDrillPayload | null;
 };
 
+/** Tappable card on agent message ``metadata.action_blocks``. */
+export type ActionBlockAction = {
+  id: string;
+  label: string;
+};
+
+export type OwedClaimActionBlock = {
+  type: "owed_claim";
+  claim_id: string;
+  title: string;
+  due_reason_text?: string | null;
+  actions: ActionBlockAction[];
+};
+
+export type VerdictActionBlock = {
+  type: "verdict";
+  gate_verdict: MasteryVerdict;
+  claim_id?: string;
+  actions: ActionBlockAction[];
+};
+
+export type ActionBlock = OwedClaimActionBlock | VerdictActionBlock;
+
 /** Payload from `start_examine` for one-tap follow into /v1/examine. */
 export type OpenExaminePayload = {
   action?: string;
@@ -349,6 +408,17 @@ export type MemoryEntry = {
   expires_at: string | null;
 };
 
+export type InterestPromoteResult = {
+  ok: boolean;
+  interest_id: string;
+  already_promoted: boolean;
+  reason: string | null;
+  rewrite_suggestion: string | null;
+  note_id: string | null;
+  claims: Claim[];
+  plan_item_ids: string[];
+};
+
 export type ProfileTopicStat = {
   topic: string;
   trajectory_failures: number;
@@ -374,7 +444,12 @@ export type GraphNode = {
 export type GraphEdge = {
   source: string;
   target: string;
-  rel: "has_topic" | "in_project" | "interest_topic" | "confused_with";
+  rel:
+    | "has_topic"
+    | "in_project"
+    | "interest_topic"
+    | "confused_with"
+    | "depends_on";
   weight?: number;
   meta?: Record<string, unknown>;
 };
