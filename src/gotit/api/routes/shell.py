@@ -21,6 +21,7 @@ from gotit.core.models import (
     DigestCronSyncResult,
     DigestPrefs,
     GraphView,
+    InterestPromoteResult,
     MemoryEntry,
     ProfileView,
 )
@@ -100,6 +101,12 @@ class InterestCreate(BaseModel):
     skill: str = "digest"
 
 
+class InterestPromoteRequest(BaseModel):
+    """Optional rewrite texts after a vacuous reject (max 3)."""
+
+    claim_texts: list[str] = Field(default_factory=list, max_length=3)
+
+
 @router.post(
     "/v1/shell/events",
     response_model=MemoryEntry,
@@ -148,6 +155,68 @@ async def create_interest(
             channel=body.channel,
             skill=body.skill,
         )
+
+
+@router.post(
+    "/v1/shell/interests/{interest_id}/promote",
+    response_model=InterestPromoteResult,
+    dependencies=[Depends(require_api_key)],
+)
+async def promote_interest(
+    interest_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+    body: InterestPromoteRequest | None = None,
+) -> InterestPromoteResult:
+    """Promote a marked-useful interest into 1–3 testable claims on today's plan."""
+    from gotit.api.deps import SessionMemoryReader, SessionPromptReader
+    from gotit.core.agents.compass import build_compass_agent, run_compass
+    from gotit.core.models import Claim, MasteryStatus
+    from gotit.db.models import MemoryEntryRow
+
+    payload = body or InterestPromoteRequest()
+    user_id = _user_id(settings)
+    claim_texts = [t.strip() for t in payload.claim_texts if t.strip()][:3]
+    claims: list[Claim] | None = None
+
+    if not claim_texts and settings.llm_api_key:
+        async with session_scope() as session:
+            row = await session.get(MemoryEntryRow, interest_id)
+            if row is None or row.user_id != user_id or row.kind != "interest":
+                raise HTTPException(
+                    status_code=404, detail=f"interest not found: {interest_id}"
+                )
+            material = day_ops.interest_material(dict(row.content or {}))
+            if not material:
+                raise HTTPException(status_code=400, detail="interest has no title")
+            prompt = await SessionPromptReader(session).get_active_prompt("compass")
+            system_prompt = prompt.system_prompt if prompt else ""
+            reader = SessionMemoryReader(session, user_id=user_id)
+            agent = build_compass_agent(get_model(), system_prompt=system_prompt)
+            output = await run_compass(agent, reader, note_body=material)
+        claims = [
+            Claim(
+                text=c.text,
+                source_excerpt=(c.source_excerpt or material)[:200],
+                status=MasteryStatus.NOT_YET,
+                topic=c.topic,
+                tags=list(c.tags) or ["digest", "interest"],
+            )
+            for c in output.claims[:3]
+        ]
+        if not claims:
+            claims = None
+
+    try:
+        async with session_scope() as session:
+            return await day_ops.promote_interest(
+                session,
+                interest_id,
+                user_id=user_id,
+                claims=claims,
+                claim_texts=claim_texts or None,
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get(

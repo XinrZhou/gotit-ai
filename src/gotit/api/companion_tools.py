@@ -18,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gotit.api.action_blocks import owed_blocks_from_claims
 from gotit.core.models import DrillRound, MasteryStatus, PlanItemSource, PlanItemStatus
 from gotit.db import ops as day_ops
 from gotit.db.models import ClaimRow, DayNoteRow, InterviewEventRow, LearningDayRow
@@ -37,6 +38,7 @@ class ToolCallRecord:
     summary: str
     open_examine: dict[str, object] | None = None
     open_drill: dict[str, object] | None = None
+    action_blocks: list[dict[str, object]] | None = None
 
     def as_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -49,6 +51,8 @@ class ToolCallRecord:
             out["open_examine"] = self.open_examine
         if self.open_drill is not None:
             out["open_drill"] = self.open_drill
+        if self.action_blocks:
+            out["action_blocks"] = self.action_blocks
         return out
 
 
@@ -67,6 +71,7 @@ class ToolCallRecorder:
         summary: str,
         open_examine: dict[str, object] | None = None,
         open_drill: dict[str, object] | None = None,
+        action_blocks: list[dict[str, object]] | None = None,
     ) -> None:
         self.calls.append(
             ToolCallRecord(
@@ -76,6 +81,7 @@ class ToolCallRecorder:
                 summary=_clip(summary, _SUMMARY_MAX),
                 open_examine=open_examine,
                 open_drill=open_drill,
+                action_blocks=action_blocks,
             )
         )
 
@@ -112,13 +118,20 @@ def _args_digest(args: dict[str, Any]) -> str:
 
 def _claim_brief(claim: Any) -> dict[str, object]:
     status = claim.status.value if hasattr(claim.status, "value") else str(claim.status)
-    return {
+    out: dict[str, object] = {
         "id": str(claim.id),
         "text": _clip(claim.text, 120),
         "status": status,
         "topic": claim.topic,
         "next_review_at": (claim.next_review_at.isoformat() if claim.next_review_at else None),
     }
+    reason = getattr(claim, "due_reason_text", None)
+    if reason:
+        out["due_reason_text"] = reason
+    code = getattr(claim, "due_reason_code", None)
+    if code:
+        out["due_reason_code"] = code
+    return out
 
 
 def _normalize_drill_round(raw: str | None) -> str:
@@ -225,7 +238,18 @@ def build_companion_tools(
                 "due_count": len(view.due_claims),
                 "due_claims": due,
                 "notes_count": len(view.notes),
+                "day_closed": view.day_closed,
+                "close_suggested": view.close_suggested,
             }
+            if view.close_summary is not None:
+                out["close_summary"] = view.close_summary.model_dump(mode="json")
+            if view.interview_focus is not None:
+                out["interview_focus"] = view.interview_focus.model_dump(mode="json")
+            focus_bit = (
+                f"，建议深挖 {view.interview_focus.project_name or view.interview_focus.company}"
+                if view.interview_focus is not None
+                else ""
+            )
             rec.record(
                 "get_today",
                 args=args,
@@ -233,6 +257,13 @@ def build_companion_tools(
                 summary=(
                     f"{view.date.isoformat()}：计划 {len(view.plan.items)} 条，"
                     f"欠账 {len(view.due_claims)} 条"
+                    + ("，已收工" if view.day_closed else "")
+                    + focus_bit
+                ),
+                open_drill=(
+                    view.interview_focus.open_drill
+                    if view.interview_focus is not None
+                    else None
                 ),
             )
             return out
@@ -245,25 +276,65 @@ def build_companion_tools(
             )
             return {"ok": False, "error": str(exc)}
 
+    async def close_day(note: str | None = None) -> dict[str, object]:
+        """Close today's learning day (idempotent). Does not cancel interviews."""
+        args: dict[str, Any] = {
+            "day": day.isoformat(),
+            "note": (note or "").strip()[:80] or None,
+        }
+        try:
+            summary = await day_ops.close_today(
+                session, day, user_id=user_id, note=note
+            )
+            out: dict[str, object] = {
+                "ok": True,
+                "day": day.isoformat(),
+                "passed_count": summary.passed_count,
+                "still_owed_count": summary.still_owed_count,
+                "note": summary.note,
+                "closed_at": (
+                    summary.closed_at.isoformat() if summary.closed_at else None
+                ),
+            }
+            rec.record(
+                "close_day",
+                args=args,
+                ok=True,
+                summary=summary.note or (
+                    f"收工：过了 {summary.passed_count}，还挂 {summary.still_owed_count}"
+                ),
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "close_day",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
     async def list_due_claims() -> dict[str, object]:
         """List claims due for review today (queued / not_yet / in_progress)."""
         args: dict[str, Any] = {"day": day.isoformat()}
         try:
-            rows = await day_ops.list_due_claims(session, day, user_id=user_id)
-            claims = [
-                _claim_brief(day_ops._claim_view(r))  # noqa: SLF001
-                for r in rows[:_DUE_LIST_CAP]
-            ]
+            today = await day_ops.get_today(session, day, user_id=user_id)
+            views = today.due_claims[:_DUE_LIST_CAP]
+            claims = [_claim_brief(v) for v in views]
+            blocks = owed_blocks_from_claims(views)
             out: dict[str, object] = {
                 "date": day.isoformat(),
-                "count": len(rows),
+                "count": len(today.due_claims),
                 "claims": claims,
             }
+            if blocks:
+                out["action_blocks"] = blocks
             rec.record(
                 "list_due_claims",
                 args=args,
                 ok=True,
-                summary=f"欠账 {len(rows)} 条",
+                summary=f"欠账 {len(today.due_claims)} 条",
+                action_blocks=blocks or None,
             )
             return out
         except Exception as exc:  # noqa: BLE001
@@ -638,6 +709,15 @@ def build_companion_tools(
             ),
         ),
         Tool(
+            close_day,
+            name="close_day",
+            description=(
+                "Close today's learning day (idempotent). "
+                "Use when the learner says they're done for today / 收工. "
+                "Does not cancel interviews or block manual practice."
+            ),
+        ),
+        Tool(
             list_due_claims,
             name="list_due_claims",
             description=(
@@ -693,12 +773,14 @@ def build_companion_tools(
 
 COMPANION_TOOL_HINT = (
     "【办事工具】你可以调用：get_today、list_due_claims、start_examine、"
-    "get_failure_lessons、add_memory、get_upcoming_interview、start_drill。\n"
+    "get_failure_lessons、add_memory、get_upcoming_interview、start_drill、close_day。\n"
     "- 问「今天欠什么 / 今日计划 / 还欠几道」时：先调 get_today 或 list_due_claims，"
     "用真实结果回答，不要编造。\n"
     "- 「帮我开考 / 考我这条」：调 start_examine（可传 claim_id / note_id；"
     "都不传则挑第一条欠账）；告知对方已备好开考，可点气泡下「开考」。"
     "不要假装自己已经判过分——掌握门不在这里。\n"
+    "- 「今天收工 / 可以停了」：调 close_day；用返回的 note / 计数说一句短复盘，"
+    "不要羞辱还挂着的题；收工后仍可手动开练。\n"
     "- 「快面试了 / 面试练什么」：调 get_upcoming_interview；需要开练时再调 "
     "start_drill（可传 interview_id / round / project_id）。告知可点气泡下「深挖」，"
     "不要假装已经开练或判过分。\n"

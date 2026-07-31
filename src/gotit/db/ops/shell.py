@@ -2,20 +2,26 @@
 
 from __future__ import annotations
 
+import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.models import (
+    Claim,
     DigestCronSyncResult,
     DigestFeed,
     DigestPrefs,
     GraphEdge,
     GraphNode,
     GraphView,
+    InterestPromoteResult,
+    MasteryStatus,
     MemoryEntry,
     ProfileTopicStat,
     ProfileView,
@@ -29,6 +35,21 @@ KIND_SHELL_EVENT = "shell_event"
 KIND_INTEREST = "interest"
 KIND_TRAJECTORY = "trajectory"
 KIND_DIGEST_PREFS = "digest_prefs"
+
+# Promote quality: rule-first vacuous reject; max 3 claims per interest.
+PROMOTE_MAX_CLAIMS = 3
+_PROMOTE_MIN_LEN = 12
+_PROMOTE_TZ = ZoneInfo("Asia/Shanghai")
+_VACUOUS_EXACT = re.compile(
+    r"^(太棒了|真棒|好看|有意思|有趣|不错|喜欢|爱了|赞|"
+    r"amazing|interesting|cool|wow|nice|great|love\s*it|"
+    r"今日要闻|今日热点|热门资讯)[!！.。…\s]*$",
+    re.IGNORECASE,
+)
+_REWRITE_HINT = (
+    "改写成可检验的短句，例如：「在条件 X 下，Y 会导致 Z」"
+    "（含主体与可证伪结果）。"
+)
 
 DEFAULT_DIGEST_FEEDS: list[DigestFeed] = [
     DigestFeed(
@@ -162,6 +183,205 @@ async def record_interest(
         topic=topic,
         content=content,
         source={"channel": channel, "skill": skill, "event_id": eid},
+    )
+
+
+def claim_reject_reason(text: str) -> str | None:
+    """Rule-first vacuous / untestable filter. Returns reason or None if ok."""
+    plain = _strip_html(text).strip()
+    if not plain:
+        return "主张为空"
+    if len(plain) < _PROMOTE_MIN_LEN:
+        return "主张过短，无法检验"
+    if _VACUOUS_EXACT.match(plain):
+        return "纯情绪或空话，无法检验"
+    # Require at least one letter / CJK ideograph (not only punctuation/digits).
+    if not re.search(r"[A-Za-z\u4e00-\u9fff]", plain):
+        return "缺少可检验主体"
+    return None
+
+
+def interest_material(content: dict[str, Any]) -> str:
+    """Context injected for extract — this interest item only."""
+    title = _strip_html(str(content.get("title") or "")).strip()
+    link = str(content.get("link") or "").strip()
+    bits = [title] if title else []
+    if link:
+        bits.append(f"链接：{link}")
+    return "\n".join(bits).strip()
+
+
+def _candidate_texts_from_interest(
+    content: dict[str, Any],
+    *,
+    claim_texts: list[str] | None = None,
+) -> list[str]:
+    if claim_texts:
+        return [t.strip() for t in claim_texts if str(t).strip()][:PROMOTE_MAX_CLAIMS]
+    title = _strip_html(str(content.get("title") or "")).strip()
+    return [title] if title else []
+
+
+async def promote_interest(
+    session: AsyncSession,
+    interest_id: UUID,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+    claims: list[Claim] | None = None,
+    claim_texts: list[str] | None = None,
+    day: date | None = None,
+) -> InterestPromoteResult:
+    """Promote a marked-useful interest into 1–3 claims on today's plan.
+
+    Strategy (pinned): create a note stub for Asia/Shanghai *today*, then
+    ``ingest_note(..., add_plan_item=True)`` so claims appear on the daily
+    verify brief for examine. Idempotent via ``content.promoted_claim_ids``.
+    """
+    from gotit.db.ops.note import add_note, ingest_note
+
+    row = await session.get(MemoryEntryRow, interest_id)
+    if row is None or row.user_id != user_id or row.kind != KIND_INTEREST:
+        raise KeyError(f"interest not found: {interest_id}")
+
+    content = dict(row.content or {})
+    existing_ids = [
+        UUID(str(x))
+        for x in (content.get("promoted_claim_ids") or [])
+        if str(x).strip()
+    ]
+    if existing_ids:
+        claim_rows = list(
+            (
+                await session.execute(
+                    select(ClaimRow).where(
+                        ClaimRow.user_id == user_id,
+                        ClaimRow.id.in_(existing_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_id = {c.id: c for c in claim_rows}
+        restored = [_claim_view(by_id[cid]) for cid in existing_ids if cid in by_id]
+        plan_ids = [
+            UUID(str(x))
+            for x in (content.get("promoted_plan_item_ids") or [])
+            if str(x).strip()
+        ]
+        note_raw = content.get("promoted_note_id")
+        return InterestPromoteResult(
+            ok=True,
+            interest_id=interest_id,
+            already_promoted=True,
+            note_id=UUID(str(note_raw)) if note_raw else None,
+            claims=restored,
+            plan_item_ids=plan_ids,
+        )
+
+    topic = (row.topic or "").strip() or None
+    feed = content.get("feed_id")
+    if not topic and feed:
+        topic = f"feed:{feed}"
+
+    if claims is None:
+        texts = _candidate_texts_from_interest(content, claim_texts=claim_texts)
+        accepted: list[Claim] = []
+        last_reason: str | None = None
+        for text in texts:
+            reason = claim_reject_reason(text)
+            if reason:
+                last_reason = reason
+                continue
+            plain = _strip_html(text).strip()
+            accepted.append(
+                Claim(
+                    text=plain[:500],
+                    source_excerpt=plain[:200],
+                    status=MasteryStatus.NOT_YET,
+                    topic=topic,
+                    tags=["digest", "interest"],
+                )
+            )
+            if len(accepted) >= PROMOTE_MAX_CLAIMS:
+                break
+        if not accepted:
+            return InterestPromoteResult(
+                ok=False,
+                interest_id=interest_id,
+                reason=last_reason or "无可检验主张",
+                rewrite_suggestion=_REWRITE_HINT,
+            )
+        claims = accepted
+    else:
+        filtered: list[Claim] = []
+        last_reason = None
+        for claim in claims[:PROMOTE_MAX_CLAIMS]:
+            reason = claim_reject_reason(claim.text)
+            if reason:
+                last_reason = reason
+                continue
+            if topic and not claim.topic:
+                claim.topic = topic
+            if not claim.tags:
+                claim.tags = ["digest", "interest"]
+            filtered.append(claim)
+        if not filtered:
+            return InterestPromoteResult(
+                ok=False,
+                interest_id=interest_id,
+                reason=last_reason or "无可检验主张",
+                rewrite_suggestion=_REWRITE_HINT,
+            )
+        claims = filtered
+
+    target_day = day
+    if target_day is None:
+        target_day = datetime.now(_PROMOTE_TZ).date()
+
+    title = _strip_html(str(content.get("title") or "")).strip() or "资讯主张"
+    body = interest_material(content) or title
+    note = await add_note(
+        session,
+        target_day,
+        body,
+        title=title[:200],
+        tags=["digest", "interest"],
+        user_id=user_id,
+    )
+    ingested = await ingest_note(
+        session,
+        note.id,
+        claims=claims,
+        user_id=user_id,
+        add_plan_item=True,
+    )
+    raw_claims = ingested.get("claims")
+    claim_payloads: list[Any] = raw_claims if isinstance(raw_claims, list) else []
+    persisted = [
+        Claim.model_validate(c) if isinstance(c, dict) else c
+        for c in claim_payloads
+    ]
+    raw_plans = ingested.get("plan_items")
+    plan_payloads: list[Any] = raw_plans if isinstance(raw_plans, list) else []
+    plan_ids = [
+        UUID(str(p["id"] if isinstance(p, dict) else getattr(p, "id")))
+        for p in plan_payloads
+    ]
+    claim_ids = [c.id for c in persisted]
+
+    content["promoted_claim_ids"] = [str(cid) for cid in claim_ids]
+    content["promoted_plan_item_ids"] = [str(pid) for pid in plan_ids]
+    content["promoted_note_id"] = str(note.id)
+    row.content = content
+    await session.flush()
+
+    return InterestPromoteResult(
+        ok=True,
+        interest_id=interest_id,
+        note_id=note.id,
+        claims=persisted,
+        plan_item_ids=plan_ids,
     )
 
 
@@ -373,9 +593,13 @@ async def build_graph_v0(
     claim_limit: int = 200,
     interest_limit: int = 100,
 ) -> GraphView:
-    """claim–topic–project + confused_with; interest may attach to topic only."""
+    """claim–topic–project + confused_with / depends_on; interest may attach to topic."""
     from gotit.core.mastery_graph import CONFUSED_THRESHOLD
-    from gotit.db.ops.graph import fail_counts_by_claim, list_confused_edges
+    from gotit.db.ops.graph import (
+        fail_counts_by_claim,
+        list_confused_edges,
+        list_depends_edges,
+    )
 
     stmt = (
         select(ClaimRow)
@@ -400,6 +624,7 @@ async def build_graph_v0(
         session, user_id=user_id, claim_ids=[c.id for c in claims]
     )
     confused = await list_confused_edges(session, user_id=user_id, min_weight=1)
+    depends = await list_depends_edges(session, user_id=user_id)
 
     nodes: dict[str, GraphNode] = {}
     edges: list[GraphEdge] = []
@@ -469,6 +694,19 @@ async def build_graph_v0(
                 rel="confused_with",
                 weight=w,
                 meta={"active": w >= CONFUSED_THRESHOLD},
+            )
+        )
+
+    for edge in depends:
+        if edge.source_claim_id not in claim_ids or edge.target_claim_id not in claim_ids:
+            continue
+        edges.append(
+            GraphEdge(
+                source=f"claim:{edge.source_claim_id}",
+                target=f"claim:{edge.target_claim_id}",
+                rel="depends_on",
+                weight=int(edge.weight),
+                meta={},
             )
         )
 

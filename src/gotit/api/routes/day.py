@@ -14,6 +14,7 @@ from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
 from gotit.core.models import (
     ChatMessageView,
+    DayCloseSummary,
     DayPlanView,
     PlanItemSource,
     PlanItemStatus,
@@ -53,6 +54,10 @@ class ChatMessageCreate(BaseModel):
     text: str = Field(min_length=1)
 
 
+class DayCloseBody(BaseModel):
+    note: str | None = Field(default=None, max_length=200)
+
+
 @router.get("/v1/today", response_model=TodayView, dependencies=[Depends(require_api_key)])
 async def today(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -60,6 +65,24 @@ async def today(
 ) -> TodayView:
     async with session_scope() as session:
         return await day_ops.get_today(session, day, user_id=_user_id(settings))
+
+
+@router.post(
+    "/v1/days/today/close",
+    response_model=DayCloseSummary,
+    dependencies=[Depends(require_api_key)],
+)
+async def close_today(
+    settings: Annotated[Settings, Depends(get_settings)],
+    body: DayCloseBody | None = None,
+    day: Annotated[date | None, Query()] = None,
+) -> DayCloseSummary:
+    """Close the learning day (idempotent). Optional ``day`` query defaults to today."""
+    note = body.note if body else None
+    async with session_scope() as session:
+        return await day_ops.close_today(
+            session, day, user_id=_user_id(settings), note=note
+        )
 
 
 @router.get(

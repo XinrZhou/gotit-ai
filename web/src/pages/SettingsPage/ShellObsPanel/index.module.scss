@@ -566,3 +566,39 @@
   font-size: 12.5px;
   color: var(--muted);
 }
+
+.promoteRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.promoteQuiet {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.promoteQuiet:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.promoteQuiet:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.promoteHint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  max-width: 28rem;
+}

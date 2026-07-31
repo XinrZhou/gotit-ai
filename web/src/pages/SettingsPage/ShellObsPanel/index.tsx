@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api";
 import { stripHtml } from "../../../lib/format";
 import { useStore } from "../../../store";
-import type { MemoryEntry } from "../../../types";
+import type { InterestPromoteResult, MemoryEntry } from "../../../types";
 import styles from "./index.module.scss";
 
 type Category = "all" | "morning" | "evening" | "news" | "interest";
@@ -313,9 +313,11 @@ function inTimeRange(
 }
 
 export function ShellObsPanel() {
-  const { setError } = useStore();
+  const { setError, setFlash } = useStore();
   const [activity, setActivity] = useState<MemoryEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [promoteHint, setPromoteHint] = useState<string | null>(null);
   const [category, setCategory] = useState<Category>("all");
   const [timePreset, setTimePreset] = useState<TimePreset>("all");
   const [customRange, setCustomRange] = useState<Range>({ from: "", to: "" });
@@ -343,6 +345,57 @@ export function ShellObsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPromoteHint(null);
+  }, [selected?.id]);
+
+  const promotedClaimIds = (e: MemoryEntry): string[] => {
+    const raw = e.content?.promoted_claim_ids;
+    return Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
+  };
+
+  const onPromote = async (e: MemoryEntry) => {
+    if (e.kind !== "interest" || promoting) return;
+    setPromoting(true);
+    setPromoteHint(null);
+    try {
+      const result = await api<InterestPromoteResult>(
+        `/v1/shell/interests/${e.id}/promote`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      if (!result.ok) {
+        const hint = [result.reason, result.rewrite_suggestion]
+          .filter(Boolean)
+          .join(" · ");
+        setPromoteHint(hint || "无法变成可考主张");
+        return;
+      }
+      const n = result.claims?.length ?? 0;
+      const msg = result.already_promoted
+        ? `已可考（${n} 条主张，未重复晋升）`
+        : `已生成 ${n} 条可考主张，已加入今日计划`;
+      setPromoteHint(msg);
+      setFlash(msg);
+      await load();
+      setSelected((prev) => {
+        if (!prev || prev.id !== e.id) return prev;
+        return {
+          ...prev,
+          content: {
+            ...prev.content,
+            promoted_claim_ids: result.claims.map((c) => c.id),
+            promoted_plan_item_ids: result.plan_item_ids,
+            promoted_note_id: result.note_id,
+          },
+        };
+      });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   useEffect(() => {
     if (!timeOpen) return;
@@ -514,6 +567,36 @@ export function ShellObsPanel() {
               {c.feed_id ? (
                 <p className={styles.mutedLine}>来源 {String(c.feed_id)}</p>
               ) : null}
+              <div className={styles.promoteRow}>
+                {promotedClaimIds(selected).length > 0 ? (
+                  <>
+                    <p className={styles.mutedLine}>
+                      已可考 · {promotedClaimIds(selected).length}{" "}
+                      条主张（今日简报可开考）
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.promoteQuiet}
+                      disabled={promoting}
+                      onClick={() => void onPromote(selected)}
+                    >
+                      {promoting ? "确认中…" : "查看晋升状态"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-ink"
+                    disabled={promoting}
+                    onClick={() => void onPromote(selected)}
+                  >
+                    {promoting ? "生成中…" : "变成可考"}
+                  </button>
+                )}
+                {promoteHint ? (
+                  <p className={styles.promoteHint}>{promoteHint}</p>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -722,6 +805,11 @@ export function ShellObsPanel() {
                   {extra ? <span className={styles.extra}>{extra}</span> : null}
                 </div>
                 <div className={styles.rowMeta}>
+                  {e.kind === "interest" ? (
+                    <span className={styles.cat}>
+                      {promotedClaimIds(e).length > 0 ? "已可考" : "可变成题"}
+                    </span>
+                  ) : null}
                   {cat && category === "all" ? (
                     <span className={styles.cat}>{cat}</span>
                   ) : null}
