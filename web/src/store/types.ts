@@ -57,6 +57,7 @@ export type Store = {
     topic: string | null;
     status: string;
     claim_id: string | null;
+    project_id?: string | null;
   }[];
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string | null) => void;

@@ -82,6 +82,9 @@ export type ProjectProgress = {
 
 export type MasteryVerdict = "passed" | "almost" | "owe_next";
 
+/** Preferred verify form (VISION P3). null/omit → probe. */
+export type CheckMode = "probe" | "drill" | "apply" | "teach_back";
+
 export type Claim = {
   id: string;
   text: string;
@@ -89,6 +92,8 @@ export type Claim = {
   topic: string | null;
   source_note_id: string | null;
   next_review_at: string | null;
+  project_id?: string | null;
+  preferred_check_mode?: CheckMode | null;
   /** Present on `/v1/today` due list — why this claim is owed today. */
   due_reason_code?: string | null;
   due_reason_text?: string | null;
@@ -300,6 +305,7 @@ export type CompanionToolCall = {
   ok: boolean;
   summary: string;
   open_examine?: OpenExaminePayload | null;
+  open_teach?: OpenTeachPayload | null;
   open_drill?: OpenDrillPayload | null;
 };
 
@@ -314,6 +320,8 @@ export type OwedClaimActionBlock = {
   claim_id: string;
   title: string;
   due_reason_text?: string | null;
+  preferred_check_mode?: CheckMode | null;
+  project_id?: string | null;
   actions: ActionBlockAction[];
 };
 
@@ -335,6 +343,17 @@ export type OpenExaminePayload = {
   note_id?: string;
   note_title?: string | null;
   claim_ids?: string[];
+  plan_item_id?: string;
+  plan_changed?: boolean;
+  thread_id?: string | null;
+};
+
+/** Payload from `start_verify` → teach for one-tap follow into /v1/teach. */
+export type OpenTeachPayload = {
+  action?: string;
+  claim_id?: string;
+  claim_text?: string;
+  topic?: string | null;
   plan_item_id?: string;
   plan_changed?: boolean;
   thread_id?: string | null;

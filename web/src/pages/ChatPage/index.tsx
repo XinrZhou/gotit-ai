@@ -26,6 +26,7 @@ import { BootcampPanel } from "./BootcampPanel";
 import { InterviewFocusBrief } from "./InterviewFocusBrief";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import { useStore } from "../../store";
+import { resolveCheckMode } from "../../lib/checkRouting";
 import { fmtDate, parseApiDate } from "../../lib/format";
 import { profileInitials, profileTint } from "../../lib/userProfile";
 import type {
@@ -37,6 +38,7 @@ import type {
   Mode,
   OpenDrillPayload,
   OpenExaminePayload,
+  OpenTeachPayload,
   SkillInfo,
   Thread,
 } from "../../types";
@@ -103,6 +105,22 @@ function agentAvatar(name: string | null | undefined) {
   if (!name) return "你";
   const ui = AGENT_UI[name as AgentName];
   return ui ? ui.avatar() : name.slice(0, 1).toUpperCase();
+}
+
+const PLACEHOLDER_THREAD_TITLES = new Set(["新对话", "学习会话"]);
+
+const WORKFLOW_FALLBACK_TITLE: Record<Exclude<Mode, "chat">, string> = {
+  examine: "考我",
+  teach: "回讲",
+  drill: "项目深挖",
+};
+
+/** Sidebar title from claim text (mirrors backend derive_thread_title). */
+function titleFromClaimText(text: string, maxLen = 28): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "考我";
+  if (cleaned.length <= maxLen) return cleaned;
+  return `${cleaned.slice(0, maxLen - 1)}…`;
 }
 
 function isAgentName(name: string | null | undefined): name is AgentName {
@@ -298,6 +316,7 @@ export function ChatPage() {
     setWorkflowThreadId,
     onExamineStart,
     onExamineStartClaim,
+    onTeachStartClaim,
     onDrillStartWithPayload,
     dueClaims,
     items,
@@ -442,13 +461,21 @@ export function ChatPage() {
   }, [mode]);
 
   const startWorkflow = useCallback(
-    async (next: Exclude<Mode, "chat">) => {
-      let tid = activeId;
+    async (
+      next: Exclude<Mode, "chat">,
+      opts?: { title?: string; forceNew?: boolean },
+    ) => {
+      const wanted =
+        (opts?.title || "").trim() || WORKFLOW_FALLBACK_TITLE[next];
+      let tid = opts?.forceNew ? null : activeId;
       if (!tid) {
         try {
           const t = await api<Thread>("/v1/threads", {
             method: "POST",
-            body: JSON.stringify({ title: "学习会话", kind: "chat" }),
+            body: JSON.stringify({
+              title: wanted,
+              kind: "chat",
+            }),
           });
           setThreads((prev) => [t, ...prev]);
           setActiveId(t.id);
@@ -457,21 +484,87 @@ export function ChatPage() {
           setErr(String(e));
           return;
         }
+      } else {
+        const cur = threads.find((x) => x.id === tid);
+        if (cur && PLACEHOLDER_THREAD_TITLES.has(cur.title)) {
+          try {
+            const updated = await api<Thread>(`/v1/threads/${tid}`, {
+              method: "PATCH",
+              body: JSON.stringify({ title: wanted }),
+            });
+            setThreads((prev) =>
+              prev.map((x) => (x.id === tid ? updated : x)),
+            );
+          } catch {
+            /* title is best-effort */
+          }
+        }
       }
       setWorkflowThreadId(tid);
       setMode(next);
       return tid;
     },
-    [activeId, setMode, setWorkflowThreadId],
+    [activeId, threads, setMode, setWorkflowThreadId],
   );
 
   const startExamineClaim = useCallback(
-    async (claim: Claim) => {
-      const tid = await startWorkflow("examine");
+    async (claim: Claim, opts?: { fresh?: boolean }) => {
+      const tid = await startWorkflow("examine", {
+        title: titleFromClaimText(claim.text),
+        forceNew: opts?.fresh,
+      });
       if (!tid) return;
       onExamineStartClaim(claim);
     },
     [startWorkflow, onExamineStartClaim],
+  );
+
+  const startTeachClaim = useCallback(
+    async (claim: Claim, opts?: { fresh?: boolean }) => {
+      const tid = await startWorkflow("teach", {
+        title: titleFromClaimText(claim.text),
+        forceNew: opts?.fresh,
+      });
+      if (!tid) return;
+      onTeachStartClaim(claim);
+    },
+    [startWorkflow, onTeachStartClaim],
+  );
+
+  /** Form-follows-claim: open examine / teach / drill by preferred mode. */
+  const startVerifyClaim = useCallback(
+    async (claim: Claim, opts?: { fresh?: boolean }) => {
+      const title = titleFromClaimText(claim.text);
+      const mode = resolveCheckMode(claim);
+      if (mode === "teach_back") {
+        const tid = await startWorkflow("teach", {
+          title,
+          forceNew: opts?.fresh,
+        });
+        if (!tid) return;
+        onTeachStartClaim(claim);
+        return;
+      }
+      if (mode === "drill") {
+        const tid = await startWorkflow("drill", {
+          title,
+          forceNew: opts?.fresh,
+        });
+        if (!tid) return;
+        onDrillStartWithPayload({
+          project_id: claim.project_id ?? null,
+          thread_id: tid,
+        });
+        return;
+      }
+      await startExamineClaim(claim, opts);
+    },
+    [
+      startExamineClaim,
+      startWorkflow,
+      onTeachStartClaim,
+      onDrillStartWithPayload,
+    ],
   );
 
   // Note ingest「去开考」handoff from compose / view-note modals.
@@ -480,17 +573,24 @@ export function ChatPage() {
     const claim = pendingExamineClaim;
     clearPendingExamineClaim();
     setLibraryOpen(false);
-    void startExamineClaim(claim);
+    void startVerifyClaim(claim, { fresh: true });
   }, [
     pendingExamineClaim,
     clearPendingExamineClaim,
     setLibraryOpen,
-    startExamineClaim,
+    startVerifyClaim,
   ]);
 
   const startExamineNote = useCallback(
     async (noteId: string, fallback?: Partial<DayNote>) => {
-      const tid = await startWorkflow("examine");
+      const label =
+        fallback?.title?.trim() ||
+        notes.find((n) => n.id === noteId)?.title?.trim() ||
+        fallback?.excerpt?.trim() ||
+        "考我";
+      const tid = await startWorkflow("examine", {
+        title: titleFromClaimText(label),
+      });
       if (!tid) return;
       const found = notes.find((n) => n.id === noteId);
       const note: DayNote = found ?? {
@@ -549,10 +649,35 @@ export function ChatPage() {
     [dueClaims, startExamineClaim, startExamineNote],
   );
 
+  const followOpenTeach = useCallback(
+    (payload: OpenTeachPayload) => {
+      if (!payload.claim_id) return;
+      const found = dueClaims.find((c) => c.id === payload.claim_id);
+      const claim: Claim = found ?? {
+        id: payload.claim_id,
+        text: (payload.claim_text || "回讲").trim() || "回讲",
+        status: "in_progress",
+        topic: payload.topic ?? null,
+        source_note_id: null,
+        next_review_at: null,
+        preferred_check_mode: "teach_back",
+      };
+      void startTeachClaim(claim);
+    },
+    [dueClaims, startTeachClaim],
+  );
+
   const followOpenDrill = useCallback(
     (payload: OpenDrillPayload) => {
       void (async () => {
-        const tid = await startWorkflow("drill");
+        const seed =
+          payload.project_name?.trim() ||
+          payload.company?.trim() ||
+          payload.direction?.trim() ||
+          "项目深挖";
+        const tid = await startWorkflow("drill", {
+          title: titleFromClaimText(seed),
+        });
         if (!tid) return;
         onDrillStartWithPayload({
           round: payload.round,
@@ -945,7 +1070,7 @@ export function ChatPage() {
                   <DailyBrief
                     variant="home"
                     maxItems={4}
-                    onExamineClaim={(c) => void startExamineClaim(c)}
+                    onExamineClaim={(c) => void startVerifyClaim(c)}
                     onExamineNoteId={(id) => void startExamineNote(id)}
                     onViewAll={() => void startWorkflow("examine")}
                   />
@@ -1127,6 +1252,7 @@ export function ChatPage() {
                             calls={toolCalls}
                             busy={busy || storeBusy}
                             onOpenExamine={followOpenExamine}
+                            onOpenTeach={followOpenTeach}
                             onOpenDrill={followOpenDrill}
                           />
                         ) : null}
@@ -1135,6 +1261,7 @@ export function ChatPage() {
                             blocks={actionBlocks}
                             busy={busy || storeBusy}
                             onOpenExamine={followOpenExamine}
+                            onOpenTeach={followOpenTeach}
                             onOpenDrill={followOpenDrill}
                           />
                         ) : null}
@@ -1201,7 +1328,7 @@ export function ChatPage() {
                         <DailyBrief
                           variant="thread"
                           maxItems={4}
-                          onExamineClaim={(c) => void startExamineClaim(c)}
+                          onExamineClaim={(c) => void startVerifyClaim(c)}
                           onExamineNoteId={(id) => void startExamineNote(id)}
                           onViewAll={() => void startWorkflow("examine")}
                         />

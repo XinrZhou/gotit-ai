@@ -13,6 +13,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
+| `form-follows-claim/` | preferred_check_mode + CTA routing (P3) |
 | `verify-spine-deepen/` | Gate signals + ContextBudget + Harness REST/CLI |
 | `note-ingest-next-step/` | Note ingest → ready card → 去开考 |
 | `daily-brief-polish/` | Daily brief UI polish (may be ship-ready) |

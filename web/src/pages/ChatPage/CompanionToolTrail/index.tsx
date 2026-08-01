@@ -2,6 +2,7 @@ import type {
   CompanionToolCall,
   OpenDrillPayload,
   OpenExaminePayload,
+  OpenTeachPayload,
 } from "../../../types";
 import styles from "./index.module.scss";
 
@@ -9,6 +10,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_today: "今日",
   list_due_claims: "欠账",
   start_examine: "开考准备",
+  start_verify: "开练准备",
   start_drill: "深挖准备",
   get_failure_lessons: "教训",
   add_memory: "记下",
@@ -26,21 +28,29 @@ function isOpenExamine(v: unknown): v is OpenExaminePayload {
   return Boolean(o.claim_id || o.note_id);
 }
 
+function isOpenTeach(v: unknown): v is OpenTeachPayload {
+  if (!v || typeof v !== "object") return false;
+  const o = v as OpenTeachPayload;
+  return o.action === "open_teach" || Boolean(o.claim_id);
+}
+
 function isOpenDrill(v: unknown): v is OpenDrillPayload {
   if (!v || typeof v !== "object") return false;
   const o = v as OpenDrillPayload;
   return o.action === "open_drill" || Boolean(o.round);
 }
 
-/** Quiet companion tool chips + optional one-tap 开考 / 深挖. */
+/** Quiet companion tool chips + optional one-tap 开考 / 回讲 / 深挖. */
 export function CompanionToolTrail({
   calls,
   onOpenExamine,
+  onOpenTeach,
   onOpenDrill,
   busy = false,
 }: {
   calls: CompanionToolCall[];
   onOpenExamine?: (payload: OpenExaminePayload) => void;
+  onOpenTeach?: (payload: OpenTeachPayload) => void;
   onOpenDrill?: (payload: OpenDrillPayload) => void;
   busy?: boolean;
 }) {
@@ -50,6 +60,10 @@ export function CompanionToolTrail({
     [...calls]
       .reverse()
       .find((c) => c.ok && isOpenExamine(c.open_examine))?.open_examine ?? null;
+  const teach =
+    [...calls]
+      .reverse()
+      .find((c) => c.ok && isOpenTeach(c.open_teach))?.open_teach ?? null;
   const drill =
     [...calls]
       .reverse()
@@ -74,6 +88,16 @@ export function CompanionToolTrail({
           onClick={() => onOpenExamine(examine)}
         >
           开考
+        </button>
+      ) : null}
+      {teach && onOpenTeach ? (
+        <button
+          type="button"
+          className={styles.cta}
+          disabled={busy}
+          onClick={() => onOpenTeach(teach)}
+        >
+          回讲
         </button>
       ) : null}
       {drill && onOpenDrill ? (
@@ -107,6 +131,7 @@ export function toolCallsFromMeta(
       ok: Boolean(o.ok),
       summary: typeof o.summary === "string" ? o.summary : "",
       open_examine: isOpenExamine(o.open_examine) ? o.open_examine : null,
+      open_teach: isOpenTeach(o.open_teach) ? o.open_teach : null,
       open_drill: isOpenDrill(o.open_drill) ? o.open_drill : null,
     });
   }

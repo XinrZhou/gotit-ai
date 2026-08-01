@@ -133,6 +133,7 @@ export function useWorkspace(setError: (s: string) => void) {
       topic: string | null;
       status: string;
       claim_id: string | null;
+      project_id?: string | null;
     }[],
     resume,
     drillMaterials,

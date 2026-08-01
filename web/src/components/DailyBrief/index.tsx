@@ -1,4 +1,5 @@
 import type { Claim, PlanItem } from "../../types";
+import { claimVerifyCta } from "../../lib/checkRouting";
 import { dueReasonLine, stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
@@ -26,6 +27,7 @@ function claimFromPlan(item: PlanItem, dueClaims: Claim[]): Claim | null {
     topic: item.topic,
     source_note_id: null,
     next_review_at: null,
+    project_id: item.project_id ?? null,
   };
 }
 
@@ -33,10 +35,11 @@ type Row = {
   key: string;
   label: string;
   reason: string | null;
+  cta: string;
   onOpen: () => void;
 };
 
-/** Today's owed/plan — click a row to examine. */
+/** Today's owed/plan — click a row to open the preferred verify form. */
 export function DailyBrief({
   onExamineClaim,
   onExamineNoteId,
@@ -64,18 +67,23 @@ export function DailyBrief({
     key: string,
     label: string,
     reason: string | null,
+    cta: string,
     onOpen: () => void,
   ) => {
     if (rows.length >= maxItems || !label) return;
     const norm = label.toLowerCase().slice(0, 96);
     if (seen.has(norm)) return;
     seen.add(norm);
-    rows.push({ key, label, reason, onOpen });
+    rows.push({ key, label, reason, cta, onOpen });
   };
 
   for (const c of dueClaims) {
-    push(`due-${c.id}`, cleanTitle(c.text), dueReasonLine(c), () =>
-      onExamineClaim(c),
+    push(
+      `due-${c.id}`,
+      cleanTitle(c.text),
+      dueReasonLine(c),
+      claimVerifyCta(c),
+      () => onExamineClaim(c),
     );
   }
   for (const item of planOpen) {
@@ -89,7 +97,7 @@ export function DailyBrief({
         sort_order: 0,
         due_at: null,
         due_time: null,
-        project_id: null,
+        project_id: item.project_id ?? null,
         topic: item.topic,
       },
       dueClaims,
@@ -99,6 +107,7 @@ export function DailyBrief({
       `plan-${item.id}`,
       cleanTitle(item.title),
       dueReasonLine(claim),
+      claimVerifyCta(claim),
       () => onExamineClaim(claim),
     );
   }
@@ -107,6 +116,7 @@ export function DailyBrief({
       `note-${n.id}`,
       cleanTitle(n.title?.trim() || n.excerpt || "未命名笔记"),
       null,
+      "开考",
       () => onExamineNoteId?.(n.id),
     );
   }
@@ -157,7 +167,7 @@ export function DailyBrief({
                   </span>
                 ) : null}
               </span>
-              <span className={styles.cta}>开考</span>
+              <span className={styles.cta}>{r.cta}</span>
             </button>
           </li>
         ))}

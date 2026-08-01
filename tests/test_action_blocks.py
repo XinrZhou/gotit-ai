@@ -57,7 +57,19 @@ def test_owed_and_verdict_block_shape() -> None:
     assert owed[0]["type"] == "owed_claim"
     assert owed[0]["claim_id"] == "c1"
     assert owed[0]["actions"] == [{"id": "start_examine", "label": "开考"}]
+    assert owed[0]["preferred_check_mode"] == "probe"
     assert owed[0]["due_reason_text"] == "今天到期"
+
+    teach = owed_blocks_from_claims(
+        [
+            {
+                "id": "c2",
+                "text": "口述注意力机制",
+                "preferred_check_mode": "teach_back",
+            }
+        ]
+    )
+    assert teach[0]["actions"] == [{"id": "start_teach", "label": "回讲"}]
 
     almost = verdict_block(gate_verdict="almost", claim_id="c1")
     assert almost["type"] == "verdict"

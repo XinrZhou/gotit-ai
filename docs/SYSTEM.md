@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-01.
+> Last reviewed: 2026-08-01 (form-follows-claim).
 
 ## Product (one line)
 
@@ -37,7 +37,7 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0013 (… + interviews + calibration + interview ramp + day close + depends_on)
+alembic/versions/  0001…0014 (… + depends_on + claim preferred_check_mode)
 openspec/changes/  active + archive/
 ```
 
@@ -68,18 +68,19 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
   list (no paraphrased times/items in the opener)
 - **Companion builtin tools** (whitelist, not full MCP): chat turns with an LLM key
-  inject `get_today` / `list_due_claims` / `start_examine` / `start_drill` /
-  `get_failure_lessons` / `add_memory` / `get_upcoming_interview` / `close_day` via
-  `api/companion_tools.py` → `db.ops`; calls land on agent message
-  `metadata.tool_calls` (name / args_digest / ok / summary; `start_examine` /
-  `start_drill` attach `open_examine` / `open_drill` + message-level lift).
+  inject `get_today` / `list_due_claims` / `start_examine` / `start_verify` /
+  `start_drill` / `get_failure_lessons` / `add_memory` /
+  `get_upcoming_interview` / `close_day` via `api/companion_tools.py` →
+  `db.ops`; calls land on agent message `metadata.tool_calls` (name /
+  args_digest / ok / summary; `start_examine` / `start_verify` / `start_drill`
+  attach `open_examine` / `open_teach` / `open_drill` + message-level lift).
   `list_due_claims` / examine finalize also fill `metadata.action_blocks`
-  (owed / verdict cards, cap 5) for one-tap 开考·再练 in the bubble.
+  (owed / verdict cards, cap 5) for one-tap 开考·回讲·深挖·再练 in the bubble.
   Chat bubbles show a quiet tool trail; one-tap「开考」→ `/v1/examine`,
-  「深挖」→ `/v1/drill/sessions` (same paths as workflow UIs). Stub (no
-  `LLM_API_KEY`) skips tools and does not fake writes. Prepare-only tools do
-  not run Critic/gate/Sage. REST + MCP `gotit_post_message` share
-  `chat_orchestrator` (same tools).
+  「回讲」→ `/v1/teach`, 「深挖」→ `/v1/drill/sessions` (same paths as
+  workflow UIs). Stub (no `LLM_API_KEY`) skips tools and does not fake writes.
+  Prepare-only tools do not run Critic/gate/Sage. REST + MCP
+  `gotit_post_message` share `chat_orchestrator` (same tools).
 - **Day close ritual**: `POST /v1/days/today/close` + MCP `gotit_close_day` +
   companion `close_day`; `/v1/today` exposes `day_closed` / `close_summary`;
   empty chat soft-hides strong 开考 CTA after close (quiet「继续练」remains)
@@ -128,6 +129,12 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   + **depends_on** (light directed edges on `graph_edges`, out-degree ≤3):
     REST `/v1/claims/{id}/depends-on` + MCP `gotit_add/remove/list_depends_on`;
     obs graph + 弱点图谱 show dashed directional prereq edges
+  + **Form follows claim** (VISION P3): `claims.preferred_check_mode`
+    (probe|drill|apply|teach_back; null→probe); deterministic
+    `core/check_routing.py` picks CTA / open-*; DailyBrief + action_blocks +
+    companion `start_verify` route to 开考 / 回讲 / 深挖; APPLY and drill-without-
+    project degrade to probe; `PATCH /v1/claims/{id}` sets preference; ingest
+    may suggest teach_back/drill via light heuristics — gate path unchanged
 - **Cold-start calibration** (`core/calibration.py` + `db.ops.calibration`):
   CAT-lite (2PL info + adaptive θ + knowledge rotate + early stop ≤10);
   binary self-check (no Critic); correct→`passed`, incorrect→`almost` +
@@ -188,6 +195,9 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - User-facing harness holdout UI (API/CLI only; Settings tab was wrong surface)
 - Auto prompt/skill register on harness `adopt` (decision is audit-only today)
 - Dedicated LLM holdout case set beyond `dev`/`gold` matrices
+- Full APPLY verify workflow (preferred `apply` currently degrades to probe)
+- Compass LLM auto-tag of `preferred_check_mode` (ingest heuristics only)
+- CAT item params (difficulty / discrimination) writeback from verify outcomes
 
 ## Commands
 

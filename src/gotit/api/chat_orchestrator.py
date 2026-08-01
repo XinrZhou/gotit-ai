@@ -86,6 +86,9 @@ def _agent_metadata(
         open_examine = _last_open_payload(tool_calls, "open_examine")
         if open_examine is not None:
             meta["open_examine"] = open_examine
+        open_teach = _last_open_payload(tool_calls, "open_teach")
+        if open_teach is not None:
+            meta["open_teach"] = open_teach
         open_drill = _last_open_payload(tool_calls, "open_drill")
         if open_drill is not None:
             meta["open_drill"] = open_drill
@@ -220,6 +223,12 @@ async def post_message_chain(
                         open_examine = _last_open_payload(slice_calls, "open_examine")
                         if open_examine is not None:
                             err_meta["open_examine"] = open_examine
+                        open_teach = _last_open_payload(slice_calls, "open_teach")
+                        if open_teach is not None:
+                            err_meta["open_teach"] = open_teach
+                        open_drill = _last_open_payload(slice_calls, "open_drill")
+                        if open_drill is not None:
+                            err_meta["open_drill"] = open_drill
                         open_drill = _last_open_payload(slice_calls, "open_drill")
                         if open_drill is not None:
                             err_meta["open_drill"] = open_drill

@@ -4,8 +4,8 @@ Thin wrappers over ``db.ops`` (same surface REST/MCP use). Lives in ``api/`` so
 ``gotit.core`` stays free of session / FastAPI / MCP imports. Tool call digests
 are recorded for message ``metadata.tool_calls`` (explainable / replayable).
 
-``start_examine`` / ``start_drill`` prepare open-* payloads for the Web CTA —
-they do **not** run Critic, the mastery gate, or Sage.
+``start_examine`` / ``start_verify`` / ``start_drill`` prepare open-* payloads
+for the Web CTA — they do **not** run Critic, the mastery gate, or Sage.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.api.action_blocks import owed_blocks_from_claims
+from gotit.core.check_routing import route_for_claim
 from gotit.core.models import DrillRound, MasteryStatus, PlanItemSource, PlanItemStatus
 from gotit.db import ops as day_ops
 from gotit.db.models import ClaimRow, DayNoteRow, InterviewEventRow, LearningDayRow
@@ -37,6 +38,7 @@ class ToolCallRecord:
     ok: bool
     summary: str
     open_examine: dict[str, object] | None = None
+    open_teach: dict[str, object] | None = None
     open_drill: dict[str, object] | None = None
     action_blocks: list[dict[str, object]] | None = None
 
@@ -49,6 +51,8 @@ class ToolCallRecord:
         }
         if self.open_examine is not None:
             out["open_examine"] = self.open_examine
+        if self.open_teach is not None:
+            out["open_teach"] = self.open_teach
         if self.open_drill is not None:
             out["open_drill"] = self.open_drill
         if self.action_blocks:
@@ -70,6 +74,7 @@ class ToolCallRecorder:
         ok: bool,
         summary: str,
         open_examine: dict[str, object] | None = None,
+        open_teach: dict[str, object] | None = None,
         open_drill: dict[str, object] | None = None,
         action_blocks: list[dict[str, object]] | None = None,
     ) -> None:
@@ -80,6 +85,7 @@ class ToolCallRecorder:
                 ok=ok,
                 summary=_clip(summary, _SUMMARY_MAX),
                 open_examine=open_examine,
+                open_teach=open_teach,
                 open_drill=open_drill,
                 action_blocks=action_blocks,
             )
@@ -93,6 +99,12 @@ class ToolCallRecorder:
         for call in reversed(self.calls):
             if call.ok and call.open_examine is not None:
                 return call.open_examine
+        return None
+
+    def last_open_teach(self) -> dict[str, object] | None:
+        for call in reversed(self.calls):
+            if call.ok and call.open_teach is not None:
+                return call.open_teach
         return None
 
     def last_open_drill(self) -> dict[str, object] | None:
@@ -131,6 +143,14 @@ def _claim_brief(claim: Any) -> dict[str, object]:
     code = getattr(claim, "due_reason_code", None)
     if code:
         out["due_reason_code"] = code
+    preferred = getattr(claim, "preferred_check_mode", None)
+    if preferred is not None:
+        out["preferred_check_mode"] = (
+            preferred.value if hasattr(preferred, "value") else str(preferred)
+        )
+    project_id = getattr(claim, "project_id", None)
+    if project_id is not None:
+        out["project_id"] = str(project_id)
     return out
 
 
@@ -483,6 +503,161 @@ def build_companion_tools(
             )
             return {"ok": False, "error": str(exc)}
 
+    async def start_verify(claim_id: str | None = None) -> dict[str, object]:
+        """Prepare open-* by claim preferred_check_mode (form follows claim).
+
+        Soft-prepares plan like start_examine when routing to probe/teach.
+        Does not run Critic/gate/Sage.
+        """
+        args: dict[str, Any] = {
+            "claim_id": claim_id,
+            "thread_id": str(thread_id) if thread_id else None,
+        }
+        try:
+            cid: UUID | None = UUID(claim_id) if claim_id else None
+            if cid is None:
+                due = await day_ops.list_due_claims(session, day, user_id=user_id)
+                if not due:
+                    out: dict[str, object] = {
+                        "ok": False,
+                        "error": "今天没有欠账 claim，无法开练。",
+                    }
+                    rec.record(
+                        "start_verify",
+                        args=args,
+                        ok=False,
+                        summary="无欠账可开练",
+                    )
+                    return out
+                cid = due[0].id
+
+            claim_row = await session.get(ClaimRow, cid)
+            if claim_row is None or claim_row.user_id != user_id:
+                raise KeyError(f"claim not found: {cid}")
+
+            route = route_for_claim(
+                preferred=claim_row.preferred_check_mode,
+                project_id=claim_row.project_id,
+            )
+
+            if route.open_key == "open_drill":
+                open_payload, _has_resume, summary = await _build_open_drill(
+                    session,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    project_id=str(claim_row.project_id)
+                    if claim_row.project_id
+                    else None,
+                )
+                out = {
+                    **open_payload,
+                    "ok": True,
+                    "claim_id": str(cid),
+                    "preferred_check_mode": route.mode.value,
+                    "hint": "可在气泡下点「深挖」。",
+                }
+                rec.record(
+                    "start_verify",
+                    args=args,
+                    ok=True,
+                    summary=f"可深挖：{_clip(claim_row.text, 60)}",
+                    open_drill=open_payload,
+                )
+                return out
+
+            # Soft-prepare plan for probe / teach (same as start_examine).
+            plan = await day_ops.get_plan(session, day, user_id=user_id)
+            existing = next((i for i in plan.items if i.claim_id == cid), None)
+            if existing is None:
+                item = await day_ops.upsert_plan_item(
+                    session,
+                    day,
+                    title=claim_row.text[:500],
+                    user_id=user_id,
+                    source=PlanItemSource.QUEUE,
+                    status=PlanItemStatus.IN_PROGRESS,
+                    claim_id=cid,
+                    due_at=day,
+                )
+                plan_item_id = str(item.id)
+                plan_changed = True
+            else:
+                if existing.status != PlanItemStatus.IN_PROGRESS:
+                    await day_ops.update_plan_item(
+                        session,
+                        existing.id,
+                        status=PlanItemStatus.IN_PROGRESS,
+                        user_id=user_id,
+                    )
+                    plan_changed = True
+                else:
+                    plan_changed = False
+                plan_item_id = str(existing.id)
+
+            if claim_row.status in (
+                MasteryStatus.QUEUED.value,
+                MasteryStatus.NOT_YET.value,
+            ):
+                claim_row.status = MasteryStatus.IN_PROGRESS.value
+                await session.flush()
+
+            if route.open_key == "open_teach":
+                open_payload = {
+                    "action": "open_teach",
+                    "claim_id": str(cid),
+                    "claim_text": _clip(claim_row.text, 160),
+                    "topic": claim_row.topic,
+                    "plan_item_id": plan_item_id,
+                    "plan_changed": plan_changed,
+                    "thread_id": str(thread_id) if thread_id else None,
+                }
+                out = {
+                    **open_payload,
+                    "ok": True,
+                    "preferred_check_mode": route.mode.value,
+                    "hint": "可在气泡下点「回讲」，或用 claim_id 调用 /v1/teach。",
+                }
+                rec.record(
+                    "start_verify",
+                    args=args,
+                    ok=True,
+                    summary=f"可回讲：{_clip(claim_row.text, 60)}",
+                    open_teach=open_payload,
+                )
+                return out
+
+            open_payload = {
+                "action": "open_examine",
+                "claim_id": str(cid),
+                "claim_text": _clip(claim_row.text, 160),
+                "topic": claim_row.topic,
+                "plan_item_id": plan_item_id,
+                "plan_changed": plan_changed,
+                "thread_id": str(thread_id) if thread_id else None,
+            }
+            out = {
+                **open_payload,
+                "ok": True,
+                "preferred_check_mode": route.mode.value,
+                "hint": "可在气泡下点「开考」，或用 claim_id 调用 /v1/examine。",
+            }
+            rec.record(
+                "start_verify",
+                args=args,
+                ok=True,
+                summary=f"可开考：{_clip(claim_row.text, 60)}",
+                open_examine=open_payload,
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "start_verify",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
     async def get_failure_lessons(claim_id: str | None = None) -> dict[str, object]:
         """Read budgeted failure lessons (same claim / confuse neighbors / topic)."""
         args: dict[str, Any] = {"claim_id": claim_id}
@@ -735,6 +910,16 @@ def build_companion_tools(
             ),
         ),
         Tool(
+            start_verify,
+            name="start_verify",
+            description=(
+                "Prepare the right open-* for a claim by preferred_check_mode "
+                "(开考 / 回讲 / 深挖). Prefer this over start_examine when the "
+                "learner says「帮我开练」without specifying the form. Soft-prepare "
+                "only — does not grade or bypass the mastery gate."
+            ),
+        ),
+        Tool(
             get_failure_lessons,
             name="get_failure_lessons",
             description=(
@@ -773,9 +958,11 @@ def build_companion_tools(
 
 COMPANION_TOOL_HINT = (
     "【办事工具】你可以调用：get_today、list_due_claims、start_examine、"
-    "get_failure_lessons、add_memory、get_upcoming_interview、start_drill、close_day。\n"
+    "start_verify、get_failure_lessons、add_memory、get_upcoming_interview、"
+    "start_drill、close_day。\n"
     "- 问「今天欠什么 / 今日计划 / 还欠几道」时：先调 get_today 或 list_due_claims，"
     "用真实结果回答，不要编造。\n"
+    "- 「帮我开练 / 练这条」：优先调 start_verify（按 claim 偏好分流开考/回讲/深挖）。\n"
     "- 「帮我开考 / 考我这条」：调 start_examine（可传 claim_id / note_id；"
     "都不传则挑第一条欠账）；告知对方已备好开考，可点气泡下「开考」。"
     "不要假装自己已经判过分——掌握门不在这里。\n"

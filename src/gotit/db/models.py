@@ -131,6 +131,10 @@ class ClaimRow(Base):
     project_id: Mapped[Any | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("projects.id"), nullable=True, index=True
     )
+    # Form-follows-claim: probe | drill | apply | teach_back (null → probe)
+    preferred_check_mode: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
     # Cold-start CAT: {difficulty, discrimination, knowledge_key}
     calibration: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 

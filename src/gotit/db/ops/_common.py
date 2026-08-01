@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from gotit.core.check_routing import parse_check_mode
 from gotit.core.models import (
     Claim,
     DayNoteView,
@@ -83,6 +84,9 @@ def _claim_view(
         topic=row.topic,
         tags=list(row.tags or []),
         project_id=row.project_id,
+        preferred_check_mode=parse_check_mode(
+            getattr(row, "preferred_check_mode", None)
+        ),
         due_reason_code=due_reason_code,
         due_reason_text=due_reason_text,
     )

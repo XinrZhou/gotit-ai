@@ -4,6 +4,7 @@ import type {
   MasteryVerdict,
   OpenDrillPayload,
   OpenExaminePayload,
+  OpenTeachPayload,
 } from "../../../types";
 import { isMasteryVerdict } from "../../../components/VerifyVerdict";
 import styles from "./index.module.scss";
@@ -37,6 +38,14 @@ function parseBlock(raw: unknown): ActionBlock | null {
       title,
       due_reason_text:
         typeof o.due_reason_text === "string" ? o.due_reason_text : null,
+      preferred_check_mode:
+        o.preferred_check_mode === "probe" ||
+        o.preferred_check_mode === "drill" ||
+        o.preferred_check_mode === "apply" ||
+        o.preferred_check_mode === "teach_back"
+          ? o.preferred_check_mode
+          : null,
+      project_id: typeof o.project_id === "string" ? o.project_id : null,
       actions,
     };
   }
@@ -71,11 +80,13 @@ export function actionBlocksFromMeta(
 export function ActionBlocks({
   blocks,
   onOpenExamine,
+  onOpenTeach,
   onOpenDrill,
   busy = false,
 }: {
   blocks: ActionBlock[];
   onOpenExamine?: (payload: OpenExaminePayload) => void;
+  onOpenTeach?: (payload: OpenTeachPayload) => void;
   onOpenDrill?: (payload: OpenDrillPayload) => void;
   busy?: boolean;
 }) {
@@ -95,8 +106,28 @@ export function ActionBlocks({
       }
       return;
     }
+    if (action.id === "start_teach" && onOpenTeach) {
+      const claimId =
+        block.type === "owed_claim"
+          ? block.claim_id
+          : block.type === "verdict"
+            ? block.claim_id
+            : undefined;
+      if (!claimId) return;
+      onOpenTeach({
+        action: "open_teach",
+        claim_id: claimId,
+        claim_text: block.type === "owed_claim" ? block.title : undefined,
+      });
+      return;
+    }
     if (action.id === "start_drill" && onOpenDrill) {
-      onOpenDrill({ action: "open_drill" });
+      const projectId =
+        block.type === "owed_claim" ? block.project_id : undefined;
+      onOpenDrill({
+        action: "open_drill",
+        project_id: projectId ?? null,
+      });
     }
   };
 
@@ -106,8 +137,12 @@ export function ActionBlocks({
         if (block.type === "owed_claim") {
           const key = `owed-${block.claim_id}-${i}`;
           const primary =
-            block.actions.find((a) => a.id === "start_examine") ??
-            block.actions[0];
+            block.actions.find(
+              (a) =>
+                a.id === "start_examine" ||
+                a.id === "start_teach" ||
+                a.id === "start_drill",
+            ) ?? block.actions[0];
           return (
             <div key={key} className={styles.card}>
               <div className={styles.body}>

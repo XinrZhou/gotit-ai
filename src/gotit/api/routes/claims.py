@@ -1,8 +1,8 @@
-"""Claim dependency (depends_on) minimal API."""
+"""Claim dependency (depends_on) + preferred check mode API."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,10 +11,13 @@ from pydantic import BaseModel, Field
 from gotit.api.auth import require_api_key
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.core.models import Claim
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 
 router = APIRouter()
+
+PreferredModeIn = Literal["probe", "drill", "apply", "teach_back"] | None
 
 
 class AddDependsBody(BaseModel):
@@ -23,10 +26,41 @@ class AddDependsBody(BaseModel):
     )
 
 
+class ClaimPreferredModeBody(BaseModel):
+    preferred_check_mode: PreferredModeIn = Field(
+        default=None,
+        description="Verify form preference; null clears to default probe.",
+    )
+
+
 class DependsEdgeOut(BaseModel):
     claim_id: UUID
     prereq_claim_id: UUID
     rel: str = "depends_on"
+
+
+@router.patch(
+    "/v1/claims/{claim_id}",
+    response_model=Claim,
+    dependencies=[Depends(require_api_key)],
+)
+async def patch_claim(
+    claim_id: UUID,
+    body: ClaimPreferredModeBody,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Claim:
+    try:
+        async with session_scope() as session:
+            return await day_ops.set_claim_preferred_check_mode(
+                session,
+                claim_id,
+                preferred_check_mode=body.preferred_check_mode,
+                user_id=_user_id(settings),
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(

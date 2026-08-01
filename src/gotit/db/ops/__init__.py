@@ -30,6 +30,7 @@ from gotit.db.ops.claim import (
     apply_examine_verdict,
     list_project_claims,
     list_topic_claims_today,
+    set_claim_preferred_check_mode,
 )
 from gotit.db.ops.connectors import (
     delete_connector,
@@ -246,6 +247,7 @@ __all__ = [
     "apply_examine_verdict",
     "list_topic_claims_today",
     "list_project_claims",
+    "set_claim_preferred_check_mode",
     # first-pass bootcamp
     "get_bootcamp_status",
     "put_bootcamp_status",

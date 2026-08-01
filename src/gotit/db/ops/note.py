@@ -178,9 +178,22 @@ async def ingest_note(
     if claims is None:
         claims = [stub_extract_claim(note.body, source_note_id=note.id)]
 
+    from gotit.core.check_routing import suggest_preferred_check_mode
+
     persisted: list[Claim] = []
     for claim in claims:
         claim.project_id = note.project_id
+        if claim.preferred_check_mode is None:
+            claim.preferred_check_mode = suggest_preferred_check_mode(
+                text=claim.text,
+                tags=list(claim.tags),
+                project_id=note.project_id,
+            )
+        mode_val = (
+            claim.preferred_check_mode.value
+            if claim.preferred_check_mode is not None
+            else None
+        )
         claim_row = ClaimRow(
             id=claim.id,
             user_id=user_id,
@@ -192,6 +205,7 @@ async def ingest_note(
             topic=claim.topic,
             tags=list(claim.tags),
             project_id=note.project_id,
+            preferred_check_mode=mode_val,
         )
         session.add(claim_row)
         persisted.append(claim)

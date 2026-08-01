@@ -8,7 +8,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gotit.core.models import Claim, MasteryStatus, PlanItemStatus
+from gotit.core.check_routing import parse_check_mode
+from gotit.core.models import CheckMode, Claim, MasteryStatus, PlanItemStatus
 from gotit.core.schedule import schedule_after_verdict
 from gotit.db.models import ClaimRow, PlanItemRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view, _plan_item_view
@@ -163,3 +164,27 @@ async def list_project_claims(
     )
     rows = list((await session.execute(stmt)).scalars().all())
     return [_claim_view(r) for r in rows]
+
+
+async def set_claim_preferred_check_mode(
+    session: AsyncSession,
+    claim_id: UUID,
+    *,
+    preferred_check_mode: str | CheckMode | None,
+    user_id: str = DEFAULT_USER_ID,
+) -> Claim:
+    """Set or clear preferred verify form (null = default probe)."""
+    claim = await session.get(ClaimRow, claim_id)
+    if claim is None or claim.user_id != user_id:
+        raise KeyError(f"claim not found: {claim_id}")
+    if preferred_check_mode is None or (
+        isinstance(preferred_check_mode, str) and not preferred_check_mode.strip()
+    ):
+        claim.preferred_check_mode = None
+    else:
+        mode = parse_check_mode(preferred_check_mode)
+        if mode is None:
+            raise ValueError(f"unknown preferred_check_mode: {preferred_check_mode}")
+        claim.preferred_check_mode = mode.value
+    await session.flush()
+    return _claim_view(claim)

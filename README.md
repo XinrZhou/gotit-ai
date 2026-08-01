@@ -158,7 +158,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 |---|-----------|---------|
 | P1 | Verified = got it | Confidence is not evidence |
 | P2 | Fail is useful | A miss → lesson + recheck on a trajectory |
-| P3 | Form follows the claim | Probe, drill, apply, teach-back |
+| P3 | Form follows the claim | Claim preferred mode → examine / teach / drill (same gate) |
 | P4 | Context on a budget | Inject the claim under test, not the whole notebook |
 | P5 | Harness-backed evolution | Prompt/skill changes need evidence |
 | P6 | Stable personality + rubric | Persona drift ≠ judgement drift |
