@@ -59,6 +59,7 @@ async def _persist_drill(
     answer: str | None,
     agent_text: str,
     session_done: bool,
+    title_seed: str | None = None,
 ) -> None:
     if thread_id is None:
         return
@@ -75,6 +76,7 @@ async def _persist_drill(
                 "drill_session_id": str(session_id),
                 "session_done": session_done,
             },
+            title_seed=title_seed,
         )
     except KeyError as exc:
         raise HTTPException(
@@ -274,6 +276,11 @@ async def start_drill_session(
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        drill_title = (
+            (project.name if project is not None else None)
+            or (body.direction or "").strip()
+            or "项目深挖"
+        )
         await _persist_drill(
             session,
             thread_id=body.thread_id,
@@ -287,6 +294,7 @@ async def start_drill_session(
                 follow_up=verdict.follow_up,
             ),
             session_done=verdict.done,
+            title_seed=drill_title,
         )
         return {"session": ds.model_dump(mode="json"), "verdict": verdict.model_dump(mode="json")}
 
@@ -340,6 +348,11 @@ async def continue_drill_session(
         )
         if verdict.done:
             await day_ops.finish_drill_session(session, ds.id, user_id=user_id)
+        cont_title = (
+            (project.name if project is not None else None)
+            or (ds.direction or "").strip()
+            or "项目深挖"
+        )
         await _persist_drill(
             session,
             thread_id=body.thread_id,
@@ -353,5 +366,6 @@ async def continue_drill_session(
                 follow_up=verdict.follow_up,
             ),
             session_done=verdict.done,
+            title_seed=cont_title,
         )
         return {"verdict": verdict.model_dump(mode="json")}

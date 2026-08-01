@@ -80,6 +80,7 @@ async def _persist_examine(
     answer: str | None,
     agent_text: str,
     extra: dict[str, object],
+    title_seed: str | None = None,
 ) -> None:
     if thread_id is None:
         return
@@ -91,6 +92,7 @@ async def _persist_examine(
             agent_text=agent_text,
             user_text=answer,
             extra_metadata=extra,
+            title_seed=title_seed,
         )
     except KeyError as exc:
         raise HTTPException(
@@ -233,6 +235,9 @@ async def examine(
                 gate_verdict=str(gate_verdict),
                 claim_id=session_verdict.current_claim_id,
             )
+        topic_seed = (body.topic or "").strip() or (
+            claims[0].text if claims else None
+        )
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -243,6 +248,7 @@ async def examine(
                 verdict=gate_verdict,
             ),
             extra=extra,
+            title_seed=topic_seed,
         )
         verdict_payload = session_verdict.model_dump(mode="json")
         if gate_verdict is not None and session_verdict.done:
@@ -292,6 +298,11 @@ async def examine(
             gate_verdict=str(finalized["gate_verdict"]),
             claim_id=body.claim_id,
         )
+        direct_seed: str | None = None
+        async with session_scope() as session:
+            crow = await session.get(ClaimRow, body.claim_id)
+            if crow is not None and crow.user_id == user_id:
+                direct_seed = crow.text
         await _persist_examine(
             thread_id=body.thread_id,
             user_id=user_id,
@@ -302,6 +313,7 @@ async def examine(
                 verdict=finalized["gate_verdict"],
             ),
             extra=extra_direct,
+            title_seed=direct_seed,
         )
         return {
             "verdict": {
@@ -400,6 +412,7 @@ async def examine(
             verdict=gate_verdict,
         ),
         extra=extra_single,
+        title_seed=claim_text,
     )
     verdict_out = verdict.model_dump(mode="json")
     if gate_verdict is not None and verdict.done:

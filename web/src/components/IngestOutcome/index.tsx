@@ -18,38 +18,37 @@ export function IngestOutcome({
   if (phase === "generating") {
     return (
       <div className={styles.panel} role="status" aria-live="polite">
-        <p className={styles.lead}>正在出题…</p>
-        <p className={styles.hint}>从笔记里抽出能考的句子，稍等一下</p>
+        <p className={styles.sub}>从笔记里抽出能考的句子，稍等一下</p>
         <div className={styles.pulse} aria-hidden="true" />
       </div>
     );
   }
 
   const n = claimTexts.length;
-  const preview = claimTexts.slice(0, 3);
 
   return (
     <div className={styles.panel} role="status" aria-live="polite">
-      <p className={styles.lead}>
-        出好了{n > 0 ? ` · ${n} 道可考` : ""}
+      <p className={styles.sub}>
+        {n > 0 ? `共 ${n} 道 · ` : ""}过一遍门，才算真会了
       </p>
-      <p className={styles.hint}>过一遍门，才算真会了</p>
-      {preview.length > 0 ? (
-        <ul className={styles.list}>
-          {preview.map((t, i) => (
-            <li key={`${i}-${t.slice(0, 24)}`} className={styles.item}>
-              {t}
+
+      {n > 0 ? (
+        <ol className={styles.list} aria-label="可考题目">
+          {claimTexts.map((t, i) => (
+            <li key={`${i}-${t.slice(0, 32)}`} className={styles.item}>
+              <span className={styles.idx} aria-hidden="true">
+                {i + 1}
+              </span>
+              <span className={styles.text}>{t}</span>
             </li>
           ))}
-          {n > preview.length ? (
-            <li className={styles.more}>还有 {n - preview.length} 道</li>
-          ) : null}
-        </ul>
+        </ol>
       ) : null}
+
       <div className={styles.actions}>
         <button
           type="button"
-          className="btn-ghost"
+          className={styles.secondary}
           disabled={busy}
           onClick={onDismiss}
         >
@@ -57,7 +56,7 @@ export function IngestOutcome({
         </button>
         <button
           type="button"
-          className="btn-ink"
+          className={styles.primary}
           disabled={busy || n === 0}
           onClick={onExamine}
         >

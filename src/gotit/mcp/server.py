@@ -162,9 +162,11 @@ async def gotit_examine(
         *,
         agent_text: str,
         extra: dict[str, object],
+        title_seed: str | None = None,
     ) -> dict[str, object] | None:
         if tid is None:
             return None
+        seed = title_seed or str(extra.get("topic") or "") or None
         try:
             await persist_workflow_exchange(
                 thread_id=tid,
@@ -173,6 +175,7 @@ async def gotit_examine(
                 agent_text=agent_text,
                 user_text=answer,
                 extra_metadata=extra,
+                title_seed=seed,
             )
         except KeyError as exc:
             return {"error": str(exc)}
@@ -272,6 +275,9 @@ async def gotit_examine(
                 gate_verdict=str(gate_verdict),
                 claim_id=session_result.current_claim_id,
             )
+        session_seed = (topic or "").strip() or (
+            claims[0].text if claims else None
+        )
         err = await _persist(
             agent_text=examine_agent_text(
                 follow_up=session_result.follow_up,
@@ -279,6 +285,7 @@ async def gotit_examine(
                 verdict=gate_verdict if session_result.done else session_result.verdict,
             ),
             extra=extra,
+            title_seed=session_seed,
         )
         if err:
             return err
@@ -414,6 +421,7 @@ async def gotit_examine(
             verdict=gate_verdict if result.done else result.verdict,
         ),
         extra=extra_single,
+        title_seed=claim.text,
     )
     if err:
         return err
@@ -784,6 +792,7 @@ async def gotit_teach(
                 ),
                 user_text=answer,
                 extra_metadata=extra,
+                title_seed=topic,
             )
         except KeyError as exc:
             return {"error": str(exc)}

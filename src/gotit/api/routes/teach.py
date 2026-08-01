@@ -121,6 +121,7 @@ async def _persist_teach(
             ),
             user_text=answer,
             extra_metadata=extra,
+            title_seed=topic,
         )
     except KeyError as exc:
         raise HTTPException(

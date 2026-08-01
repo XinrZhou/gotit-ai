@@ -4,14 +4,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 28px 24px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .pickerInner {
   width: 100%;
   max-width: 420px;
+  margin: auto 0;
 }
 
 .pickerHead {
@@ -124,12 +124,4 @@
 
 .row:hover:not(:disabled) .rowCta {
   color: var(--ink);
-}
-
-.more {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--faint);
-  letter-spacing: -0.01em;
-  text-align: center;
 }

@@ -21,8 +21,6 @@ function clean(raw: string): string {
   return stripHtml(raw).replace(/\s+/g, " ").trim();
 }
 
-const MAX_PICK = 6;
-
 export function ExaminePage() {
   const {
     notes,
@@ -84,7 +82,6 @@ export function ExaminePage() {
   const seen = new Set<string>();
   const rows: PickRow[] = [];
   const pushClaim = (claim: Claim) => {
-    if (rows.length >= MAX_PICK) return;
     const label = clean(claim.text);
     if (!label) return;
     const norm = label.toLowerCase().slice(0, 96);
@@ -102,14 +99,13 @@ export function ExaminePage() {
   for (const c of dueClaims) pushClaim(c);
   for (const c of planClaims) pushClaim(c);
 
-  const noteRows: PickRow[] = [];
   for (const n of noteEntries) {
     const label = clean(n.title?.trim() || n.excerpt || "未命名笔记");
     if (!label) continue;
     const norm = `note:${label.toLowerCase().slice(0, 96)}`;
     if (seen.has(norm)) continue;
     seen.add(norm);
-    noteRows.push({
+    rows.push({
       key: `n-${n.id}`,
       kind: "note",
       label,
@@ -117,15 +113,6 @@ export function ExaminePage() {
       count: n.claim_ids.length,
     });
   }
-
-  // Prefer owed/plan; fill remaining slots with notes.
-  for (const nr of noteRows) {
-    if (rows.length >= MAX_PICK) break;
-    rows.push(nr);
-  }
-
-  const leftover =
-    dueClaims.length + planClaims.length + noteEntries.length - rows.length;
 
   if (rows.length === 0) {
     return (
@@ -147,7 +134,9 @@ export function ExaminePage() {
           </div>
           <div className={styles.pickerCopy}>
             <div className={styles.pickerTitle}>选一条开考</div>
-            <div className={styles.pickerSub}>过了 / 还差点 / 欠着下次</div>
+            <div className={styles.pickerSub}>
+              共 {rows.length} 条 · 过了 / 还差点 / 欠着下次
+            </div>
           </div>
         </header>
 
@@ -184,10 +173,6 @@ export function ExaminePage() {
             </li>
           ))}
         </ul>
-
-        {leftover > 0 ? (
-          <p className={styles.more}>还有 {leftover} 条，考完再回来</p>
-        ) : null}
       </div>
     </div>
   );

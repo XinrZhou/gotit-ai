@@ -147,6 +147,10 @@ async def delete_thread(
     return True
 
 
+# Default titles that should be replaced once real content arrives.
+PLACEHOLDER_THREAD_TITLES = frozenset({"新对话", "学习会话"})
+
+
 def derive_thread_title(text: str, *, max_len: int = 28) -> str:
     """Heuristic title from the first user message (no LLM)."""
     cleaned = " ".join(text.strip().split())
@@ -155,6 +159,27 @@ def derive_thread_title(text: str, *, max_len: int = 28) -> str:
     if len(cleaned) <= max_len:
         return cleaned
     return cleaned[: max_len - 1] + "…"
+
+
+async def maybe_retitle_placeholder_thread(
+    session: AsyncSession,
+    thread_id: UUID,
+    *,
+    seed: str,
+) -> Thread | None:
+    """If the thread still has a placeholder title, rename from ``seed``."""
+    row = await session.get(ThreadRow, thread_id)
+    if row is None:
+        return None
+    if row.title not in PLACEHOLDER_THREAD_TITLES:
+        return _thread_view(row)
+    new_title = derive_thread_title(seed)
+    if not new_title or new_title in PLACEHOLDER_THREAD_TITLES:
+        return _thread_view(row)
+    row.title = new_title
+    row.updated_at = datetime.now(UTC)
+    await session.flush()
+    return _thread_view(row)
 
 
 # --- messages ---
@@ -222,15 +247,21 @@ async def append_workflow_exchange(
     agent_text: str,
     user_text: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
+    title_seed: str | None = None,
 ) -> list[Message]:
     """Write a workflow user+agent exchange into a thread the user owns.
 
     Raises ``KeyError`` when the thread is missing or not owned by ``user_id``.
     Skips empty agent text (user answer still written when present).
+    Retitles placeholder threads (新对话 / 学习会话) from ``title_seed`` or text.
     """
     thread = await get_thread(session, thread_id)
     if thread is None or thread.user_id != user_id:
         raise KeyError(f"thread not found: {thread_id}")
+
+    seed = (title_seed or user_text or agent_text or "").strip()
+    if seed:
+        await maybe_retitle_placeholder_thread(session, thread_id, seed=seed)
 
     base: dict[str, Any] = {"workflow": workflow, **dict(extra_metadata or {})}
     out: list[Message] = []

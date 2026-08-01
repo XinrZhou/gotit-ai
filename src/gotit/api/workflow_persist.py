@@ -59,6 +59,7 @@ async def persist_workflow_exchange(
     agent_text: str,
     user_text: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
+    title_seed: str | None = None,
 ) -> list[Any]:
     """No-op when ``thread_id`` is None. Raises ``KeyError`` on bad ownership."""
     if thread_id is None:
@@ -74,4 +75,5 @@ async def persist_workflow_exchange(
             agent_text=agent_text,
             user_text=user_text,
             extra_metadata=extra_metadata,
+            title_seed=title_seed,
         )

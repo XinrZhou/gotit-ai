@@ -83,6 +83,32 @@ async def list_threads(
         )
 
 
+class ThreadPatch(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+
+
+@router.patch(
+    "/v1/threads/{thread_id}",
+    response_model=Thread,
+    dependencies=[Depends(require_api_key)],
+)
+async def patch_thread(
+    thread_id: UUID,
+    body: ThreadPatch,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Thread:
+    async with session_scope() as session:
+        thread = await day_ops.get_thread(session, thread_id)
+        if thread is None or thread.user_id != _user_id(settings):
+            raise HTTPException(status_code=404, detail="thread not found")
+        updated = await day_ops.update_thread_title(
+            session, thread_id, title=body.title.strip()
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="thread not found")
+        return updated
+
+
 @router.delete(
     "/v1/threads/{thread_id}",
     dependencies=[Depends(require_api_key)],

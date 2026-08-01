@@ -185,6 +185,7 @@ from gotit.db.ops.skills import (
     update_skill_markdown,
 )
 from gotit.db.ops.thread import (
+    PLACEHOLDER_THREAD_TITLES,
     add_message,
     append_workflow_exchange,
     clear_ball,
@@ -196,6 +197,7 @@ from gotit.db.ops.thread import (
     get_thread,
     list_messages,
     list_threads,
+    maybe_retitle_placeholder_thread,
     set_ball,
     touch_thread,
     update_thread_title,
@@ -350,7 +352,9 @@ __all__ = [
     "update_thread_title",
     "touch_thread",
     "delete_thread",
+    "PLACEHOLDER_THREAD_TITLES",
     "derive_thread_title",
+    "maybe_retitle_placeholder_thread",
     "add_message",
     "append_workflow_exchange",
     "count_user_messages",

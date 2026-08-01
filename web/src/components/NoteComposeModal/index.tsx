@@ -185,7 +185,7 @@ export function NoteComposeModal() {
   return (
     <Modal
       title={ready ? "题出好了" : generating ? "正在出题" : "添加资料"}
-      wide={!editorExpanded && !generating && !ready}
+      wide={ready || (!editorExpanded && !generating)}
       fill={editorExpanded && !generating && !ready}
       onClose={close}
       actions={

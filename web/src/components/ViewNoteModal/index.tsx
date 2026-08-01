@@ -35,7 +35,14 @@ export function ViewNoteModal() {
 
   return (
     <Modal
-      title={viewNote.title || "未命名笔记"}
+      title={
+        ready
+          ? "题出好了"
+          : generating
+            ? "正在出题"
+            : viewNote.title || "未命名笔记"
+      }
+      wide={ready || generating}
       onClose={close}
       actions={
         ready || generating ? null : (
