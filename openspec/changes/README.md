@@ -11,7 +11,11 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 ## Current active
 
-*(none)*
+| Change | Notes |
+|--------|-------|
+| `verify-spine-deepen/` | Gate signals + ContextBudget + Harness REST/CLI |
+| `daily-brief-polish/` | Daily brief UI polish (may be ship-ready) |
+| `yuque-md-convert-wipe/` | Yuque md convert (may be ship-ready) |
 
 ## Recently archived
 
@@ -39,6 +43,6 @@ Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 
 ## Later (not opened yet)
 
-- Axiom harness holdout UI / user-visible harness adopts
+- Auto prompt/skill register on harness adopt
 - Broad per-agent multi-model beyond Critic
 - Broad agent-as-tool against full MCP catalog

@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-07-31.
+> Last reviewed: 2026-08-01.
 
 ## Product (one line)
 
@@ -91,10 +91,14 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   shows as a clearable chip on the composer meta row
 - Chat reading column centered (~720px); thinking toggle is quiet text (not a
   pill); workflow bar hint + ModeHeader「正在…」context
-- **Settings** (conversation top-right account): 资料 / Skills / MCP / 计划推送 / 动态 — profile + DIY skill
-  install/view/edit + MCP connectors；**计划推送** = 早/晚计划 cron + 可选 AI/YouTube 源
-  （「保存并同步」→ OpenClaw cron）；
-  动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含 Apple 计划桥导入说明
+- **Settings** (conversation top-right account): 资料 / Skills / MCP / 计划推送 / 动态 —
+  profile + DIY skill install/view/edit + MCP connectors；**计划推送** = 早/晚计划
+  cron + 可选 AI/YouTube 源（「保存并同步」→ OpenClaw cron）；
+  动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含
+  Apple 计划桥导入说明
+- **Harness API** (dev/CI, not a Settings tab): `POST/GET/PATCH /v1/harness/runs`
+  runs `dev`/`gold` + human `adopt|observe|reject` in `summary` (no auto prompt
+  change); CLI `scripts/run_harness.py` remains
 - Nav rail = brand + library + threads (no account footer)
 - Conversation top-right: **弱点图谱** (fullscreen mastery graph) + account /
   Settings
@@ -107,6 +111,12 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
     `/v1/teach` (claim-bound), and MCP `gotit_examine` / `gotit_teach` /
     `gotit_start_verify`** claim-close — same Critic + gate + trajectory path
     (REST↔MCP parity)
+  + **Gate signals** (deterministic): after stricter-of-two, `score < 0.4` or
+    provided empty/short `evidence` (<8 chars) downgrades `passed` → `almost`
+    (`GateResult.signals`; never upgrades). `None` = not provided (stubs OK).
+  + **ContextBudget** (`core/context_budget.py`): compose graph + failure-lesson
+    blocks with per-block + total char caps; trim lessons first; wired in
+    `axiom.build_prompt`
   + **Spaced review** (`core/schedule.py`, deterministic — never LLM):
     `passed` clears due; `almost` stays due today; `owe_next` →
     `next_review_at = as_of + min(30, 1+2×prior_failures)`;
@@ -134,8 +144,10 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
     `recheck_verdict` / `gate_verdict`
 - **Workflow turns in thread**: examine / teach / drill optionally append to the
   active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
-- Notes → claims → plan; project + resume-driven drill (resume import =
-  projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills; harness
+- Notes → claims → plan; compose/view-note「出题」shows in-modal
+  generating → ready with「去开考」(first claim → examine); project + resume-driven
+  drill (resume import = projects + `ResumeRecord` only — **no** auto quiz notes);
+  memory; skills; harness
   （个人 gold 对照见 `openspec/changes/archive/2026-07-30-companion-tools-and-schedule/notes-gold.md`：`uv run python scripts/run_gold_compare.py`）
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
 - **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; optional
@@ -173,7 +185,9 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Broad agent-as-tool beyond the companion **builtin whitelist** + optional user
   MCP connectors (no auto-mount of the full gotit MCP catalog into chat)
 - Rich profile / full KG store beyond mastery confuse + light `depends_on`
-- Axiom harness holdout UI / user-visible harness adopts
+- User-facing harness holdout UI (API/CLI only; Settings tab was wrong surface)
+- Auto prompt/skill register on harness `adopt` (decision is audit-only today)
+- Dedicated LLM holdout case set beyond `dev`/`gold` matrices
 
 ## Commands
 

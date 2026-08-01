@@ -139,6 +139,9 @@ def build_prompt(
     budget_block: str | None = None,
     failure_lesson_block: str | None = None,
 ) -> str:
+    from gotit.core.context_budget import compose_examine_context
+
+    composed = compose_examine_context(budget_block, failure_lesson_block)
     parts = [
         f"## Claim under examination\n{claim_text}",
         f"## Relevant memory about this learner\n{_format_memory(memory)}",
@@ -148,10 +151,10 @@ def build_prompt(
             "## Prior attempts on this topic (learning trajectory)\n"
             + _format_memory(trajectory)
         )
-    if budget_block:
-        parts.append(budget_block)
-    if failure_lesson_block:
-        parts.append(failure_lesson_block)
+    if composed.budget_block:
+        parts.append(composed.budget_block)
+    if composed.failure_lesson_block:
+        parts.append(composed.failure_lesson_block)
     parts.append(f"## Conversation so far\n{_format_history(history)}")
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")

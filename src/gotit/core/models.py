@@ -780,6 +780,7 @@ class GateResult(BaseModel):
     verdict: Literal["passed", "almost", "owe_next"]
     next_review_at: date | None = None
     reason: str
+    signals: list[str] = Field(default_factory=list)
 
 
 class RecheckVerdict(BaseModel):

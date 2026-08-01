@@ -17,6 +17,7 @@ from gotit.api.routes import (
     day,
     drill,
     examine,
+    harness,
     health,
     identities,
     ingest,
@@ -52,5 +53,6 @@ router.include_router(projects.router)
 router.include_router(resume.router)
 router.include_router(drill.router)
 router.include_router(interviews.router)
+router.include_router(harness.router)
 
 __all__ = ["router"]

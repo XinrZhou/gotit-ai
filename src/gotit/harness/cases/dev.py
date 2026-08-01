@@ -147,6 +147,13 @@ def _case_gate_no_llm() -> Case:
         g2 = deterministic_gate("almost", "almost")
         # both pass -> passed, next_review_at cleared
         g3 = deterministic_gate("passed", "passed")
+        # score signal: low score blocks pass even when agents agree
+        g4 = deterministic_gate(
+            "passed",
+            "passed",
+            score=0.2,
+            evidence="enough evidence characters here",
+        )
         ok = (
             g1.verdict == "owe_next"
             and g1.next_review_at is not None
@@ -157,6 +164,8 @@ def _case_gate_no_llm() -> Case:
             and not g1.passed
             and not g2.passed
             and g3.passed
+            and g4.verdict == "almost"
+            and "low_score_blocks_pass" in g4.signals
         )
         return CaseResult(
             passed=ok,
@@ -164,11 +173,13 @@ def _case_gate_no_llm() -> Case:
                 "g1": g1.verdict,
                 "g2": g2.verdict,
                 "g3": g3.verdict,
+                "g4": g4.verdict,
             },
             trace=[
                 {"g1": g1.model_dump(mode="json")},
                 {"g2": g2.model_dump(mode="json")},
                 {"g3": g3.model_dump(mode="json")},
+                {"g4": g4.model_dump(mode="json")},
             ],
         )
 

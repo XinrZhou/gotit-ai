@@ -83,8 +83,10 @@ from gotit.db.ops.harness import (
     add_harness_case_result,
     add_harness_run,
     finalize_harness_run,
+    get_harness_run,
     list_harness_case_results,
     list_harness_runs,
+    set_harness_decision,
 )
 from gotit.db.ops.identity import (
     get_identity,
@@ -328,6 +330,8 @@ __all__ = [
     "add_harness_run",
     "add_harness_case_result",
     "finalize_harness_run",
+    "get_harness_run",
+    "set_harness_decision",
     "list_harness_runs",
     "list_harness_case_results",
     # identity

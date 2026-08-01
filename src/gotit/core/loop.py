@@ -63,6 +63,24 @@ class VerifyLoop:
 
 _STRICTNESS = {"passed": 0, "almost": 1, "owe_next": 2}
 
+# Explainable score/evidence floors — pinned by tests/test_gate_signals.py.
+# ``None`` means "not provided" (stubs / gold matrix) → no downgrade.
+SCORE_PASS_FLOOR = 0.4
+MIN_EVIDENCE_CHARS = 8
+
+
+def _apply_pass_signals(
+    *,
+    score: float | None,
+    evidence: str | None,
+) -> list[str]:
+    """Signals that block a stricter-of-two ``passed`` (never upgrade)."""
+    if score is not None and score < SCORE_PASS_FLOOR:
+        return ["low_score_blocks_pass"]
+    if evidence is not None and len(evidence.strip()) < MIN_EVIDENCE_CHARS:
+        return ["empty_evidence_blocks_pass"]
+    return []
+
 
 def deterministic_gate(
     examine_verdict: str,
@@ -75,34 +93,48 @@ def deterministic_gate(
 ) -> GateResult:
     """Deterministic mastery gate — no LLM.
 
-    Takes the stricter of the examiner's and the critic's verdicts (so a single
-    lenient agent cannot pass a claim), then maps to a GateResult with
-    ``schedule_after_verdict`` for ``next_review_at`` (writeback may pass a
-    richer ``prior_failures`` again).
+    1. Stricter of examiner + critic (a single lenient agent cannot pass).
+    2. If that base is ``passed``, optional score/evidence signals may
+       downgrade to ``almost`` (never upgrade a stricter base).
+    3. Map to ``schedule_after_verdict`` for ``next_review_at``.
     """
-    del score, evidence  # reserved for future gate signals
     ex = _STRICTNESS.get(examine_verdict, 1)
     rc = _STRICTNESS.get(recheck_verdict, 1)
     final_rank = max(ex, rc)
     final = next(v for v, r in _STRICTNESS.items() if r == final_rank)
+    signals: list[str] = []
+    if final == "passed":
+        signals = _apply_pass_signals(score=score, evidence=evidence)
+        if signals:
+            final = "almost"
+
     today = as_of or date.today()
     sched = schedule_after_verdict(
         final, prior_failures=prior_failures, as_of=today
     )
+    signal_suffix = f" [{', '.join(signals)}]" if signals else ""
 
     if final == "passed":
         return GateResult(
             passed=True,
             verdict="passed",
             next_review_at=sched.next_review_at,
-            reason=f"examine={examine_verdict} recheck={recheck_verdict} → 掌握",
+            reason=(
+                f"examine={examine_verdict} recheck={recheck_verdict} → 掌握"
+                f"{signal_suffix}"
+            ),
+            signals=signals,
         )
     if final == "almost":
         return GateResult(
             passed=False,
             verdict="almost",
             next_review_at=sched.next_review_at,
-            reason=f"examine={examine_verdict} recheck={recheck_verdict} → 续考（今天接着）",
+            reason=(
+                f"examine={examine_verdict} recheck={recheck_verdict} "
+                f"→ 续考（今天接着）{signal_suffix}"
+            ),
+            signals=signals,
         )
     days = sched.interval_days if sched.interval_days is not None else 1
     return GateResult(
@@ -111,8 +143,9 @@ def deterministic_gate(
         next_review_at=sched.next_review_at,
         reason=(
             f"examine={examine_verdict} recheck={recheck_verdict} "
-            f"→ 欠着，{days} 天后再考"
+            f"→ 欠着，{days} 天后再考{signal_suffix}"
         ),
+        signals=signals,
     )
 
 

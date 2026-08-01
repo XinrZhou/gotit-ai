@@ -111,6 +111,38 @@ async def finalize_harness_run(
     await session.flush()
 
 
+async def get_harness_run(
+    session: AsyncSession,
+    run_id: UUID,
+) -> HarnessRun | None:
+    row = await session.get(HarnessRunRow, run_id)
+    if row is None:
+        return None
+    return _harness_run_view(row)
+
+
+async def set_harness_decision(
+    session: AsyncSession,
+    run_id: UUID,
+    *,
+    decision: str,
+    note: str | None = None,
+) -> HarnessRun:
+    """Record human holdout decision on ``summary`` (no schema migration)."""
+    if decision not in {"adopt", "observe", "reject"}:
+        raise ValueError(f"unknown harness decision: {decision}")
+    row = await session.get(HarnessRunRow, run_id)
+    if row is None:
+        raise KeyError(f"harness run not found: {run_id}")
+    summary = dict(row.summary or {})
+    summary["decision"] = decision
+    summary["decision_note"] = (note or "").strip() or None
+    summary["decided_at"] = datetime.now(UTC).isoformat()
+    row.summary = summary
+    await session.flush()
+    return _harness_run_view(row)
+
+
 async def list_harness_runs(
     session: AsyncSession,
     *,
