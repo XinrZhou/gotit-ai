@@ -13,12 +13,13 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
-| `cat-param-writeback/` | verify/calib → claim.calibration a/b update |
-| `form-follows-claim/` | preferred_check_mode + CTA routing (P3) |
-| `verify-spine-deepen/` | Gate signals + ContextBudget + Harness REST/CLI |
-| `note-ingest-next-step/` | Note ingest → ready card → 去开考 |
-| `daily-brief-polish/` | Daily brief UI polish (may be ship-ready) |
-| `yuque-md-convert-wipe/` | Yuque md convert (may be ship-ready) |
+| **`main-path-converge/`** | **Next wave: archive + friction audit + polish（明天执行）** |
+| `cat-param-writeback/` | verify/calib → claim.calibration（待归档） |
+| `form-follows-claim/` | preferred_check_mode 路由（待归档） |
+| `verify-spine-deepen/` | Gate signals + ContextBudget + Harness API（待归档） |
+| `note-ingest-next-step/` | 出题 → 去开考（待归档） |
+| `daily-brief-polish/` | Daily brief UI（待归档若已合） |
+| `yuque-md-convert-wipe/` | Yuque md convert（待归档若已合） |
 
 ## Recently archived
 
