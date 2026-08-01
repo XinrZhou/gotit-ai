@@ -7,6 +7,7 @@ import type {
   DrillMaterial,
   DrillRound,
   DrillSession,
+  IngestUi,
   InterviewFocusHint,
   MasteryVerdict,
   Mode,
@@ -89,8 +90,18 @@ export type Store = {
   onOpenNote: (id: string) => void;
   onDeleteNote: (id: string) => void;
   onDeleteNotes: (ids: string[]) => void;
-  onIngestNote: (id: string) => void;
+  onIngestNote: (
+    id: string,
+    opts?: { surface?: "compose" | "view" | "silent" },
+  ) => Promise<void>;
   onIngestAll: () => void;
+  ingestUi: IngestUi | null;
+  beginComposeIngest: () => void;
+  clearIngestUi: () => void;
+  dismissIngestReady: () => void;
+  requestExamineFromIngest: () => void;
+  pendingExamineClaim: Claim | null;
+  clearPendingExamineClaim: () => void;
   showCompose: boolean;
   setShowCompose: (b: boolean) => void;
   showProjectModal: boolean;

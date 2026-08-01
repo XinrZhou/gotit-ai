@@ -94,6 +94,18 @@ export type Claim = {
   due_reason_text?: string | null;
 };
 
+/** `POST /v1/notes/{id}/ingest` body. */
+export type NoteIngestResponse = {
+  note_id: string;
+  claims: Claim[];
+  plan_items: PlanItem[];
+};
+
+/** In-modal note→claim progress (compose / view note). */
+export type IngestUi =
+  | { phase: "generating"; noteId: string | null; surface: "compose" | "view" }
+  | { phase: "ready"; noteId: string; claims: Claim[]; surface: "compose" | "view" };
+
 export type VerifyPath = {
   examine_verdict: MasteryVerdict;
   recheck_verdict: MasteryVerdict;

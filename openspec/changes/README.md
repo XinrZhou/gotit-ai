@@ -14,6 +14,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 | Change | Notes |
 |--------|-------|
 | `verify-spine-deepen/` | Gate signals + ContextBudget + Harness REST/CLI |
+| `note-ingest-next-step/` | Note ingest → ready card → 去开考 |
 | `daily-brief-polish/` | Daily brief UI polish (may be ship-ready) |
 | `yuque-md-convert-wipe/` | Yuque md convert (may be ship-ready) |
 

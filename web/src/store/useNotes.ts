@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
-import type { DayNote } from "../types";
+import type { Claim, DayNote, IngestUi, NoteIngestResponse } from "../types";
 import type { Run } from "./types";
 
 type Deps = {
@@ -12,6 +12,17 @@ type Deps = {
   setFlash: (s: string) => void;
 };
 
+function asClaim(raw: Claim, noteId: string): Claim {
+  return {
+    id: raw.id,
+    text: (raw.text || "").trim() || "可考主张",
+    status: raw.status || "not_yet",
+    topic: raw.topic ?? null,
+    source_note_id: raw.source_note_id ?? noteId,
+    next_review_at: raw.next_review_at ?? null,
+  };
+}
+
 export function useNotes({
   notes,
   run,
@@ -22,6 +33,35 @@ export function useNotes({
 }: Deps) {
   const [viewNote, setViewNote] = useState<DayNote | null>(null);
   const [showCompose, setShowCompose] = useState(false);
+  const [ingestUi, setIngestUi] = useState<IngestUi | null>(null);
+  const [pendingExamineClaim, setPendingExamineClaim] = useState<Claim | null>(
+    null,
+  );
+
+  const clearIngestUi = useCallback(() => {
+    setIngestUi(null);
+  }, []);
+
+  const clearPendingExamineClaim = useCallback(() => {
+    setPendingExamineClaim(null);
+  }, []);
+
+  const dismissIngestReady = useCallback(() => {
+    setIngestUi(null);
+    setViewNote(null);
+    setShowCompose(false);
+  }, []);
+
+  const requestExamineFromIngest = useCallback(() => {
+    if (!ingestUi || ingestUi.phase !== "ready") return;
+    const first = ingestUi.claims[0];
+    if (!first) return;
+    const claim = asClaim(first, ingestUi.noteId);
+    setIngestUi(null);
+    setViewNote(null);
+    setShowCompose(false);
+    setPendingExamineClaim(claim);
+  }, [ingestUi]);
 
   const onOpenNote = useCallback(
     (id: string) => {
@@ -43,6 +83,7 @@ export function useNotes({
       void run(async () => {
         await api<{ ok: boolean }>(`/v1/notes/${id}`, { method: "DELETE" });
         setViewNote(null);
+        setIngestUi(null);
       }, "笔记已删除");
     },
     [run],
@@ -57,23 +98,69 @@ export function useNotes({
           body: JSON.stringify({ ids }),
         });
         setViewNote((cur) => (cur && ids.includes(cur.id) ? null : cur));
+        setIngestUi(null);
       }, ids.length === 1 ? "笔记已删除" : `已删除 ${ids.length} 条资料`);
     },
     [run],
   );
 
-  const onIngestNote = useCallback(
-    (id: string) => {
-      void run(
-        () =>
-          api<unknown>(`/v1/notes/${id}/ingest`, {
-            method: "POST",
-            body: JSON.stringify({ add_plan_item: true }),
-          }),
-        "题出好了",
-      );
+  const beginComposeIngest = useCallback(() => {
+    setIngestUi({ phase: "generating", noteId: null, surface: "compose" });
+  }, []);
+
+  const runIngestOnSurface = useCallback(
+    async (noteId: string, surface: "compose" | "view") => {
+      setBusy(true);
+      setError("");
+      setIngestUi({ phase: "generating", noteId, surface });
+      try {
+        const res = await api<NoteIngestResponse>(`/v1/notes/${noteId}/ingest`, {
+          method: "POST",
+          body: JSON.stringify({ add_plan_item: true }),
+        });
+        const claims = (res.claims ?? []).map((c) => asClaim(c, noteId));
+        if (claims.length === 0) {
+          setIngestUi(null);
+          setFlash("没抽出可考的句子，换一段再试");
+          await refresh();
+          return;
+        }
+        setIngestUi({
+          phase: "ready",
+          noteId: res.note_id || noteId,
+          claims,
+          surface,
+        });
+        await refresh();
+      } catch (err) {
+        setIngestUi(null);
+        setError(String(err));
+      } finally {
+        setBusy(false);
+      }
     },
-    [run],
+    [refresh, setBusy, setError, setFlash],
+  );
+
+  const onIngestNote = useCallback(
+    (
+      id: string,
+      opts?: { surface?: "compose" | "view" | "silent" },
+    ): Promise<void> => {
+      const surface = opts?.surface ?? "silent";
+      if (surface === "silent") {
+        return run(
+          () =>
+            api<NoteIngestResponse>(`/v1/notes/${id}/ingest`, {
+              method: "POST",
+              body: JSON.stringify({ add_plan_item: true }),
+            }),
+          "题出好了",
+        );
+      }
+      return runIngestOnSurface(id, surface);
+    },
+    [run, runIngestOnSurface],
   );
 
   const onIngestAll = useCallback(() => {
@@ -84,7 +171,7 @@ export function useNotes({
       setError("");
       try {
         for (const n of pending) {
-          await api<unknown>(`/v1/notes/${n.id}/ingest`, {
+          await api<NoteIngestResponse>(`/v1/notes/${n.id}/ingest`, {
             method: "POST",
             body: JSON.stringify({ add_plan_item: true }),
           });
@@ -109,5 +196,12 @@ export function useNotes({
     onDeleteNotes,
     onIngestNote,
     onIngestAll,
+    ingestUi,
+    beginComposeIngest,
+    clearIngestUi,
+    dismissIngestReady,
+    requestExamineFromIngest,
+    pendingExamineClaim,
+    clearPendingExamineClaim,
   };
 }

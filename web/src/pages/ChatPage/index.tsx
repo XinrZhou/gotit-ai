@@ -309,6 +309,8 @@ export function ChatPage() {
     interviewFocus,
     bootcamp,
     setBootcampStatus,
+    pendingExamineClaim,
+    clearPendingExamineClaim,
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
   const showBootcamp = Boolean(bootcamp?.show);
@@ -471,6 +473,20 @@ export function ChatPage() {
     },
     [startWorkflow, onExamineStartClaim],
   );
+
+  // Note ingest「去开考」handoff from compose / view-note modals.
+  useEffect(() => {
+    if (!pendingExamineClaim) return;
+    const claim = pendingExamineClaim;
+    clearPendingExamineClaim();
+    setLibraryOpen(false);
+    void startExamineClaim(claim);
+  }, [
+    pendingExamineClaim,
+    clearPendingExamineClaim,
+    setLibraryOpen,
+    startExamineClaim,
+  ]);
 
   const startExamineNote = useCallback(
     async (noteId: string, fallback?: Partial<DayNote>) => {

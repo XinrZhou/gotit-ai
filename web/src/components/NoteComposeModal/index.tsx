@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { DayNote, ImportTab } from "../../types";
+import { IngestOutcome } from "../IngestOutcome";
 import { Modal } from "../Modal";
 import {
   YuqueNoteEditor,
@@ -40,12 +41,25 @@ export function NoteComposeModal() {
     refresh,
     day,
     selectedProjectId,
+    onIngestNote,
+    ingestUi,
+    beginComposeIngest,
+    clearIngestUi,
+    dismissIngestReady,
+    requestExamineFromIngest,
   } = useStore();
   const editorRef = useRef<YuqueNoteEditorHandle>(null);
   const [noteTitle, setNoteTitle] = useState("");
   const [importTab, setImportTab] = useState<ImportTab>("write");
   const [linkUrl, setLinkUrl] = useState("");
   const [editorExpanded, setEditorExpanded] = useState(false);
+
+  const surfaceActive =
+    ingestUi != null &&
+    ingestUi.surface === "compose" &&
+    (ingestUi.phase === "generating" || ingestUi.phase === "ready");
+  const generating = surfaceActive && ingestUi.phase === "generating";
+  const ready = surfaceActive && ingestUi.phase === "ready";
 
   useEffect(() => {
     if (!showCompose || !editorExpanded) return;
@@ -72,12 +86,15 @@ export function NoteComposeModal() {
   }
 
   function selectTab(id: ImportTab) {
+    if (generating || ready) return;
     setImportTab(id);
     if (id !== "write") setEditorExpanded(false);
   }
 
   function close() {
+    if (generating) return;
     setEditorExpanded(false);
+    clearIngestUi();
     setShowCompose(false);
   }
 
@@ -108,9 +125,11 @@ export function NoteComposeModal() {
 
   async function saveAndIngest() {
     const body = readEditorBody();
-    if (!body) return;
+    if (!body || busy || generating || ready) return;
     setBusy(true);
     setError("");
+    setEditorExpanded(false);
+    beginComposeIngest();
     try {
       const note = await api<DayNote>(`/v1/days/${day}/notes`, {
         method: "POST",
@@ -121,52 +140,56 @@ export function NoteComposeModal() {
           project_id: selectedProjectId,
         }),
       });
-      await api<unknown>(`/v1/notes/${note.id}/ingest`, {
-        method: "POST",
-        body: JSON.stringify({ add_plan_item: true }),
-      });
       clearEditor();
-      setEditorExpanded(false);
-      setShowCompose(false);
-      setFlash("保存好了，题也出了");
-      await refresh();
+      await onIngestNote(note.id, { surface: "compose" });
     } catch (err) {
+      clearIngestUi();
       setError(String(err));
-    } finally {
       setBusy(false);
     }
   }
 
-  const writeActions = (
-    <>
-      <button
-        type="button"
-        className={`${styles.iconBtn} btn-start`}
-        disabled={busy}
-        aria-label={editorExpanded ? "收起" : "放大编辑"}
-        aria-pressed={editorExpanded}
-        title={editorExpanded ? "收起" : "放大编辑"}
-        onClick={() => setEditorExpanded((v) => !v)}
-      >
-        <ExpandIcon collapse={editorExpanded} />
-      </button>
-      <button type="button" className="btn-ghost" disabled={busy} onClick={saveNoteOnly}>
-        仅保存
-      </button>
-      <button type="button" className="btn-ink" disabled={busy} onClick={saveAndIngest}>
-        {busy ? "处理中…" : "出题考我"}
-      </button>
-    </>
-  );
+  const writeActions =
+    generating || ready ? null : (
+      <>
+        <button
+          type="button"
+          className={`${styles.iconBtn} btn-start`}
+          disabled={busy}
+          aria-label={editorExpanded ? "收起" : "放大编辑"}
+          aria-pressed={editorExpanded}
+          title={editorExpanded ? "收起" : "放大编辑"}
+          onClick={() => setEditorExpanded((v) => !v)}
+        >
+          <ExpandIcon collapse={editorExpanded} />
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={busy}
+          onClick={saveNoteOnly}
+        >
+          仅保存
+        </button>
+        <button
+          type="button"
+          className="btn-ink"
+          disabled={busy}
+          onClick={() => void saveAndIngest()}
+        >
+          {busy ? "正在出题…" : "出题考我"}
+        </button>
+      </>
+    );
 
   return (
     <Modal
-      title="添加资料"
-      wide={!editorExpanded}
-      fill={editorExpanded}
+      title={ready ? "题出好了" : generating ? "正在出题" : "添加资料"}
+      wide={!editorExpanded && !generating && !ready}
+      fill={editorExpanded && !generating && !ready}
       onClose={close}
       actions={
-        importTab === "write" ? (
+        importTab === "write" || generating || ready ? (
           writeActions
         ) : (
           <>
@@ -180,69 +203,89 @@ export function NoteComposeModal() {
         )
       }
     >
-      <div className={styles.importTabs} role="tablist">
-        {(
-          [
-            ["write", "手写"],
-            ["link", "链接"],
-            ["zip", "文件"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            className={importTab === id ? `${styles.tab} ${styles.active}` : styles.tab}
-            aria-selected={importTab === id}
-            onClick={() => selectTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {generating || ready ? (
+        <IngestOutcome
+          phase={generating ? "generating" : "ready"}
+          claimTexts={
+            ingestUi?.phase === "ready"
+              ? ingestUi.claims.map((c) => c.text)
+              : []
+          }
+          busy={busy}
+          onExamine={requestExamineFromIngest}
+          onDismiss={dismissIngestReady}
+        />
+      ) : (
+        <>
+          <div className={styles.importTabs} role="tablist">
+            {(
+              [
+                ["write", "手写"],
+                ["link", "链接"],
+                ["zip", "文件"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                className={
+                  importTab === id ? `${styles.tab} ${styles.active}` : styles.tab
+                }
+                aria-selected={importTab === id}
+                onClick={() => selectTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-      {importTab === "write" ? (
-        <div className={editorExpanded ? styles.writeExpanded : styles.write}>
-          {!editorExpanded ? (
-            <p className={styles.hint}>写点今天学的，我来帮你出题</p>
+          {importTab === "write" ? (
+            <div className={editorExpanded ? styles.writeExpanded : styles.write}>
+              {!editorExpanded ? (
+                <p className={styles.hint}>写点今天学的，我来帮你出题</p>
+              ) : null}
+              <input
+                className={`note-title-input ${styles.title}`}
+                value={noteTitle}
+                onChange={(e) => setNoteTitle(e.target.value)}
+                placeholder="标题（可选）"
+                disabled={busy}
+              />
+              <YuqueNoteEditor
+                ref={editorRef}
+                value="<p></p>"
+                height={editorExpanded ? "100%" : 340}
+                className={styles.editor}
+                onError={(err) => setError(String(err))}
+              />
+            </div>
           ) : null}
-          <input
-            className={`note-title-input ${styles.title}`}
-            value={noteTitle}
-            onChange={(e) => setNoteTitle(e.target.value)}
-            placeholder="标题（可选）"
-            disabled={busy}
-          />
-          <YuqueNoteEditor
-            ref={editorRef}
-            value="<p></p>"
-            height={editorExpanded ? "100%" : 340}
-            className={styles.editor}
-            onError={(err) => setError(String(err))}
-          />
-        </div>
-      ) : null}
 
-      {importTab === "link" ? (
-        <div className={styles.pane}>
-          <p className={styles.hint}>丢个链接，抓完帮你出题</p>
-          <input
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-            placeholder="https://www.yuque.com/…"
-            disabled={busy}
-          />
-          <p className={styles.hint}>链接导入即将支持</p>
-        </div>
-      ) : null}
+          {importTab === "link" ? (
+            <div className={styles.pane}>
+              <p className={styles.hint}>丢个链接，抓完帮你出题</p>
+              <input
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://www.yuque.com/…"
+                disabled={busy}
+              />
+              <p className={styles.hint}>链接导入即将支持</p>
+            </div>
+          ) : null}
 
-      {importTab === "zip" ? (
-        <div className={styles.pane}>
-          <p className={styles.hint}>传个文件，批量帮你出题</p>
-          <div className={styles.dropzone}>把文件拖到这里，或点击选择</div>
-          <p className={styles.hint}>支持 .zip / .md / .txt / .docx（即将支持）</p>
-        </div>
-      ) : null}
+          {importTab === "zip" ? (
+            <div className={styles.pane}>
+              <p className={styles.hint}>传个文件，批量帮你出题</p>
+              <div className={styles.dropzone}>把文件拖到这里，或点击选择</div>
+              <p className={styles.hint}>
+                支持 .zip / .md / .txt / .docx（即将支持）
+              </p>
+            </div>
+          ) : null}
+        </>
+      )}
     </Modal>
   );
 }
