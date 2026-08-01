@@ -157,9 +157,7 @@ export function DailyBrief({
                   </span>
                 ) : null}
               </span>
-              <span className={styles.chevron} aria-hidden>
-                ›
-              </span>
+              <span className={styles.cta}>开考</span>
             </button>
           </li>
         ))}

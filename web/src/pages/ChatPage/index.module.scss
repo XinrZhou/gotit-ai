@@ -679,13 +679,54 @@
 }
 
 .threadEmptyBrief {
-  max-width: none;
+  max-width: 440px;
   width: 100%;
   align-items: stretch;
   text-align: left;
-  gap: 28px;
-  margin: 28px auto 8px;
+  gap: 0;
+  margin: 20px auto 8px;
   padding: 0;
+}
+
+.briefStage {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  animation: emptyIn 0.35s ease both;
+}
+
+.briefFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.briefClose {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.briefClose:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--soft);
+}
+
+.briefClose:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .threadEmptyLead {
@@ -712,38 +753,26 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0;
+  gap: 6px;
   margin: 0;
   padding: 0;
 }
 
-.briefAltItem {
-  display: inline-flex;
-  align-items: center;
-}
-
-.briefAltSep {
-  color: var(--line);
-  font-size: 12px;
-  padding: 0 2px;
-  user-select: none;
-}
-
-.briefAltLink {
+.briefAltChip {
   border: none;
-  background: transparent;
-  color: var(--faint);
+  background: var(--soft);
+  color: var(--ink);
   font-size: 12.5px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
-.briefAltLink:hover {
-  color: var(--ink);
+.briefAltChip:hover {
+  background: var(--fill);
 }
 
 .composerWorkflows {

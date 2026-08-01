@@ -925,13 +925,40 @@ export function ChatPage() {
                   onCalibrate={() => setCalibrationOpen(true)}
                 />
               ) : hasDailyBrief ? (
-                <DailyBrief
-                  variant="home"
-                  maxItems={4}
-                  onExamineClaim={(c) => void startExamineClaim(c)}
-                  onExamineNoteId={(id) => void startExamineNote(id)}
-                  onViewAll={() => void startWorkflow("examine")}
-                />
+                <div className={styles.briefStage}>
+                  <DailyBrief
+                    variant="home"
+                    maxItems={4}
+                    onExamineClaim={(c) => void startExamineClaim(c)}
+                    onExamineNoteId={(id) => void startExamineNote(id)}
+                    onViewAll={() => void startWorkflow("examine")}
+                  />
+                  <footer className={styles.briefFooter}>
+                    {showCloseCta ? (
+                      <button
+                        type="button"
+                        className={styles.briefClose}
+                        disabled={closingDay || storeBusy}
+                        onClick={() => void onCloseDay()}
+                      >
+                        今天收工
+                      </button>
+                    ) : null}
+                    <nav className={styles.briefAltNav} aria-label="开练方式">
+                      {WORKFLOWS.map((w) => (
+                        <button
+                          key={w.mode}
+                          type="button"
+                          className={styles.briefAltChip}
+                          onClick={() => void startWorkflow(w.mode)}
+                          title={w.hint}
+                        >
+                          {w.label}
+                        </button>
+                      ))}
+                    </nav>
+                  </footer>
+                </div>
               ) : dayClosed ? (
                 <div className={styles.emptyIntro}>
                   <p className={styles.emptyLead}>今天收工了</p>
@@ -991,7 +1018,7 @@ export function ChatPage() {
                   先摸底一下
                 </button>
               ) : null}
-              {showCloseCta ? (
+              {!hasDailyBrief && showCloseCta ? (
                 <button
                   type="button"
                   className={
@@ -1154,13 +1181,47 @@ export function ChatPage() {
                         onCalibrate={() => setCalibrationOpen(true)}
                       />
                     ) : hasDailyBrief ? (
-                      <DailyBrief
-                        variant="thread"
-                        maxItems={4}
-                        onExamineClaim={(c) => void startExamineClaim(c)}
-                        onExamineNoteId={(id) => void startExamineNote(id)}
-                        onViewAll={() => void startWorkflow("examine")}
-                      />
+                      <div className={styles.briefStage}>
+                        <DailyBrief
+                          variant="thread"
+                          maxItems={4}
+                          onExamineClaim={(c) => void startExamineClaim(c)}
+                          onExamineNoteId={(id) => void startExamineNote(id)}
+                          onViewAll={() => void startWorkflow("examine")}
+                        />
+                        {showQuietInterview && interviewFocus ? (
+                          <InterviewFocusBrief
+                            focus={interviewFocus}
+                            busy={busy || storeBusy}
+                            onOpenDrill={followOpenDrill}
+                          />
+                        ) : null}
+                        <footer className={styles.briefFooter}>
+                          {showCloseCta ? (
+                            <button
+                              type="button"
+                              className={styles.briefClose}
+                              disabled={closingDay || storeBusy}
+                              onClick={() => void onCloseDay()}
+                            >
+                              今天收工
+                            </button>
+                          ) : null}
+                          <nav className={styles.briefAltNav} aria-label="开练方式">
+                            {WORKFLOWS.map((w) => (
+                              <button
+                                key={w.mode}
+                                type="button"
+                                className={styles.briefAltChip}
+                                onClick={() => void startWorkflow(w.mode)}
+                                title={w.hint}
+                              >
+                                {w.label}
+                              </button>
+                            ))}
+                          </nav>
+                        </footer>
+                      </div>
                     ) : dayClosed ? (
                       <>
                         <p className={styles.threadEmptyLead}>今天收工了</p>
@@ -1198,20 +1259,18 @@ export function ChatPage() {
                         ) : null}
                       </>
                     )}
-                    {showQuietInterview && interviewFocus ? (
+                    {!hasDailyBrief && showQuietInterview && interviewFocus ? (
                       <InterviewFocusBrief
                         focus={interviewFocus}
                         busy={busy || storeBusy}
                         onOpenDrill={followOpenDrill}
                       />
                     ) : null}
-                    {showCloseCta ? (
+                    {!hasDailyBrief && showCloseCta ? (
                       <button
                         type="button"
                         className={
-                          closeSuggested && !hasDailyBrief
-                            ? styles.emptyCalibrate
-                            : styles.emptyChatLink
+                          closeSuggested ? styles.emptyCalibrate : styles.emptyChatLink
                         }
                         disabled={closingDay || storeBusy}
                         onClick={() => void onCloseDay()}
@@ -1219,34 +1278,21 @@ export function ChatPage() {
                         今天收工
                       </button>
                     ) : null}
-                    {!dayClosed && !showBootcamp ? (
-                      <nav
-                        className={
-                          hasDailyBrief ? styles.briefAltNav : styles.workflowTabs
-                        }
-                        aria-label="开练方式"
-                      >
-                        {WORKFLOWS.map((w, i) => (
-                          <span key={w.mode} className={hasDailyBrief ? styles.briefAltItem : undefined}>
-                            {hasDailyBrief && i > 0 ? (
-                              <span className={styles.briefAltSep} aria-hidden>
-                                ·
-                              </span>
+                    {!hasDailyBrief && !dayClosed && !showBootcamp ? (
+                      <nav className={styles.workflowTabs} aria-label="开练方式">
+                        {WORKFLOWS.map((w) => (
+                          <button
+                            key={w.mode}
+                            type="button"
+                            className={styles.chatBarTab}
+                            onClick={() => void startWorkflow(w.mode)}
+                            title={w.hint}
+                          >
+                            {w.label}
+                            {w.mode === "examine" && examineCount > 0 ? (
+                              <span className={styles.chatBarCount}>{examineCount}</span>
                             ) : null}
-                            <button
-                              type="button"
-                              className={hasDailyBrief ? styles.briefAltLink : styles.chatBarTab}
-                              onClick={() => void startWorkflow(w.mode)}
-                              title={w.hint}
-                            >
-                              {w.label}
-                              {!hasDailyBrief &&
-                              w.mode === "examine" &&
-                              examineCount > 0 ? (
-                                <span className={styles.chatBarCount}>{examineCount}</span>
-                              ) : null}
-                            </button>
-                          </span>
+                          </button>
                         ))}
                       </nav>
                     ) : null}
