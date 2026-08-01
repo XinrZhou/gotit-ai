@@ -21,6 +21,7 @@ from gotit.db.ops.bootcamp import (
 )
 from gotit.db.ops.calibration import (
     answer_calibration,
+    apply_item_calibration_update,
     get_calibration,
     run_synthetic_calibration,
     start_calibration,
@@ -257,6 +258,7 @@ __all__ = [
     "answer_calibration",
     "get_calibration",
     "run_synthetic_calibration",
+    "apply_item_calibration_update",
     # project
     "create_project",
     "list_projects",

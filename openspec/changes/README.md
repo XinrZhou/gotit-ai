@@ -13,6 +13,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
+| `cat-param-writeback/` | verify/calib → claim.calibration a/b update |
 | `form-follows-claim/` | preferred_check_mode + CTA routing (P3) |
 | `verify-spine-deepen/` | Gate signals + ContextBudget + Harness REST/CLI |
 | `note-ingest-next-step/` | Note ingest → ready card → 去开考 |

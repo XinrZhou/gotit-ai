@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-01 (form-follows-claim).
+> Last reviewed: 2026-08-01 (form-follows-claim + cat-param-writeback).
 
 ## Product (one line)
 
@@ -141,6 +141,11 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
   `fail_event(reason=calibration)` + calibration-only confuse seed;
   REST `/v1/calibration/*` + MCP `gotit_calibration_*` + synthetic replay;
   empty chat CTA「先摸底一下」when owed empty but claims exist
+  + **Item param writeback** (deterministic): gate / calib binary outcomes
+    update `claims.calibration` difficulty↑ on fail / ↓ on pass, discrimination
+    by surprise vs P(correct|θ=3); step shrinks with √(n+1); wired in
+    `finalize_examine_with_gate` + `answer_calibration` (counters
+    `n_attempts` / `n_passed` / `n_failed`)
 - **First-pass bootcamp**: empty library (`claims==0`, few notes) SessionStart
   guide note→claim→开考/摸底→quiet celebrate; memory `bootcamp` status
   (done/skipped/in_progress); `/v1/today.bootcamp` + `PUT /v1/bootcamp`;
@@ -197,7 +202,7 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 - Dedicated LLM holdout case set beyond `dev`/`gold` matrices
 - Full APPLY verify workflow (preferred `apply` currently degrades to probe)
 - Compass LLM auto-tag of `preferred_check_mode` (ingest heuristics only)
-- CAT item params (difficulty / discrimination) writeback from verify outcomes
+- Item-param update using per-learner θ (v1 uses fixed θ=3 surprise reference)
 
 ## Commands
 

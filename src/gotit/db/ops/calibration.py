@@ -14,12 +14,14 @@ from gotit.core.calibration import (
     AbilityState,
     CalibItem,
     CalibOutcome,
+    gate_verdict_to_outcome,
     item_from_meta,
     normalize_calibration_meta,
     select_next_item,
     should_stop,
     synthetic_outcome,
     update_ability,
+    update_item_calibration,
 )
 from gotit.core.models import (
     CalibrationItemView,
@@ -45,6 +47,29 @@ def _meta_for_claim(row: ClaimRow) -> dict[str, object]:
         "discrimination": discrimination,
         "knowledge_key": knowledge_key,
     }
+
+
+async def apply_item_calibration_update(
+    session: AsyncSession,
+    claim_id: UUID,
+    *,
+    outcome: CalibOutcome | None = None,
+    gate_verdict: str | None = None,
+    user_id: str = DEFAULT_USER_ID,
+) -> dict[str, object]:
+    """Persist item a/b writeback from binary outcome or gate verdict."""
+    if outcome is None:
+        if not gate_verdict:
+            raise ValueError("outcome or gate_verdict required")
+        outcome = gate_verdict_to_outcome(gate_verdict)
+    claim = await session.get(ClaimRow, claim_id)
+    if claim is None or claim.user_id != user_id:
+        raise KeyError(f"claim not found: {claim_id}")
+    raw = claim.calibration if isinstance(claim.calibration, dict) else {}
+    updated = update_item_calibration(raw, outcome=outcome, topic=claim.topic)
+    claim.calibration = updated
+    await session.flush()
+    return dict(updated)
 
 
 def _calib_item(row: ClaimRow) -> CalibItem:
@@ -373,6 +398,14 @@ async def answer_calibration(
         discrimination=item.discrimination,
         difficulty=item.difficulty,
     )
+    item_calib = await apply_item_calibration_update(
+        session,
+        claim_id,
+        outcome=outcome,
+        user_id=user_id,
+    )
+    # Reload claim params after writeback for trace (selection already used prior).
+    claim = await session.get(ClaimRow, claim_id) or claim
 
     confused_seeded = 0
     if outcome == "correct":
@@ -431,6 +464,7 @@ async def answer_calibration(
         "outcome": outcome,
         "theta_after": step.theta_after,
         "se_after": step.se_after,
+        "item_calibration": item_calib,
         "confused_edges_seeded": confused_seeded,
         "stop": False,
     }

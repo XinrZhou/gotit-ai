@@ -57,8 +57,17 @@ STABLE_EPS = 0.15
 ROTATE_PENALTY = 0.35
 NEIGHBOR_PENALTY = 0.4
 
+# Item-param writeback (verify / calibration outcomes → claim.calibration).
+ITEM_B_STEP = 0.25
+ITEM_A_STEP = 0.1
+ITEM_SURPRISE_CENTER = 0.25  # surprise above this raises discrimination
+ITEM_A_MIN = 0.05
+ITEM_A_MAX = 3.0
+ITEM_REF_THETA = THETA0  # fixed reference for surprise (no per-user θ needed)
+
 StopReason = Literal["converged", "stable", "max_items", "exhausted"]
 CalibOutcome = Literal["correct", "incorrect"]
+GateVerdict = Literal["passed", "almost", "owe_next"]
 
 
 @dataclass(frozen=True)
@@ -102,31 +111,102 @@ class StepUpdate:
     info: float
 
 
+def _parse_difficulty_float(raw: object) -> float:
+    try:
+        return max(1.0, min(5.0, float(raw)))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return float(DEFAULT_DIFFICULTY)
+
+
 def normalize_calibration_meta(
     raw: dict[str, object] | None,
     *,
     topic: str | None = None,
 ) -> tuple[int, float, str]:
-    """Fill defaults → (difficulty, discrimination, knowledge_key)."""
+    """Fill defaults → (difficulty int 1–5, discrimination, knowledge_key).
+
+    JSON may store continuous difficulty; CalibItem uses rounded int.
+    """
     data = dict(raw or {})
     difficulty_raw = data.get("difficulty", DEFAULT_DIFFICULTY)
     discrimination_raw = data.get("discrimination", DEFAULT_DISCRIMINATION)
     key = data.get("knowledge_key")
     if not key:
         key = (topic or "").strip() or DEFAULT_KNOWLEDGE_KEY
-    try:
-        d = int(str(difficulty_raw))
-    except (TypeError, ValueError):
-        d = DEFAULT_DIFFICULTY
+    d_f = _parse_difficulty_float(difficulty_raw)
+    d = max(1, min(5, int(round(d_f))))
     try:
         a = float(str(discrimination_raw))
     except (TypeError, ValueError):
         a = DEFAULT_DISCRIMINATION
     return (
-        max(1, min(5, d)),
-        max(0.05, a),
+        d,
+        max(ITEM_A_MIN, a),
         str(key).strip() or DEFAULT_KNOWLEDGE_KEY,
     )
+
+
+def gate_verdict_to_outcome(verdict: str) -> CalibOutcome:
+    """Map mastery gate verdict to binary calibration outcome."""
+    if verdict == "passed":
+        return "correct"
+    return "incorrect"
+
+
+def update_item_calibration(
+    raw: dict[str, object] | None,
+    *,
+    outcome: CalibOutcome,
+    topic: str | None = None,
+) -> dict[str, object]:
+    """Update claim calibration JSON after one binary outcome (no LLM).
+
+    - Fail → difficulty up (harder than labeled); pass → difficulty down.
+    - Discrimination moves with surprise vs P(correct|θ=3, a, b).
+    - Step sizes shrink with √(n+1). Counters n_attempts / n_passed / n_failed.
+    """
+    data = dict(raw or {})
+    d_int, a, key = normalize_calibration_meta(data, topic=topic)
+    d_f = _parse_difficulty_float(data.get("difficulty", d_int))
+    try:
+        n = max(0, int(data.get("n_attempts", 0) or 0))
+    except (TypeError, ValueError):
+        n = 0
+    try:
+        n_passed = max(0, int(data.get("n_passed", 0) or 0))
+    except (TypeError, ValueError):
+        n_passed = 0
+    try:
+        n_failed = max(0, int(data.get("n_failed", 0) or 0))
+    except (TypeError, ValueError):
+        n_failed = 0
+
+    y = 1.0 if outcome == "correct" else 0.0
+    shrink = math.sqrt(n + 1)
+    step_b = ITEM_B_STEP / shrink
+    d_after = max(1.0, min(5.0, d_f + (1.0 - 2.0 * y) * step_b))
+
+    p0 = correct_probability(
+        ITEM_REF_THETA, discrimination=a, difficulty=d_f
+    )
+    surprise = abs(y - p0)
+    a_after = a + ITEM_A_STEP * (surprise - ITEM_SURPRISE_CENTER) / shrink
+    a_after = max(ITEM_A_MIN, min(ITEM_A_MAX, a_after))
+
+    n_after = n + 1
+    if outcome == "correct":
+        n_passed += 1
+    else:
+        n_failed += 1
+
+    return {
+        "difficulty": round(d_after, 4),
+        "discrimination": round(a_after, 4),
+        "knowledge_key": key,
+        "n_attempts": n_after,
+        "n_passed": n_passed,
+        "n_failed": n_failed,
+    }
 
 
 def item_from_meta(

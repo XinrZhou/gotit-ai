@@ -121,6 +121,14 @@ async def finalize_examine_with_gate(
         prior_failures=prior_failures,
     )
 
+    item_calibration = await day_ops.apply_item_calibration_update(
+        session,
+        claim_id,
+        gate_verdict=gate.verdict,
+        user_id=user_id,
+    )
+    writeback["calibration"] = item_calibration
+
     await append_trajectory(
         session,
         user_id=user_id,
@@ -148,4 +156,5 @@ async def finalize_examine_with_gate(
         "gate_verdict": gate.verdict,
         "writeback": writeback,
         "mastery_graph": mastery,
+        "calibration": item_calibration,
     }
