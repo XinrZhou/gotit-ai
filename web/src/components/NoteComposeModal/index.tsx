@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
@@ -9,6 +9,25 @@ import {
   type YuqueNoteEditorHandle,
 } from "../YuqueNoteEditor";
 import styles from "./index.module.scss";
+
+function ExpandIcon({ collapse }: { collapse?: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d={
+          collapse
+            ? "M5 2v3H2M11 2v3h3M2 11h3v3M14 11h-3v3"
+            : "M6 2H2v4M10 2h4v4M14 10v4h-4M6 14H2v-4"
+        }
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function NoteComposeModal() {
   const {
@@ -23,22 +42,43 @@ export function NoteComposeModal() {
     selectedProjectId,
   } = useStore();
   const editorRef = useRef<YuqueNoteEditorHandle>(null);
-  const [noteHtml, setNoteHtml] = useState("<p></p>");
   const [noteTitle, setNoteTitle] = useState("");
   const [importTab, setImportTab] = useState<ImportTab>("write");
   const [linkUrl, setLinkUrl] = useState("");
+  const [editorExpanded, setEditorExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!showCompose || !editorExpanded) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setEditorExpanded(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCompose, editorExpanded]);
 
   if (!showCompose) return null;
 
   function readEditorBody(): string {
-    const html = editorRef.current?.getHtml() ?? noteHtml;
+    const html = editorRef.current?.getHtml() ?? "";
     return stripHtml(html).length > 0 ? html : "";
   }
 
   function clearEditor() {
-    setNoteHtml("<p></p>");
     setNoteTitle("");
     editorRef.current?.setHtml("<p></p>");
+  }
+
+  function selectTab(id: ImportTab) {
+    setImportTab(id);
+    if (id !== "write") setEditorExpanded(false);
+  }
+
+  function close() {
+    setEditorExpanded(false);
+    setShowCompose(false);
   }
 
   async function saveNoteOnly() {
@@ -86,6 +126,7 @@ export function NoteComposeModal() {
         body: JSON.stringify({ add_plan_item: true }),
       });
       clearEditor();
+      setEditorExpanded(false);
       setShowCompose(false);
       setFlash("保存好了，题也出了");
       await refresh();
@@ -96,8 +137,49 @@ export function NoteComposeModal() {
     }
   }
 
+  const writeActions = (
+    <>
+      <button
+        type="button"
+        className={`${styles.iconBtn} btn-start`}
+        disabled={busy}
+        aria-label={editorExpanded ? "收起" : "放大编辑"}
+        aria-pressed={editorExpanded}
+        title={editorExpanded ? "收起" : "放大编辑"}
+        onClick={() => setEditorExpanded((v) => !v)}
+      >
+        <ExpandIcon collapse={editorExpanded} />
+      </button>
+      <button type="button" className="btn-ghost" disabled={busy} onClick={saveNoteOnly}>
+        仅保存
+      </button>
+      <button type="button" className="btn-ink" disabled={busy} onClick={saveAndIngest}>
+        {busy ? "处理中…" : "出题考我"}
+      </button>
+    </>
+  );
+
   return (
-    <Modal title="添加资料" onClose={() => setShowCompose(false)}>
+    <Modal
+      title="添加资料"
+      wide={!editorExpanded}
+      fill={editorExpanded}
+      onClose={close}
+      actions={
+        importTab === "write" ? (
+          writeActions
+        ) : (
+          <>
+            <button type="button" className="btn-ghost" onClick={close}>
+              取消
+            </button>
+            <button type="button" className="btn-ink" disabled>
+              {importTab === "link" ? "导入" : "上传"}
+            </button>
+          </>
+        )
+      }
+    >
       <div className={styles.importTabs} role="tablist">
         {(
           [
@@ -112,7 +194,7 @@ export function NoteComposeModal() {
             role="tab"
             className={importTab === id ? `${styles.tab} ${styles.active}` : styles.tab}
             aria-selected={importTab === id}
-            onClick={() => setImportTab(id)}
+            onClick={() => selectTab(id)}
           >
             {label}
           </button>
@@ -120,10 +202,12 @@ export function NoteComposeModal() {
       </div>
 
       {importTab === "write" ? (
-        <>
-          <div className="muted">写点今天学的，我来帮你出题</div>
+        <div className={editorExpanded ? styles.writeExpanded : styles.write}>
+          {!editorExpanded ? (
+            <p className={styles.hint}>写点今天学的，我来帮你出题</p>
+          ) : null}
           <input
-            className="note-title-input"
+            className={`note-title-input ${styles.title}`}
             value={noteTitle}
             onChange={(e) => setNoteTitle(e.target.value)}
             placeholder="标题（可选）"
@@ -131,59 +215,34 @@ export function NoteComposeModal() {
           />
           <YuqueNoteEditor
             ref={editorRef}
-            value={noteHtml}
-            onChange={setNoteHtml}
-            height={260}
+            value="<p></p>"
+            height={editorExpanded ? "100%" : 340}
+            className={styles.editor}
             onError={(err) => setError(String(err))}
           />
-          <div className={styles.actions}>
-            <button type="button" className="btn-ghost" disabled={busy} onClick={saveNoteOnly}>
-              仅保存
-            </button>
-            <button type="button" className="btn-ink" disabled={busy} onClick={saveAndIngest}>
-              {busy ? "处理中…" : "出题考我"}
-            </button>
-          </div>
-        </>
+        </div>
       ) : null}
 
       {importTab === "link" ? (
-        <>
-          <div className="muted">丢个链接，抓完帮你出题</div>
+        <div className={styles.pane}>
+          <p className={styles.hint}>丢个链接，抓完帮你出题</p>
           <input
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
             placeholder="https://www.yuque.com/…"
             disabled={busy}
           />
-          <div className="muted">链接导入即将支持</div>
-          <div className={styles.actions}>
-            <button type="button" className="btn-ghost" onClick={() => setShowCompose(false)}>
-              取消
-            </button>
-            <button type="button" className="btn-ink" disabled>
-              导入
-            </button>
-          </div>
-        </>
+          <p className={styles.hint}>链接导入即将支持</p>
+        </div>
       ) : null}
 
       {importTab === "zip" ? (
-        <>
-          <div className="muted">传个文件，批量帮你出题</div>
+        <div className={styles.pane}>
+          <p className={styles.hint}>传个文件，批量帮你出题</p>
           <div className={styles.dropzone}>把文件拖到这里，或点击选择</div>
-          <div className="muted">支持 .zip / .md / .txt / .docx（即将支持）</div>
-          <div className={styles.actions}>
-            <button type="button" className="btn-ghost" onClick={() => setShowCompose(false)}>
-              取消
-            </button>
-            <button type="button" className="btn-ink" disabled>
-              上传
-            </button>
-          </div>
-        </>
+          <p className={styles.hint}>支持 .zip / .md / .txt / .docx（即将支持）</p>
+        </div>
       ) : null}
     </Modal>
   );
 }
-

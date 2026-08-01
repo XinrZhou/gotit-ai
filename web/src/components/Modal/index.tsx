@@ -7,6 +7,8 @@ type ModalProps = {
   children?: ReactNode;
   actions?: ReactNode;
   wide?: boolean;
+  /** Near-viewport shell for writing / preview (overrides wide width). */
+  fill?: boolean;
   /** Children own padding/layout (e.g. settings split pane). */
   flush?: boolean;
   /** Flush split panes: hide title row, float close over content. */
@@ -19,12 +21,14 @@ export function Modal({
   children,
   actions,
   wide,
+  fill,
   flush,
   titleless,
 }: ModalProps) {
   const shell = [
     styles.modal,
-    wide ? styles.modalWide : "",
+    wide && !fill ? styles.modalWide : "",
+    fill ? styles.modalFill : "",
     flush ? styles.modalFlush : "",
     titleless ? styles.modalTitleless : "",
   ]

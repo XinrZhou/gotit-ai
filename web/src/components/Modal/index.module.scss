@@ -21,16 +21,48 @@
 }
 
 .modalWide {
-  width: 720px;
+  width: 800px;
+  max-width: calc(100vw - 32px);
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
 }
 
 .modalWide .modalBody {
-  max-height: calc(100vh - 220px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.modalWide .modalActions {
+  flex-shrink: 0;
+  margin-top: 16px;
+}
+
+.modalFill {
+  width: min(1080px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modalFill .modalBody {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-right: 0;
+}
+
+.modalFill .modalActions {
+  flex-shrink: 0;
+  margin-top: 16px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
 }
 
 .modalFlush {
