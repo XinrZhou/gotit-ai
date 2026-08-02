@@ -19,7 +19,8 @@ CONTEXT = """\
 - Read `docs/SYSTEM.md` for architecture, stack, shipped features, layout.
 - Read `docs/PRODUCT.md` before expanding features (positioning + intake rules).
 - Product: daily learning companion; chat owns the surface; verify is the spine.
-- Stack: Python 3.12 + uv + FastAPI + MCP; React/Vite/npm; Postgres/Redis.
+- Stack: Python 3.12 + uv + FastAPI + MCP; React/Vite/npm; Postgres (Redis unused).
+- Deploy: personal / single-user (`GOTIT_USER_ID` + API key); not multi-tenant.
 - Iron: `gotit.core` framework-free; REST↔MCP share `db.ops`; gate is code not LLM.
 
 ## OpenSpec (non-trivial work)

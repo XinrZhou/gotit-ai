@@ -1,0 +1,19 @@
+"""MCP tool modules — import registers tools on ``gotit.mcp.app.mcp``."""
+
+from gotit.mcp.tools import calibration as _calibration  # noqa: F401
+from gotit.mcp.tools import connectors as _connectors  # noqa: F401
+from gotit.mcp.tools import day as _day  # noqa: F401
+from gotit.mcp.tools import drill as _drill  # noqa: F401
+from gotit.mcp.tools import examine as _examine  # noqa: F401
+from gotit.mcp.tools import graph as _graph  # noqa: F401
+from gotit.mcp.tools import health as _health  # noqa: F401
+from gotit.mcp.tools import interviews as _interviews  # noqa: F401
+from gotit.mcp.tools import memory as _memory  # noqa: F401
+from gotit.mcp.tools import notes as _notes  # noqa: F401
+from gotit.mcp.tools import projects as _projects  # noqa: F401
+from gotit.mcp.tools import prompts as _prompts  # noqa: F401
+from gotit.mcp.tools import resume as _resume  # noqa: F401
+from gotit.mcp.tools import shell as _shell  # noqa: F401
+from gotit.mcp.tools import skills as _skills  # noqa: F401
+from gotit.mcp.tools import teach as _teach  # noqa: F401
+from gotit.mcp.tools import thread as _thread  # noqa: F401

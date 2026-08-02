@@ -59,11 +59,11 @@ gotit-ai（Python / uv）
   core/     身份 · 消息 · agents · verify-loop · skills
   db/ops/   领域操作（REST + MCP 共用）
   api/      FastAPI + A2A orchestrator
-  mcp/      OpenClaw 工具（薄封装）
-  Postgres · Redis
+  mcp/      OpenClaw 工具（薄封装 → 同一套 db.ops）
+  Postgres（Redis 未接线）
 ```
 
-**设计原则：** 搭子拥有聊天面。**验证是脊柱**，不是无头流水线。OpenClaw 是可选渠道。
+**设计原则：** 搭子拥有聊天面。**验证是脊柱**，不是无头流水线。OpenClaw 是可选渠道。部署定位是**个人单用户**（`GOTIT_USER_ID` + API key），不做多租户 SaaS。
 
 ## 技术栈
 
@@ -71,7 +71,7 @@ gotit-ai（Python / uv）
 |----|------|
 | 运行时 | Python 3.12 · **uv** · FastAPI · MCP |
 | 领域核 | `gotit.core` — 无框架依赖 |
-| 数据 | Postgres 16 · Redis 7（本地可用 SQLite） |
+| 数据 | Postgres 16（本地可用 SQLite）；Compose 含 Redis 但**应用未使用** |
 | Web | React · Vite · **npm**（`web/`） |
 | LLM | OpenAI 兼容接口（如智谱 `glm-4-flash`） |
 | 工程 | OpenSpec · ADR · `docs/SYSTEM.md` · `scripts/gate.sh` |
@@ -88,7 +88,7 @@ uv sync --all-extras
 cp .env.example .env
 # 配置 GOTIT_API_KEY、LLM_BASE_URL、LLM_API_KEY、LLM_MODEL
 
-docker compose up -d postgres redis
+docker compose up -d postgres   # redis 可选 / 应用未使用；或用 .env 里的 SQLite
 
 uv run gotit-api          # http://127.0.0.1:8787/health
 cd web && npm install && npm run dev   # :5173
