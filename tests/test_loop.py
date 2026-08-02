@@ -1,19 +1,27 @@
-from gotit.core.loop import VerifyLoop
-from gotit.core.models import Claim, LoopState
+from uuid import uuid4
+
+from gotit.core.loop import VerifyWorkflow
+from gotit.core.models import BallStage
 
 
-def test_verify_loop_happy_path() -> None:
-    loop = VerifyLoop()
-    assert loop.state == LoopState.INGEST
+def test_verify_workflow_ball_custody() -> None:
+    thread_id = uuid4()
+    claim_id = uuid4()
+    ball = VerifyWorkflow.start(thread_id, claim_id)
+    assert ball.holder == "axiom"
+    assert ball.stage == BallStage.EXAMINE
+    assert ball.context["claim_id"] == str(claim_id)
 
-    loop.ingest_claims([Claim(text="Context budget beats dumping whole notes")])
-    assert loop.state == LoopState.CLAIM
+    ball = VerifyWorkflow.on_examine(
+        ball, verdict="passed", score=0.9, evidence="solid answer here"
+    )
+    assert ball.holder == "critic"
+    assert ball.stage == BallStage.RECHECK
 
-    loop.begin_examine()
-    assert loop.state == LoopState.EXAMINE
+    ball = VerifyWorkflow.on_recheck(ball, verdict="passed")
+    assert ball.holder == "gate"
+    assert ball.stage == BallStage.GATE
 
-    loop.begin_gate()
-    assert loop.state == LoopState.GATE
-
-    loop.mark_done()
-    assert loop.state == LoopState.DONE
+    gate = VerifyWorkflow.gate(ball, prior_failures=0)
+    assert gate.verdict == "passed"
+    assert gate.passed is True

@@ -1,4 +1,4 @@
-"""Learning-day, plan, chat-message, and today-aggregate operations."""
+"""Learning-day, plan, and today-aggregate operations."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from gotit.core.models import (
-    ChatMessageView,
     Claim,
     DayCloseSummary,
     DayPlanView,
@@ -22,7 +21,7 @@ from gotit.core.models import (
     TodayView,
 )
 from gotit.core.plan_time import resolve_due_time
-from gotit.db.models import ChatMessageRow, ClaimRow, LearningDayRow, PlanItemRow
+from gotit.db.models import ClaimRow, LearningDayRow, PlanItemRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view, _plan_item_view
 from gotit.db.ops.note import list_notes
 
@@ -382,67 +381,6 @@ async def fill_today_from_queue(
     await session.flush()
     session.expire_all()
     return await get_plan(session, day, user_id=user_id)
-
-
-async def list_chat_messages(
-    session: AsyncSession,
-    plan_item_id: UUID,
-    *,
-    user_id: str = DEFAULT_USER_ID,
-) -> list[ChatMessageView]:
-    row = await session.get(PlanItemRow, plan_item_id)
-    if row is None:
-        raise KeyError(f"plan item not found: {plan_item_id}")
-    day_row = await session.get(LearningDayRow, row.day_id)
-    if day_row is None or day_row.user_id != user_id:
-        raise KeyError(f"plan item not found: {plan_item_id}")
-    stmt = (
-        select(ChatMessageRow)
-        .where(ChatMessageRow.plan_item_id == plan_item_id)
-        .order_by(ChatMessageRow.created_at, ChatMessageRow.id)
-    )
-    rows = list((await session.execute(stmt)).scalars().all())
-    return [
-        ChatMessageView(
-            id=r.id,
-            plan_item_id=r.plan_item_id,
-            role=r.role,
-            text=r.text,
-            created_at=r.created_at or datetime.now(UTC),
-        )
-        for r in rows
-    ]
-
-
-async def add_chat_message(
-    session: AsyncSession,
-    plan_item_id: UUID,
-    role: str,
-    text: str,
-    *,
-    user_id: str = DEFAULT_USER_ID,
-) -> ChatMessageView:
-    row = await session.get(PlanItemRow, plan_item_id)
-    if row is None:
-        raise KeyError(f"plan item not found: {plan_item_id}")
-    day_row = await session.get(LearningDayRow, row.day_id)
-    if day_row is None or day_row.user_id != user_id:
-        raise KeyError(f"plan item not found: {plan_item_id}")
-    msg = ChatMessageRow(
-        id=uuid4(),
-        plan_item_id=plan_item_id,
-        role=role,
-        text=text.strip(),
-    )
-    session.add(msg)
-    await session.flush()
-    return ChatMessageView(
-        id=msg.id,
-        plan_item_id=plan_item_id,
-        role=role,
-        text=msg.text,
-        created_at=msg.created_at or datetime.now(UTC),
-    )
 
 
 async def get_today(

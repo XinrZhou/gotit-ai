@@ -13,8 +13,6 @@ class Settings(BaseSettings):
     gotit_api_key: str = "dev-change-me"
 
     database_url: str = "postgresql+asyncpg://gotit:gotit@127.0.0.1:5432/gotit"
-    # Reserved; application code does not read redis_url today.
-    redis_url: str = "redis://127.0.0.1:6379/0"
     gotit_user_id: str = "local"
     # When true (default), create tables on API startup (handy for sqlite/dev).
     gotit_db_create_all: bool = True

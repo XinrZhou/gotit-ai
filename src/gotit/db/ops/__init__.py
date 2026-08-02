@@ -45,14 +45,12 @@ from gotit.db.ops.connectors import (
     upsert_connector,
 )
 from gotit.db.ops.day import (
-    add_chat_message,
     close_today,
     delete_plan_item,
     ensure_day,
     fill_today_from_queue,
     get_plan,
     get_today,
-    list_chat_messages,
     list_due_claims,
     update_plan_item,
     upsert_plan_item,
@@ -231,8 +229,6 @@ __all__ = [
     "fill_today_from_queue",
     "get_today",
     "close_today",
-    "list_chat_messages",
-    "add_chat_message",
     # note / ingest
     "add_note",
     "list_notes",

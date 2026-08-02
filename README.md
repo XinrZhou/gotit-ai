@@ -59,7 +59,7 @@ gotit-ai (Python / uv)
   db/ops/   shared domain ops (REST + MCP)
   api/      FastAPI routes + A2A chat orchestrator
   mcp/      OpenClaw tools (thin → same db.ops)
-  Postgres (Redis unused)
+  Postgres
 ```
 
 **Design rule:** the companion owns chat. **Verification is the spine**, not a headless pipeline. OpenClaw is an optional distribution channel. Deployed as a **personal / single-user** app (`GOTIT_USER_ID` + API key) — not multi-tenant SaaS.
@@ -70,7 +70,7 @@ gotit-ai (Python / uv)
 |-------|--------|
 | Runtime | Python 3.12 · **uv** · FastAPI · MCP |
 | Core | `gotit.core` — framework-free |
-| Data | Postgres 16 (SQLite OK for local/dev); Redis in Compose but **unused by app** |
+| Data | Postgres 16 (SQLite OK for local/dev) |
 | Web | React · Vite · **npm** (`web/`) |
 | LLM | OpenAI-compatible endpoint (e.g. Zhipu `glm-4-flash`) |
 | Engineering | OpenSpec · ADR · `docs/SYSTEM.md` · `scripts/gate.sh` |
@@ -87,7 +87,7 @@ uv sync --all-extras
 cp .env.example .env
 # set GOTIT_API_KEY, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
 
-docker compose up -d postgres         # redis optional / unused; or SQLite in .env
+docker compose up -d postgres         # or use SQLite in .env
 
 uv run gotit-api
 # → http://127.0.0.1:8787/health

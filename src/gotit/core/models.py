@@ -103,14 +103,6 @@ class DayPlanView(BaseModel):
     items: list[PlanItemView] = Field(default_factory=list)
 
 
-class ChatMessageView(BaseModel):
-    id: UUID
-    plan_item_id: UUID
-    role: str
-    text: str
-    created_at: datetime
-
-
 class DayCloseSummary(BaseModel):
     """Short wrap after the learner closes the day (digest may reuse counts)."""
 

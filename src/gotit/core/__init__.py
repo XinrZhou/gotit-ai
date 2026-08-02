@@ -1,6 +1,6 @@
 """Domain types and verify-loop primitives (framework-free)."""
 
-from gotit.core.loop import VerifyLoop
+from gotit.core.loop import VerifyWorkflow, deterministic_gate
 from gotit.core.models import (
     CheckMode,
     CheckResult,
@@ -27,5 +27,6 @@ __all__ = [
     "PlanItemStatus",
     "PlanItemView",
     "TodayView",
-    "VerifyLoop",
+    "VerifyWorkflow",
+    "deterministic_gate",
 ]

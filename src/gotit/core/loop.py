@@ -6,60 +6,13 @@ from uuid import UUID, uuid4
 from gotit.core.models import (
     BallCustody,
     BallStage,
-    Claim,
     GateResult,
-    LoopState,
 )
 from gotit.core.schedule import schedule_after_verdict
 
-
-class VerifyLoop:
-    """Skeleton state machine for the check → coach → recheck cycle.
-
-    LLM / persistence adapters plug in later; this module stays framework-free.
-    """
-
-    def __init__(self) -> None:
-        self.state: LoopState = LoopState.INGEST
-        self.claims: list[Claim] = []
-
-    def ingest_claims(self, claims: list[Claim]) -> None:
-        if self.state not in {LoopState.INGEST, LoopState.DONE}:
-            raise RuntimeError(f"cannot ingest in state {self.state}")
-        self.claims = list(claims)
-        self.state = LoopState.CLAIM if self.claims else LoopState.INGEST
-
-    def begin_examine(self) -> None:
-        if self.state not in {LoopState.CLAIM, LoopState.COACH, LoopState.QUEUE}:
-            raise RuntimeError(f"cannot examine in state {self.state}")
-        self.state = LoopState.EXAMINE
-
-    def begin_coach(self) -> None:
-        if self.state != LoopState.EXAMINE:
-            raise RuntimeError(f"cannot coach in state {self.state}")
-        self.state = LoopState.COACH
-
-    def begin_gate(self) -> None:
-        if self.state != LoopState.EXAMINE:
-            raise RuntimeError(f"cannot gate in state {self.state}")
-        self.state = LoopState.GATE
-
-    def enqueue_missed(self) -> None:
-        if self.state != LoopState.GATE:
-            raise RuntimeError(f"cannot queue in state {self.state}")
-        self.state = LoopState.QUEUE
-
-    def mark_done(self) -> None:
-        self.state = LoopState.DONE
-
-
-# --- Persistent ball-custody verify workflow (companion-arch) ---
-#
-# The legacy `VerifyLoop` above is an in-memory skeleton kept for back-compat.
-# The real verify-loop is a persistent ball-custody state machine: the ball
-# moves examine(axiom) → recheck(critic) → gate(deterministic code, no LLM).
-# State lives in the `ball_custody` table; the functions below are pure
-# transitions over `BallCustody` DTOs — the orchestration layer persists.
+# Persistent ball-custody verify workflow: examine(axiom) → recheck(critic) →
+# gate(deterministic code, no LLM). Pure transitions over `BallCustody` DTOs;
+# orchestration persists via `db.ops.set_ball`.
 
 _STRICTNESS = {"passed": 0, "almost": 1, "owe_next": 2}
 

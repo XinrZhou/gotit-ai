@@ -7,7 +7,7 @@ context: |
   (false fluency → examine → recheck → deterministic gate). Verification is
   the spine; the companion owns the chat surface.
   Stack: Python 3.12 + uv + FastAPI + MCP; React web via npm; Postgres
-  (or SQLite); Redis unused. Personal / single-user (GOTIT_USER_ID + API key).
+  (or SQLite). Personal / single-user (GOTIT_USER_ID + API key).
   OpenClaw is an optional distribution channel (gotit exposes MCP tools).
   Keep gotit.core framework-free. Verified = done. The mastery gate is
   deterministic code, never an LLM. Harness evidence for prompt/skill adopts.
@@ -21,6 +21,6 @@ rules:
   specs:
     - Prefer SHALL requirements with concrete scenarios (given/when/then).
   design:
-    - Call out REST/MCP schema parity and Postgres impact (Redis unused).
+    - Call out REST/MCP schema parity and Postgres impact.
   tasks:
     - Include test or harness steps; mark gate commands explicitly.

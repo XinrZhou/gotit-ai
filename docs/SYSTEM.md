@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-02 (mcp-split-stack-honest; personal single-user).
+> Last reviewed: 2026-08-02 (legacy-surface-cleanup).
 
 ## Product (one line)
 
@@ -22,7 +22,7 @@ shared bearer `GOTIT_API_KEY`. No per-user auth product work planned.
 |-------|--------|
 | Runtime | Python 3.12 · **uv** · FastAPI · MCP (`gotit-api` / `gotit-mcp`) |
 | Core | `gotit.core` — **framework-free** (no FastAPI/MCP imports) |
-| Data | Postgres 16 (Compose) or SQLite local; **Redis unused** (Compose optional) |
+| Data | Postgres 16 (Compose) or SQLite local |
 | Web | React + Vite + **npm** under `web/` |
 | LLM | OpenAI-compatible (`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`); e.g. 智谱 `glm-4-flash` |
 | Specs | OpenSpec · `docs/VISION.md` · `docs/adr/` · this file |
@@ -35,8 +35,7 @@ Default API port in `.env.example`: **8787** (local overrides may use 8790).
 ```
 src/gotit/
   core/          agents, models, identity, messaging, skills;
-                 verify = deterministic_gate + VerifyWorkflow (BallCustody).
-                 VerifyLoop = legacy in-memory skeleton (tests only).
+                 verify = deterministic_gate + VerifyWorkflow (BallCustody)
   db/ops/        domain ops (day, note, claim, thread, …) — barrel `__init__`
   api/routes/    one router per subdomain + chat_orchestrator (A2A)
   mcp/           app.py + common.py + tools/* → same db.ops; server.py entry
@@ -44,14 +43,13 @@ web/src/
   pages/ChatPage   main shell (workflows embed Examine/Teach/Drill)
   store/           shell + domain hooks (useExamine / useTeach / useDrill / …)
   components/      Avatars, ModeHeader, SessionStartPanel, …
-alembic/versions/  0001…0014 (… + depends_on + claim preferred_check_mode)
+alembic/versions/  0001…0015 (… + drop unused chat_messages)
 openspec/changes/  active + archive/
 ```
 
 Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic code**, never LLM.
 
-Messages: companion UI uses `threads`/`messages`; legacy plan-item
-`chat_messages` still exposed on day chat routes (not the ChatPage path).
+Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` removed).
 
 ## Agents (UI nicknames)
 
@@ -219,7 +217,7 @@ Messages: companion UI uses `threads`/`messages`; legacy plan-item
 ```bash
 uv sync --all-extras
 cp .env.example .env          # set GOTIT_API_KEY + LLM_*
-docker compose up -d postgres # redis optional / unused by app today
+docker compose up -d postgres
 # or: DATABASE_URL=sqlite+aiosqlite:///./gotit.db
 uv run gotit-api              # :8787
 cd web && npm install && npm run dev   # :5173

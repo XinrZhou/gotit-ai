@@ -1,4 +1,4 @@
-"""Day, plan, and plan-item chat-message endpoints."""
+"""Day and plan endpoints."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from gotit.api.auth import require_api_key
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
 from gotit.core.models import (
-    ChatMessageView,
     DayCloseSummary,
     DayPlanView,
     PlanItemSource,
@@ -47,11 +46,6 @@ class PlanItemPatch(BaseModel):
     due_at: date | None = None
     due_time: str | None = None
     defer_to: date | None = None
-
-
-class ChatMessageCreate(BaseModel):
-    role: str = Field(min_length=1, max_length=16)
-    text: str = Field(min_length=1)
 
 
 class DayCloseBody(BaseModel):
@@ -214,44 +208,3 @@ async def delete_plan_item(
 
         rm_item(plan_day, title)
     return {"ok": True}
-
-
-@router.get(
-    "/v1/plan/items/{item_id}/messages",
-    response_model=list[ChatMessageView],
-    dependencies=[Depends(require_api_key)],
-)
-async def list_messages(
-    item_id: UUID,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> list[ChatMessageView]:
-    async with session_scope() as session:
-        try:
-            return await day_ops.list_chat_messages(
-                session, item_id, user_id=_user_id(settings)
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-
-@router.post(
-    "/v1/plan/items/{item_id}/messages",
-    response_model=ChatMessageView,
-    dependencies=[Depends(require_api_key)],
-)
-async def create_message(
-    item_id: UUID,
-    body: ChatMessageCreate,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> ChatMessageView:
-    async with session_scope() as session:
-        try:
-            return await day_ops.add_chat_message(
-                session,
-                item_id,
-                body.role,
-                body.text,
-                user_id=_user_id(settings),
-            )
-        except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

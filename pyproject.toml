@@ -12,7 +12,6 @@ dependencies = [
   "pydantic-settings>=2.7.0",
   "sqlalchemy[asyncio]>=2.0.36",
   "asyncpg>=0.30.0",
-  "redis>=5.2.0",
   "httpx>=0.28.0",
   "openai>=1.60.0",
   "mcp>=1.6.0",
