@@ -364,6 +364,30 @@ async def fail_counts_by_claim(
     return {cid: int(n) for cid, n in rows}
 
 
+async def latest_fail_by_claim(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_ids: list[UUID] | None = None,
+) -> dict[UUID, FailEventView]:
+    """Newest fail_event per claim (for obs graph tips / recent flags)."""
+    stmt = (
+        select(FailEventRow)
+        .where(FailEventRow.user_id == user_id)
+        .order_by(FailEventRow.created_at.desc())
+    )
+    if claim_ids is not None:
+        if not claim_ids:
+            return {}
+        stmt = stmt.where(FailEventRow.claim_id.in_(claim_ids))
+    out: dict[UUID, FailEventView] = {}
+    for row in (await session.execute(stmt)).scalars().all():
+        if row.claim_id in out:
+            continue
+        out[row.claim_id] = _fail_view(row)
+    return out
+
+
 async def _claim_labels(
     session: AsyncSession,
     *,

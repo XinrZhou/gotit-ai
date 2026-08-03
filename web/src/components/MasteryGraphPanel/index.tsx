@@ -1,111 +1,86 @@
-import { forceCollide, forceLink, forceManyBody, forceCenter, forceX, forceY } from "d3-force";
+import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from "cytoscape";
+import fcose from "cytoscape-fcose";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ForceGraph2D from "react-force-graph-2d";
 import { api } from "../../api";
 import { stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
-import type { GraphEdge, GraphNode, GraphView } from "../../types";
+import type { CheckMode, Claim, GraphEdge, GraphNode, GraphView } from "../../types";
 import styles from "./index.module.scss";
 
-type FGNode = GraphNode & {
-  name: string;
-  x?: number;
-  y?: number;
-  failCount: number;
-  topicKey: string;
-  val: number;
-  clean: string;
-};
-type FGLink = {
-  source: string | FGNode;
-  target: string | FGNode;
-  rel: GraphEdge["rel"];
-  weight: number;
-  active?: boolean;
-};
-
-type FocusMode = "weak" | "all";
-
-type FGApi = {
-  d3Force: (name: string, force?: unknown) => unknown;
-  d3ReheatSimulation: () => void;
-  zoomToFit: (ms?: number, padding?: number) => void;
-};
-
-/** Quiet palette — topic tint via hash; claims inherit topic hue. */
-const TOPIC_HUES = [210, 155, 28, 275, 335, 185, 48];
-
-function topicHue(topic: string): number {
-  let h = 0;
-  for (let i = 0; i < topic.length; i++) h = (h * 31 + topic.charCodeAt(i)) >>> 0;
-  return TOPIC_HUES[h % TOPIC_HUES.length];
+try {
+  cytoscape.use(fcose);
+} catch {
+  /* already registered (HMR) */
 }
 
-function nodeFill(n: FGNode): string {
-  if (n.type === "topic") return `hsl(${topicHue(n.label)} 18% 42%)`;
-  if (n.type === "project") return "hsl(0 0% 48%)";
-  if (n.type === "interest") return "hsl(0 0% 68%)";
-  const hue = n.topicKey ? topicHue(n.topicKey) : 210;
-  const fails = n.failCount;
-  if (fails >= 3) return `hsl(${hue} 28% 28%)`;
-  if (fails >= 1) return `hsl(${hue} 20% 36%)`;
-  return `hsl(${hue} 8% 58%)`;
-}
+type FocusMode = "weak" | "all" | "recent";
+
+type Sel =
+  | { kind: "claim"; node: GraphNode }
+  | { kind: "topic"; node: GraphNode }
+  | { kind: "edge"; edge: GraphEdge; blurb: string }
+  | null;
+
+/** Quiet slate tints by topic — Apple-like, no shouty accent. */
+const TOPIC_TONES = [
+  { fill: "#d9e4f0", border: "#9eb4c9", claim: "#c5d5e6", claimBorder: "#8aa3bb" },
+  { fill: "#dde8e3", border: "#9fb8ae", claim: "#c8d9d1", claimBorder: "#8aada0" },
+  { fill: "#e4e2ea", border: "#b0aec0", claim: "#d2d0dc", claimBorder: "#9b99ad" },
+  { fill: "#e6e1db", border: "#b8aea4", claim: "#d6cfc6", claimBorder: "#a89a8d" },
+  { fill: "#dce5ea", border: "#a5b7c2", claim: "#c8d5dd", claimBorder: "#8ea4b2" },
+] as const;
 
 function cleanLabel(text: string): string {
   return stripHtml(text).replace(/\s+/g, " ").trim();
 }
 
-function shortLabel(text: string, max = 10): string {
+function shortLabel(text: string, max = 16): string {
   const t = cleanLabel(text);
-  if (!t) return "…";
+  if (!t) return "·";
   if (t.length <= max) return t;
   return `${t.slice(0, max)}…`;
 }
 
-/** 薄弱：优先易混 / 前置依赖簇；去掉无边孤立点，避免全屏大片空白. */
-function filterWeakGraph(raw: GraphView): GraphView {
-  const claimLinks = raw.edges.filter(
-    (e) => e.rel === "confused_with" || e.rel === "depends_on",
-  );
-  const keepClaim = new Set<string>();
-  for (const e of claimLinks) {
-    keepClaim.add(e.source);
-    keepClaim.add(e.target);
-  }
-  if (keepClaim.size === 0) {
-    for (const n of raw.nodes) {
-      if (n.type === "claim" && Number(n.meta?.fail_count ?? 0) > 0) {
-        keepClaim.add(n.id);
-      }
-    }
-  }
-  if (keepClaim.size === 0) {
-    const claims = raw.nodes.filter((n) => n.type === "claim").slice(0, 24);
-    const ids = new Set(claims.map((c) => c.id));
-    const topics = new Set<string>();
-    for (const e of raw.edges) {
-      if (e.rel === "has_topic" && ids.has(e.source)) topics.add(e.target);
-    }
-    const nodes = raw.nodes.filter(
-      (n) =>
-        (n.type === "claim" && ids.has(n.id)) ||
-        (n.type === "topic" && topics.has(n.id)),
-    );
-    const nodeIds = new Set(nodes.map((n) => n.id));
-    return {
-      nodes,
-      edges: raw.edges.filter(
-        (e) =>
-          (e.rel === "has_topic" ||
-            e.rel === "confused_with" ||
-            e.rel === "depends_on") &&
-          nodeIds.has(e.source) &&
-          nodeIds.has(e.target),
-      ),
-    };
-  }
+function hashTone(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return Math.abs(h) % TOPIC_TONES.length;
+}
 
+function claimFromNode(n: GraphNode): Claim | null {
+  if (n.type !== "claim") return null;
+  const meta = n.meta ?? {};
+  const id = String(meta.claim_id ?? "").trim() || n.id.replace(/^claim:/, "");
+  if (!id) return null;
+  const mode = meta.preferred_check_mode;
+  const preferred =
+    mode === "probe" || mode === "drill" || mode === "teach_back"
+      ? (mode as CheckMode)
+      : null;
+  const projectRaw = meta.project_id;
+  return {
+    id,
+    text: cleanLabel(n.label) || "可考主张",
+    status: String(meta.status ?? "not_yet"),
+    topic: meta.topic != null ? String(meta.topic) : null,
+    source_note_id: null,
+    next_review_at: null,
+    project_id: projectRaw != null && String(projectRaw) ? String(projectRaw) : null,
+    preferred_check_mode: preferred,
+    failure_hint:
+      meta.last_fail_reason != null ? String(meta.last_fail_reason) : null,
+  };
+}
+
+function ctaForClaim(claim: Claim): { label: string; note?: string } {
+  if (claim.preferred_check_mode === "teach_back") return { label: "回讲" };
+  if (claim.preferred_check_mode === "drill") {
+    return { label: "练深挖", note: "练习场，不算正式掌握" };
+  }
+  return { label: "开考" };
+}
+
+function filterClaimCluster(raw: GraphView, keepClaim: Set<string>): GraphView {
   const topics = new Set<string>();
   for (const e of raw.edges) {
     if (e.rel === "has_topic" && keepClaim.has(e.source)) topics.add(e.target);
@@ -129,6 +104,29 @@ function filterWeakGraph(raw: GraphView): GraphView {
   };
 }
 
+function filterWeakGraph(raw: GraphView): GraphView {
+  const claimLinks = raw.edges.filter(
+    (e) => e.rel === "confused_with" || e.rel === "depends_on",
+  );
+  const keepClaim = new Set<string>();
+  for (const e of claimLinks) {
+    keepClaim.add(e.source);
+    keepClaim.add(e.target);
+  }
+  if (keepClaim.size === 0) {
+    for (const n of raw.nodes) {
+      if (n.type === "claim" && Number(n.meta?.fail_count ?? 0) > 0) {
+        keepClaim.add(n.id);
+      }
+    }
+  }
+  if (keepClaim.size === 0) {
+    const claims = raw.nodes.filter((n) => n.type === "claim").slice(0, 24);
+    return filterClaimCluster(raw, new Set(claims.map((c) => c.id)));
+  }
+  return filterClaimCluster(raw, keepClaim);
+}
+
 function filterAllGraph(raw: GraphView): GraphView {
   const nodes = raw.nodes.filter((n) => n.type === "claim" || n.type === "topic");
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -145,29 +143,338 @@ function filterAllGraph(raw: GraphView): GraphView {
   };
 }
 
-export function MasteryGraphPanel({
-  fullscreen = false,
-  onClose,
-}: {
-  fullscreen?: boolean;
-  onClose?: () => void;
-}) {
-  const { setError } = useStore();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const fgRef = useRef<FGApi | null>(null);
+function filterRecentGraph(raw: GraphView): GraphView {
+  const recent = new Set(
+    raw.nodes
+      .filter((n) => n.type === "claim" && Boolean(n.meta?.recent))
+      .map((n) => n.id),
+  );
+  if (recent.size === 0) return { nodes: [], edges: [] };
+  const keep = new Set(recent);
+  for (const e of raw.edges) {
+    if (e.rel !== "confused_with" && e.rel !== "depends_on") continue;
+    if (recent.has(e.source) || recent.has(e.target)) {
+      keep.add(e.source);
+      keep.add(e.target);
+    }
+  }
+  return filterClaimCluster(raw, keep);
+}
+
+function edgeBlurb(e: GraphEdge): string {
+  const meta = e.meta ?? {};
+  if (e.rel === "confused_with") {
+    const bits: string[] = [
+      meta.cross_topic ? "分属不同主题，但容易搞混" : "这两条经常一起搞混",
+    ];
+    if (meta.source_topic && meta.target_topic) {
+      bits.push(
+        `${cleanLabel(String(meta.source_topic))} ↔ ${cleanLabel(String(meta.target_topic))}`,
+      );
+    }
+    if (meta.reason_summary) bits.push(String(meta.reason_summary));
+    return bits.join("。");
+  }
+  if (e.rel === "depends_on") {
+    const prereq = meta.prereq_label
+      ? cleanLabel(String(meta.prereq_label))
+      : null;
+    if (meta.unmet) {
+      return prereq
+        ? `还没过：「${prereq}」。建议先练这条。`
+        : "箭头指向的那条还没过，建议先练它。";
+    }
+    return prereq ? `前置已过：「${prereq}」。` : "这条前置已经过了。";
+  }
+  return e.rel;
+}
+
+function claimSize(fails: number): number {
+  if (fails >= 4) return 42;
+  if (fails >= 2) return 36;
+  if (fails >= 1) return 32;
+  return 28;
+}
+
+function toElements(view: GraphView): ElementDefinition[] {
+  const topicKeyByClaim = new Map<string, string>();
+  for (const e of view.edges) {
+    if (e.rel === "has_topic") topicKeyByClaim.set(e.source, e.target);
+  }
+
+  const els: ElementDefinition[] = [];
+  for (const n of view.nodes) {
+    if (n.type !== "claim" && n.type !== "topic") continue;
+    const fails = Number(n.meta?.fail_count ?? 0);
+    const label = cleanLabel(n.label) || (n.type === "topic" ? "主题" : "命题");
+    const topicKey =
+      n.type === "topic"
+        ? n.id
+        : topicKeyByClaim.get(n.id) ||
+          (n.meta?.topic != null ? String(n.meta.topic) : n.id);
+    const tone = TOPIC_TONES[hashTone(topicKey)];
+    const size = n.type === "claim" ? claimSize(fails) : 0;
+    els.push({
+      group: "nodes",
+      data: {
+        id: n.id,
+        label,
+        shortLabel: shortLabel(label, n.type === "topic" ? 14 : 16),
+        type: n.type,
+        fails,
+        size,
+        topic: n.meta?.topic != null ? String(n.meta.topic) : "",
+        recent: Boolean(n.meta?.recent),
+        fill: n.type === "topic" ? tone.fill : tone.claim,
+        border: n.type === "topic" ? tone.border : tone.claimBorder,
+        raw: n,
+      },
+      classes: [
+        n.type,
+        n.type === "claim" && fails > 0 ? "hasFail" : "",
+        n.type === "claim" && fails >= 3 ? "hasFailMore" : "",
+        n.type === "claim" && Boolean(n.meta?.recent) ? "recent" : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+  const ids = new Set(els.map((e) => String(e.data?.id)));
+  for (const e of view.edges) {
+    if (!ids.has(e.source) || !ids.has(e.target)) continue;
+    if (
+      e.rel !== "confused_with" &&
+      e.rel !== "depends_on" &&
+      e.rel !== "has_topic"
+    ) {
+      continue;
+    }
+    const w = e.weight ?? 1;
+    els.push({
+      group: "edges",
+      data: {
+        id: `${e.rel}:${e.source}->${e.target}`,
+        source: e.source,
+        target: e.target,
+        rel: e.rel,
+        weight: w,
+        width: e.rel === "has_topic" ? 1 : Math.min(1.2 + w * 0.55, 3.2),
+        raw: e,
+      },
+      classes: [
+        e.rel,
+        e.meta?.cross_topic ? "crossTopic" : "",
+        e.meta?.unmet ? "unmet" : "",
+        e.meta?.active || w >= 2 ? "strong" : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+  return els;
+}
+
+const STYLE = [
+  {
+    selector: "node",
+    style: {
+      "background-color": "data(fill)",
+      "border-width": 1.5,
+      "border-color": "data(border)",
+      color: "#3a3a3c",
+      "font-size": 11,
+      "font-weight": 500,
+      "font-family":
+        "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
+      "text-valign": "bottom",
+      "text-halign": "center",
+      "text-margin-y": 8,
+      "text-max-width": 112,
+      "text-wrap": "wrap",
+      "text-opacity": 1,
+      "overlay-opacity": 0,
+      "transition-property":
+        "background-color, border-color, border-width, opacity, width, height",
+      "transition-duration": "0.15s",
+    },
+  },
+  {
+    selector: "node.topic",
+    style: {
+      shape: "round-rectangle",
+      label: "data(shortLabel)",
+      width: "label",
+      height: 30,
+      padding: "10px",
+      color: "#1d1d1f",
+      "font-size": 12,
+      "font-weight": 600,
+      "text-valign": "center",
+      "text-halign": "center",
+      "text-margin-y": 0,
+      "text-max-width": 140,
+      "border-width": 1,
+    },
+  },
+  {
+    selector: "node.claim",
+    style: {
+      shape: "ellipse",
+      label: "data(shortLabel)",
+      width: "data(size)",
+      height: "data(size)",
+      color: "#1d1d1f",
+      "font-size": 11,
+      "font-weight": 500,
+      "text-background-color": "#f5f5f7",
+      "text-background-opacity": 0.85,
+      "text-background-padding": "2px",
+      "text-background-shape": "round-rectangle",
+    },
+  },
+  {
+    selector: "node.claim.hasFailMore",
+    style: {
+      "border-width": 2,
+      color: "#1d1d1f",
+    },
+  },
+  {
+    selector: "node.claim.recent",
+    style: {
+      "border-width": 2,
+    },
+  },
+  {
+    selector: "node:selected",
+    style: {
+      "border-width": 2.5,
+      "border-color": "#1d1d1f",
+      "z-index": 20,
+    },
+  },
+  {
+    selector: "node.claim:selected, node.claim.hover",
+    style: {
+      "font-weight": 600,
+      "z-index": 20,
+    },
+  },
+  {
+    selector: "node.topic:selected, node.topic.hover",
+    style: {
+      "border-color": "#1d1d1f",
+      "border-width": 1.5,
+      "z-index": 20,
+    },
+  },
+  {
+    selector: "node.dim",
+    style: {
+      opacity: 0.22,
+    },
+  },
+  {
+    selector: "edge",
+    style: {
+      width: "data(width)",
+      "line-color": "#b8c0c8",
+      "curve-style": "bezier",
+      "target-arrow-shape": "none",
+      opacity: 0.95,
+      "overlay-opacity": 0,
+      "transition-property": "line-color, opacity, width",
+      "transition-duration": "0.15s",
+    },
+  },
+  {
+    selector: "edge.has_topic",
+    style: {
+      width: 1,
+      "line-color": "#d8d8dd",
+      opacity: 0.55,
+      "curve-style": "haystack",
+      "haystack-radius": 0.4,
+    },
+  },
+  {
+    selector: "edge.confused_with",
+    style: {
+      "line-color": "#7d92a8",
+      opacity: 0.9,
+    },
+  },
+  {
+    selector: "edge.confused_with.strong",
+    style: {
+      "line-color": "#5f7a94",
+      opacity: 1,
+    },
+  },
+  {
+    selector: "edge.confused_with.crossTopic",
+    style: {
+      "line-color": "#6a849c",
+      "line-style": "solid",
+    },
+  },
+  {
+    selector: "edge.depends_on",
+    style: {
+      "line-color": "#9a9aa1",
+      "line-style": "dashed",
+      "target-arrow-shape": "triangle",
+      "target-arrow-color": "#9a9aa1",
+      "arrow-scale": 0.85,
+    },
+  },
+  {
+    selector: "edge.depends_on.unmet",
+    style: {
+      "line-color": "#6e6e73",
+      "target-arrow-color": "#6e6e73",
+    },
+  },
+  {
+    selector: "edge:selected",
+    style: {
+      "line-color": "#1d1d1f",
+      "target-arrow-color": "#1d1d1f",
+      width: 2.5,
+      opacity: 1,
+      "z-index": 15,
+    },
+  },
+  {
+    selector: "edge.dim",
+    style: {
+      opacity: 0.12,
+    },
+  },
+] as StylesheetJson;
+
+function focusNeighborhood(cy: Core, ele: cytoscape.SingularElementArgument | null) {
+  cy.elements().removeClass("dim");
+  if (!ele) return;
+  const closed = ele.closedNeighborhood();
+  cy.elements().not(closed).addClass("dim");
+}
+
+export function MasteryGraphPanel({ embedded = true }: { embedded?: boolean }) {
+  const { setError, queueVerifyClaim, setMasteryGraphOpen } = useStore();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<Core | null>(null);
   const [raw, setRaw] = useState<GraphView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<GraphNode | null>(null);
-  const [hoverId, setHoverId] = useState<string | null>(null);
   const [focus, setFocus] = useState<FocusMode>("weak");
-  const [size, setSize] = useState({ w: 400, h: 480 });
+  const [sel, setSel] = useState<Sel>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const g = await api<GraphView>("/v1/obs/graph");
       setRaw(g);
-      setSelected(null);
+      setSel(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -179,314 +486,271 @@ export function MasteryGraphPanel({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!fullscreen || !onClose) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [fullscreen, onClose]);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const cr = entries[0]?.contentRect;
-      if (!cr) return;
-      setSize({
-        w: Math.max(240, Math.floor(cr.width)),
-        h: Math.max(240, Math.floor(cr.height)),
-      });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const graph = useMemo(() => {
+  const view = useMemo(() => {
     if (!raw) return null;
-    return focus === "weak" ? filterWeakGraph(raw) : filterAllGraph(raw);
+    if (focus === "recent") return filterRecentGraph(raw);
+    if (focus === "all") return filterAllGraph(raw);
+    return filterWeakGraph(raw);
   }, [raw, focus]);
 
-  const data = useMemo(() => {
-    const nodes: FGNode[] = (graph?.nodes ?? []).map((n) => {
-      const failCount = Number(n.meta?.fail_count ?? 0);
-      const clean = cleanLabel(n.label) || (n.type === "topic" ? "主题" : "命题");
-      let val = 1;
-      if (n.type === "topic") val = 5;
-      else if (n.type === "claim") val = 1.4 + Math.min(3.2, failCount * 0.75);
-      return {
-        ...n,
-        name: clean,
-        clean,
-        failCount,
-        topicKey: String(n.meta?.topic ?? (n.type === "topic" ? clean : "")),
-        val,
-      };
-    });
-    const links: FGLink[] = (graph?.edges ?? []).map((e) => ({
-      source: e.source,
-      target: e.target,
-      rel: e.rel,
-      weight: e.weight ?? 1,
-      active: Boolean(e.meta?.active),
-    }));
-    return { nodes, links };
-  }, [graph]);
+  const claimCount = useMemo(
+    () => (view?.nodes ?? []).filter((n) => n.type === "claim").length,
+    [view],
+  );
+
+  const edgeStats = useMemo(() => {
+    const edges = view?.edges ?? [];
+    return {
+      confuse: edges.filter((e) => e.rel === "confused_with").length,
+      depends: edges.filter((e) => e.rel === "depends_on").length,
+    };
+  }, [view]);
 
   useEffect(() => {
-    const fg = fgRef.current;
-    if (!fg || data.nodes.length === 0) return;
+    const host = hostRef.current;
+    if (!host || !view) return;
 
-    fg.d3Force(
-      "link",
-      forceLink<FGNode, FGLink>()
-        .id((d) => d.id)
-        .distance((l) => {
-          if (l.rel === "confused_with") {
-            return l.active || l.weight >= 2 ? 52 : 64;
-          }
-          if (l.rel === "depends_on") return 58;
-          return 78;
-        })
-        .strength((l) => {
-          if (l.rel === "confused_with") {
-            return l.active || l.weight >= 2 ? 0.95 : 0.65;
-          }
-          if (l.rel === "depends_on") return 0.55;
-          return 0.4;
-        }),
-    );
-    fg.d3Force(
-      "charge",
-      forceManyBody()
-        .strength((d) => {
-          const n = d as FGNode;
-          return n.type === "topic" ? -220 : -130;
-        })
-        .distanceMax(360),
-    );
-    fg.d3Force(
-      "collide",
-      forceCollide<FGNode>()
-        .radius((d) => (d.type === "topic" ? 28 : 14 + d.val * 2.2))
-        .strength(0.95)
-        .iterations(3),
-    );
-    fg.d3Force("center", forceCenter(0, 0).strength(0.12));
-    fg.d3Force("x", forceX(0).strength(0.08));
-    fg.d3Force("y", forceY(0).strength(0.08));
-    fg.d3ReheatSimulation();
+    const elements = toElements(view);
+    if (cyRef.current) {
+      cyRef.current.destroy();
+      cyRef.current = null;
+    }
 
-    const pad = fullscreen ? 48 : 32;
-    const t1 = window.setTimeout(() => fg.zoomToFit(400, pad), 180);
-    const t2 = window.setTimeout(() => fg.zoomToFit(280, pad), 700);
-    const t3 = window.setTimeout(() => fg.zoomToFit(220, Math.max(28, pad - 8)), 1200);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
+    const cy = cytoscape({
+      container: host,
+      elements,
+      style: STYLE,
+      minZoom: 0.4,
+      maxZoom: 2.6,
+      wheelSensitivity: 0.22,
+      boxSelectionEnabled: false,
+      autoungrabify: false,
+      layout: {
+        name: "fcose",
+        animate: true,
+        animationDuration: 420,
+        animationEasing: "ease-out",
+        randomize: true,
+        fit: true,
+        padding: 48,
+        nodeSeparation: 72,
+        idealEdgeLength: 110,
+        edgeElasticity: 0.28,
+        nestingFactor: 0.08,
+        gravity: 0.28,
+        gravityRange: 3.8,
+        quality: "proof",
+        nodeDimensionsIncludeLabels: true,
+        packComponents: true,
+        tile: true,
+      } as cytoscape.LayoutOptions,
+    });
+    cyRef.current = cy;
+
+    const clearHover = () => {
+      cy.nodes().removeClass("hover");
     };
-  }, [data, size.w, size.h, focus, fullscreen]);
 
-  const claimCount = useMemo(
-    () => (graph?.nodes ?? []).filter((n) => n.type === "claim").length,
-    [graph],
-  );
+    cy.on("tap", "node", (evt) => {
+      const n = evt.target;
+      cy.elements().unselect();
+      n.select();
+      focusNeighborhood(cy, n);
+      const rawNode = n.data("raw") as GraphNode;
+      if (rawNode.type === "claim") setSel({ kind: "claim", node: rawNode });
+      else setSel({ kind: "topic", node: rawNode });
+    });
+    cy.on("tap", "edge", (evt) => {
+      const e = evt.target;
+      if (e.data("rel") === "has_topic") return;
+      cy.elements().unselect();
+      e.select();
+      focusNeighborhood(cy, e);
+      const rawEdge = e.data("raw") as GraphEdge;
+      setSel({ kind: "edge", edge: rawEdge, blurb: edgeBlurb(rawEdge) });
+    });
+    cy.on("tap", (evt) => {
+      if (evt.target === cy) {
+        cy.elements().unselect();
+        focusNeighborhood(cy, null);
+        setSel(null);
+      }
+    });
+    cy.on("mouseover", "node", (evt) => {
+      clearHover();
+      evt.target.addClass("hover");
+      if (cy.$(":selected").empty()) focusNeighborhood(cy, evt.target);
+    });
+    cy.on("mouseout", "node", () => {
+      clearHover();
+      const selected = cy.$(":selected");
+      if (selected.nonempty()) focusNeighborhood(cy, selected[0]!);
+      else focusNeighborhood(cy, null);
+    });
 
-  const selectedClean = selected ? cleanLabel(selected.label) : "";
+    const onResize = () => {
+      cy.resize();
+      cy.fit(undefined, 44);
+    };
+    const ro = new ResizeObserver(onResize);
+    ro.observe(host);
 
-  const body = (
-    <>
+    return () => {
+      ro.disconnect();
+      cy.destroy();
+      if (cyRef.current === cy) cyRef.current = null;
+    };
+  }, [view]);
+
+  const onLaunch = useCallback(() => {
+    if (!sel || sel.kind !== "claim") return;
+    const claim = claimFromNode(sel.node);
+    if (!claim) return;
+    queueVerifyClaim(claim);
+    setMasteryGraphOpen(false);
+  }, [sel, queueVerifyClaim, setMasteryGraphOpen]);
+
+  const selectedClaim =
+    sel?.kind === "claim" ? claimFromNode(sel.node) : null;
+  const cta = selectedClaim ? ctaForClaim(selectedClaim) : null;
+  const failCount =
+    sel?.kind === "claim" ? Number(sel.node.meta?.fail_count ?? 0) : 0;
+
+  const emptyLine =
+    focus === "recent" ? "近 14 天暂无还差点" : "暂时没有要盯的弱点";
+
+  return (
+    <div className={`${styles.root} ${embedded ? styles.embedded : ""}`}>
       <div className={styles.toolbar}>
-        <div className={styles.toolbarLeft}>
-          {fullscreen ? <h2 className={styles.fsTitle}>弱点图谱</h2> : null}
-          <div className={styles.focusToggle} role="tablist" aria-label="图谱范围">
+        <div className={styles.filters} role="tablist" aria-label="显示范围">
+          {(
+            [
+              ["weak", "还没过"],
+              ["recent", "近14天"],
+              ["all", "全部"],
+            ] as const
+          ).map(([id, label]) => (
             <button
+              key={id}
               type="button"
               role="tab"
-              aria-selected={focus === "weak"}
-              className={focus === "weak" ? styles.focusActive : styles.focusBtn}
-              onClick={() => setFocus("weak")}
+              aria-selected={focus === id}
+              className={focus === id ? styles.filterOn : styles.filter}
+              onClick={() => setFocus(id)}
             >
-              薄弱
+              {label}
+              {focus === id && !loading && claimCount > 0 ? (
+                <span className={styles.filterCount}>{claimCount}</span>
+              ) : null}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={focus === "all"}
-              className={focus === "all" ? styles.focusActive : styles.focusBtn}
-              onClick={() => setFocus("all")}
-            >
-              全部
-            </button>
-          </div>
-          {!loading && claimCount > 0 ? (
-            <span className={styles.stats}>{claimCount} 题</span>
-          ) : null}
+          ))}
         </div>
-        <div className={styles.toolbarRight}>
-          <button type="button" className={styles.refresh} onClick={() => void load()}>
-            刷新
-          </button>
-          {fullscreen && onClose ? (
-            <button
-              type="button"
-              className={styles.closeFs}
-              onClick={onClose}
-              aria-label="关闭"
-            >
-              关闭
-            </button>
-          ) : null}
-        </div>
+        <button
+          type="button"
+          className={styles.refresh}
+          onClick={() => void load()}
+        >
+          刷新
+        </button>
       </div>
 
-      <div className={styles.canvasWrap} ref={wrapRef}>
-        {loading ? (
-          <p className={styles.empty}>加载中…</p>
-        ) : data.nodes.length === 0 ? (
-          <p className={styles.empty}>暂无薄弱点</p>
-        ) : (
-          <ForceGraph2D
-            ref={fgRef as never}
-            width={size.w}
-            height={size.h}
-            graphData={data}
-            nodeId="id"
-            nodeVal="val"
-            nodeLabel={(n) => (n as FGNode).clean}
-            linkDirectionalArrowLength={(link) =>
-              (link as FGLink).rel === "depends_on" ? 4 : 0
-            }
-            linkDirectionalArrowRelPos={0.85}
-            cooldownTicks={180}
-            warmupTicks={60}
-            enableNodeDrag
-            backgroundColor="rgba(0,0,0,0)"
-            linkCanvasObjectMode={() => "replace"}
-            linkCanvasObject={(link, ctx, globalScale) => {
-              const l = link as FGLink;
-              const src = l.source as FGNode;
-              const tgt = l.target as FGNode;
-              if (
-                src?.x == null ||
-                src?.y == null ||
-                tgt?.x == null ||
-                tgt?.y == null
-              ) {
-                return;
-              }
-              const active = l.rel === "confused_with" && (l.active || l.weight >= 2);
-              ctx.beginPath();
-              ctx.moveTo(src.x, src.y);
-              ctx.lineTo(tgt.x, tgt.y);
-              if (l.rel === "confused_with") {
-                ctx.strokeStyle = active
-                  ? "rgba(29,29,31,0.55)"
-                  : "rgba(29,29,31,0.22)";
-                ctx.lineWidth =
-                  (active ? Math.min(3.2, 1.6 + l.weight * 0.35) : 1.2) / globalScale;
-                ctx.setLineDash([]);
-              } else if (l.rel === "depends_on") {
-                // Distinct from confuse: quieter dash + arrow (directional prereq).
-                ctx.strokeStyle = "rgba(29,29,31,0.35)";
-                ctx.lineWidth = 1.35 / globalScale;
-                ctx.setLineDash([4 / globalScale, 4 / globalScale]);
-              } else {
-                // topic spokes stay nearly invisible — structure without noise
-                ctx.strokeStyle = "rgba(0,0,0,0.08)";
-                ctx.lineWidth = 0.9 / globalScale;
-                ctx.setLineDash([3 / globalScale, 5 / globalScale]);
-              }
-              ctx.stroke();
-              ctx.setLineDash([]);
-            }}
-            nodeCanvasObject={(node, ctx, globalScale) => {
-              const n = node as FGNode;
-              const x = n.x ?? 0;
-              const y = n.y ?? 0;
-              const isSel = selected?.id === n.id;
-              const isHover = hoverId === n.id;
-              // Topics always labeled; claims only when focused — kills label soup.
-              const showLabel = n.type === "topic" || isSel || isHover;
-
-              let r = 5;
-              if (n.type === "topic") r = 11;
-              else r = 5 + Math.min(5, n.failCount * 1.1);
-
-              if (n.type === "topic" || isSel || isHover) {
-                ctx.beginPath();
-                ctx.arc(x, y, r + 3.5 / globalScale, 0, 2 * Math.PI);
-                ctx.fillStyle =
-                  isSel || isHover ? "rgba(29,29,31,0.1)" : "rgba(29,29,31,0.05)";
-                ctx.fill();
-              }
-
-              ctx.beginPath();
-              ctx.arc(x, y, r, 0, 2 * Math.PI, false);
-              ctx.fillStyle = nodeFill(n);
-              ctx.fill();
-              if (isSel || isHover) {
-                ctx.strokeStyle = "rgba(29,29,31,0.7)";
-                ctx.lineWidth = 1.6 / globalScale;
-                ctx.stroke();
-              }
-
-              if (showLabel) {
-                const max = n.type === "topic" ? 10 : 22;
-                const label = shortLabel(n.clean, max);
-                const fontSize = Math.max(
-                  11,
-                  Math.min(14, (n.type === "topic" ? 13 : 12) / Math.sqrt(globalScale)),
-                );
-                ctx.font = `${n.type === "topic" ? 600 : 500} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "top";
-                const ty = y + r + 5 / globalScale;
-                ctx.lineWidth = 3.2 / globalScale;
-                ctx.strokeStyle = "rgba(245,245,247,0.95)";
-                ctx.strokeText(label, x, ty);
-                ctx.fillStyle =
-                  n.type === "topic"
-                    ? "rgba(29,29,31,0.88)"
-                    : "rgba(50,50,55,0.9)";
-                ctx.fillText(label, x, ty);
-              }
-            }}
-            onNodeClick={(node) => setSelected(node as FGNode)}
-            onNodeHover={(node) => setHoverId(node ? (node as FGNode).id : null)}
-            onBackgroundClick={() => setSelected(null)}
-            onEngineStop={() => {
-              fgRef.current?.zoomToFit(260, fullscreen ? 40 : 28);
+      <div className={styles.body}>
+        <div className={styles.canvas}>
+          {loading ? <p className={styles.empty}>加载中…</p> : null}
+          {!loading && claimCount === 0 ? (
+            <p className={styles.empty}>{emptyLine}</p>
+          ) : null}
+          {!loading && claimCount > 0 ? (
+            <div className={styles.legend} aria-hidden>
+              <span className={styles.legendItem}>
+                <span className={`${styles.legendSwatch} ${styles.legendConfuse}`} />
+                容易搞混
+                {edgeStats.confuse ? ` · ${edgeStats.confuse}` : ""}
+              </span>
+              <span className={styles.legendItem}>
+                <span className={`${styles.legendSwatch} ${styles.legendDepends}`} />
+                还差前置
+                {edgeStats.depends ? ` · ${edgeStats.depends}` : ""}
+              </span>
+              <span className={styles.legendItem}>
+                <span className={`${styles.legendSwatch} ${styles.legendTopic}`} />
+                主题
+              </span>
+            </div>
+          ) : null}
+          <div
+            ref={hostRef}
+            className={styles.cy}
+            style={{
+              visibility: !loading && claimCount > 0 ? "visible" : "hidden",
             }}
           />
-        )}
+        </div>
 
-        {selected && selectedClean ? (
-          <div className={styles.detail}>
-            <p className={styles.detailLabel}>{selectedClean}</p>
-            {selected.type === "claim" ? (
-              <p className={styles.detailMeta}>
-                失败 {Number(selected.meta?.fail_count ?? 0)} 次
-                {selected.meta?.topic
-                  ? ` · ${cleanLabel(String(selected.meta.topic))}`
-                  : null}
+        <aside className={styles.side} aria-label="选中详情">
+          {!sel ? (
+            <div className={styles.sideIdle}>
+              <p className={styles.sideIdleTitle}>还没选</p>
+              <p className={styles.sideIdleBody}>
+                点左边的圆点，这里会显示内容，并可以开考。
               </p>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+
+          {sel?.kind === "claim" && selectedClaim ? (
+            <div className={styles.sideCard}>
+              <p className={styles.sideLabel}>{cleanLabel(sel.node.label)}</p>
+              <div className={styles.sideChips}>
+                {failCount > 0 ? (
+                  <span className={styles.chipWarn}>没过 {failCount} 次</span>
+                ) : (
+                  <span className={styles.chip}>还没考过</span>
+                )}
+                {sel.node.meta?.topic ? (
+                  <span className={styles.chip}>
+                    {cleanLabel(String(sel.node.meta.topic))}
+                  </span>
+                ) : null}
+                {sel.node.meta?.recent ? (
+                  <span className={styles.chip}>近 14 天</span>
+                ) : null}
+              </div>
+              {sel.node.meta?.last_fail_reason ? (
+                <p className={styles.sideMeta}>
+                  上次：{String(sel.node.meta.last_fail_reason)}
+                </p>
+              ) : null}
+              {cta ? (
+                <div className={styles.sideActions}>
+                  <button type="button" className={styles.cta} onClick={onLaunch}>
+                    {cta.label}
+                  </button>
+                  {cta.note ? (
+                    <span className={styles.ctaNote}>{cta.note}</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {sel?.kind === "topic" ? (
+            <div className={styles.sideCard}>
+              <p className={styles.sideEyebrow}>主题</p>
+              <p className={styles.sideLabel}>{cleanLabel(sel.node.label)}</p>
+              <p className={styles.sideMeta}>再点旁边的圆点，就能开考。</p>
+            </div>
+          ) : null}
+
+          {sel?.kind === "edge" ? (
+            <div className={styles.sideCard}>
+              <p className={styles.sideEyebrow}>
+                {sel.edge.rel === "confused_with" ? "容易搞混" : "还差前置"}
+              </p>
+              <p className={styles.sideMeta}>{sel.blurb}</p>
+            </div>
+          ) : null}
+        </aside>
       </div>
-    </>
+    </div>
   );
-
-  if (fullscreen) {
-    return (
-      <div className={styles.fsRoot} role="dialog" aria-modal="true" aria-label="弱点图谱">
-        <div className={styles.fsPanel}>{body}</div>
-      </div>
-    );
-  }
-
-  return <div className={styles.panel}>{body}</div>;
 }

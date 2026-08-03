@@ -13,7 +13,10 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
+| **`apple-interview-calendar/`** | 面试安排自动同步 Mac 日历「面试」 |
+| **`settings-ia-shell-activity/`** | Settings 我/提醒/高级；动态顶栏 + 删除 API |
 | **`main-path-converge/`** | 产品故事 S1–S8：空态/深挖诚实/过关可感（UX 作者自管；近归档） |
+| **`mastery-graph-deepen/`** | 弱点图谱：开练用法 + 跨主题/近14天结构（非百科 KG） |
 
 ## Recently archived
 
@@ -56,4 +59,4 @@ Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 - Auto prompt/skill register on harness adopt（仍禁止；审计 only）
 - Broad per-agent multi-model beyond Critic
 - ~~Broad agent-as-tool against full MCP catalog~~ — **not near-term** (whitelist stays)
-- Mastery-graph deepen（用法 + topic 簇；非百科 KG）— not opened yet
+- ~~Mastery-graph deepen~~ → opened as `mastery-graph-deepen/`

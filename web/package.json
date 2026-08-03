@@ -9,16 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "d3-force": "^3.0.0",
+    "cytoscape": "^3.34.0",
+    "cytoscape-fcose": "^2.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-force-graph-2d": "^1.29.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "yuque-editor-core": "^0.0.7"
   },
   "devDependencies": {
-    "@types/d3-force": "^3.0.10",
+    "@types/cytoscape": "^3.21.9",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",

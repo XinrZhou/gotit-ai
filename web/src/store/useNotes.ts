@@ -63,6 +63,11 @@ export function useNotes({
     setPendingExamineClaim(claim);
   }, [ingestUi]);
 
+  /** Queue a claim into ChatPage startVerifyClaim (graph / external handoff). */
+  const queueVerifyClaim = useCallback((claim: Claim) => {
+    setPendingExamineClaim(claim);
+  }, []);
+
   const onOpenNote = useCallback(
     (id: string) => {
       void (async () => {
@@ -201,6 +206,7 @@ export function useNotes({
     clearIngestUi,
     dismissIngestReady,
     requestExamineFromIngest,
+    queueVerifyClaim,
     pendingExamineClaim,
     clearPendingExamineClaim,
   };

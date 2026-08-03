@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-03 (eval-harness-loop metric contract + failure writeback).
+> Last reviewed: 2026-08-03 (apple-interview-calendar).
 
 ## Product (one line)
 
@@ -29,9 +29,12 @@ Learner empty states: owed → brief is primary; idle →「添加资料」is pr
 (workflows / calibrate / new chat are secondary). Product-story checklist:
 `openspec/changes/main-path-converge/design.md` (S1–S5).
 
-旁路（入口不强化）：弱点图谱、Settings（Skills/MCP/计划推送/动态）、
-Apple 桥、Harness API/CLI、CAT 题参写回。当前波次：
+旁路（入口不强化）：弱点图谱、顶栏动态、Settings（我/提醒/高级）、
+Apple 桥（日计划↔提醒事项；面试↔日历）、Harness API/CLI、CAT 题参写回。当前波次：
 - UX / 主路径摩擦：`openspec/changes/main-path-converge/`（作者自管）
+- 弱点图谱加深：`openspec/changes/mastery-graph-deepen/`
+- 设置 IA + 动态删除：`openspec/changes/settings-ia-shell-activity/`
+- 面试 → Apple 日历：`openspec/changes/apple-interview-calendar/`
 - 评测闭环 + 失败写回可回归已归档：
   `archive/2026-08-03-eval-harness-loop/`、
   `archive/2026-08-03-failure-writeback-regress/`
@@ -129,11 +132,12 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   shows as a clearable chip on the composer meta row
 - Chat reading column centered (~720px); thinking toggle is quiet text (not a
   pill); workflow bar hint + ModeHeader「正在…」context
-- **Settings** (conversation top-right account): 资料 / Skills / MCP / 计划推送 / 动态 —
-  profile + DIY skill install/view/edit + MCP connectors；**计划推送** = 早/晚计划
-  cron + 可选 AI/YouTube 源（「保存并同步」→ OpenClaw cron）；
-  动态 = OpenClaw 推送/兴趣写回（分类/时间筛选；列表主标题为当日 subject）；资料含
-  Apple 计划桥导入说明
+- **Settings** (conversation top-right account): **我 / 提醒 / 高级** —
+  profile + resume + interviews（临近备考提醒）; 提醒 = digest cron/prefs;
+  高级 = Skills + MCP. **动态** is a top-bar surface (beside 弱点图谱), not a
+  Settings tab — list / promote / delete shell_event+interest
+  (`DELETE /v1/shell/activity/{id}`, `POST /v1/shell/activity/delete`).
+  Apple plan sync is a one-liner under 我.
 - **Harness API** (dev/CI, not a Settings tab): `POST/GET/PATCH /v1/harness/runs`
   runs `dev`/`gold` + human `adopt|observe|reject` in `summary` (no auto prompt
   change); CLI `scripts/run_harness.py` remains. Run `summary` contract keys:
@@ -146,8 +150,9 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   adopt|observe|reject (audit only; VISION P5 — holdout before adopt;
   adopt ≠ auto-apply prompt/skill).
 - Nav rail = brand + library + threads (no account footer)
-- Conversation top-right: **弱点图谱** (fullscreen mastery graph) + account /
-  Settings
+- Conversation top-right: **弱点图谱** opens **in the main column** (keeps
+  left threads + top bar; not fullscreen) — claim 可开考/回讲/深挖；边可解释
+  易混/跨主题/前置；筛选薄弱|近14天|全部（verify-derived，非百科 KG）
 - **Verify loop**: examine → critic recheck → deterministic gate → trajectory / SR weighting
   + mastery-graph writeback (`fail_events`, `confused_with` edges)
   + Critic may bind a distinct OpenAI-compatible model via
@@ -210,7 +215,9 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
 - **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; optional
   `depends_on` prereq edges; budget subgraph injects into Axiom; fullscreen
-  「弱点图谱」from conversation top bar (`react-force-graph-2d`); `/v1/obs/graph`
+  「弱点图谱」(`cytoscape` + fcose，主栏内嵌非全屏); `/v1/obs/graph` enriches meta
+  (`claim_id`, `recent`, `cross_topic`, `unmet`, `preferred_check_mode`, …)
+  for launch + explain — `openspec/changes/mastery-graph-deepen/`
 
 ## OpenClaw shell (not in gotit core)
 
@@ -219,15 +226,21 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   `docs/openclaw-digest.md`；skill `skills/digest/` + Gateway cron（Asia/Shanghai）
 - **Bridge writeback**：digest → `shell_event`；「有用」→ `interest`；
   interest → `POST /v1/shell/interests/{id}/promote`（1–3 可考 claim + 今日
-  plan；空话拒；幂等；MCP `gotit_promote_interest`）；Settings「动态」一键「变成可考」；
-  prefs `/v1/shell/digest-prefs` + `POST /v1/shell/digest-cron/sync`；obs `/v1/shell/*` + `/v1/obs/profile|graph`；Settings「计划推送」「动态」
+  plan；空话拒；幂等；MCP `gotit_promote_interest`）；顶栏「动态」一键「变成可考」
+  + 删除（`DELETE /v1/shell/activity/{id}` / `POST …/delete` /
+  MCP `gotit_delete_shell_activity`）；prefs `/v1/shell/digest-prefs` +
+  `POST /v1/shell/digest-cron/sync`；obs `/v1/shell/*` + `/v1/obs/profile|graph`；
+  Settings「提醒」+ 顶栏「动态」
 - **Apple plan bridge**（P1d）：Reminders ↔ `plan_items`（`due_time`；upsert/delete
   自动 sync；早推 import→push reconcile）；`gotit.bridge.reminders` + `skills/apple-plan/`
   （osascript；**不**进 `gotit.core`）
+- **Apple interview calendar**（P3d+）：面试 upsert/patch/delete → Calendar「面试」
+  （标记 `[gotit-interview:<uuid>]`；完成/取消则删）；`gotit.bridge.calendar` +
+  `skills/apple-interview/`；`GOTIT_SKIP_APPLE_SYNC=1` 可跳过
 - **Interviews**（P3d + P4）：`InterviewEvent` + REST/MCP due-reminders；
   countdown ramp（deterministic `ramp_tier`：silent/light/warm/urgent；
   light/warm 低频 nudge + `last_ramp_nudge_at` 去重；prefs 可关）；
-  Settings「资料」列表 + 升温开关；companion `get_upcoming_interview`；
+  Settings「我」列表 +「备考提醒」开关；companion `get_upcoming_interview`；
   今日简报 `interview_focus` 与 ramp 粘合（prefs 关则无偏置条）；
   投递 `skills/interview-remind/`（offset + ramp 同 cron）
 - **Failure → 再练**（P2/P4）：`almost|owe_next` → `failure_digest`（同 claim+verdict

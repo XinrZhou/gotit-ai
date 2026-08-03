@@ -42,7 +42,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Notes → claims** | Ingest into testable claims + plan; digest「有用」can promote to examinable claims |
 | **Teach-back** | Text or voice transcription; same finalize path as examine |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
-| **Settings** | 资料 / Skills / MCP / 计划推送 / 动态 — profile, DIY skills, plan push prefs, OpenClaw activity |
+| **Settings** | 我 / 提醒 / 高级 — profile + interview reminders, digest prefs, Skills+MCP; top-bar「动态」for OpenClaw activity |
 | **OpenClaw via MCP** | Optional channel; gotit exposes the same domain ops as REST |
 | **Harness** | Snapshot cases via API/CLI (not a Settings tab) so prompt changes stay measurable |
 
@@ -119,6 +119,8 @@ news = separate 20:00 RSS job by default (news separate, optional off):
 `docs/openclaw-digest.md`, `skills/digest/`.
 Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 `skills/apple-plan/`.
+Interview schedule → Mac Calendar: `docs/openclaw-apple-interview.md`,
+`skills/apple-interview/`.
 
 ## How it feels day-to-day
 
@@ -141,8 +143,9 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | Notes / claims / plan / resume drill | Done |
 | REST ↔ MCP parity + harness (API/CLI) | Done |
 | OpenClaw WeChat digests (morning plan / evening wrap+tomorrow / optional news) | Done (P1c) |
-| OpenClaw→gotit shell writeback + Settings「计划推送」「动态」 | Done |
+| OpenClaw→gotit shell writeback + Settings「提醒」+ top-bar「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
+| Interview schedule → Apple Calendar auto-sync | Done |
 | Mastery graph (fail events, confused_with, fullscreen from chat top bar) | Done |
 | Persist workflow turns into thread history | Done |
 | Interview schedule + due reminders | Done (P3d) |

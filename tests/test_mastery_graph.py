@@ -111,6 +111,86 @@ async def test_fail_grows_confused_and_graph_obs(
 
 
 @pytest.mark.asyncio
+async def test_obs_graph_enrichment_cross_topic_and_depends(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    async with session_scope() as session:
+        a = ClaimRow(
+            id=uuid4(),
+            user_id="local",
+            text="Linear algebra basis",
+            status=MasteryStatus.NOT_YET.value,
+            topic="math",
+        )
+        b = ClaimRow(
+            id=uuid4(),
+            user_id="local",
+            text="Attention QK matmul",
+            status=MasteryStatus.NOT_YET.value,
+            topic="transformers",
+            preferred_check_mode="teach_back",
+        )
+        session.add_all([a, b])
+        await session.flush()
+        id_a, id_b = a.id, b.id
+        await graph_ops.record_verify_mastery_writeback(
+            session,
+            user_id="local",
+            claim_id=id_a,
+            topic="math",
+            gate_verdict="owe_next",
+            reason="basis miss",
+        )
+        await graph_ops.record_verify_mastery_writeback(
+            session,
+            user_id="local",
+            claim_id=id_b,
+            topic="transformers",
+            gate_verdict="almost",
+            reason="QK slip",
+        )
+        # Force confuse across topics (same-topic seed won't link math↔transformers).
+        await graph_ops.increment_confused_with(
+            session, user_id="local", claim_a=id_a, claim_b=id_b
+        )
+        await graph_ops.increment_confused_with(
+            session, user_id="local", claim_a=id_a, claim_b=id_b
+        )
+        await graph_ops.add_depends_on(
+            session, user_id="local", claim_id=id_b, prereq_claim_id=id_a
+        )
+
+    graph = await client.get("/v1/obs/graph", headers=auth_headers)
+    assert graph.status_code == 200, graph.text
+    body = graph.json()
+    claims = {n["id"]: n for n in body["nodes"] if n["type"] == "claim"}
+    node_b = claims[f"claim:{id_b}"]
+    assert node_b["meta"]["claim_id"] == str(id_b)
+    assert node_b["meta"]["preferred_check_mode"] == "teach_back"
+    assert node_b["meta"]["recent"] is True
+    assert node_b["meta"]["last_fail_reason"]
+
+    confuse = [
+        e
+        for e in body["edges"]
+        if e["rel"] == "confused_with"
+        and {e["source"], e["target"]} == {f"claim:{id_a}", f"claim:{id_b}"}
+    ]
+    assert confuse
+    assert confuse[0]["meta"]["cross_topic"] is True
+
+    dep = [
+        e
+        for e in body["edges"]
+        if e["rel"] == "depends_on"
+        and e["source"] == f"claim:{id_b}"
+        and e["target"] == f"claim:{id_a}"
+    ]
+    assert dep
+    assert dep[0]["meta"]["unmet"] is True
+
+
+@pytest.mark.asyncio
 async def test_verify_writes_fail_event(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:

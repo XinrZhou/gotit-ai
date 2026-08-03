@@ -42,7 +42,7 @@
 | **笔记 → claim** | 导入资料，抽出可检验主张 + 今日计划；动态「有用」可晋升为可考主张 |
 | **回讲** | 文本或口说转写；与考我同一套终审 |
 | **简历深挖** | 项目 / 简历驱动的模拟面试（桑迪） |
-| **设置** | 资料 / Skills / MCP / 计划推送 / 动态 — 技能、连接器、计划推送配置、推送观测 |
+| **设置** | 我 / 提醒 / 高级 — 资料与临近备考提醒、计划提醒、Skills+MCP；顶栏「动态」观测 OpenClaw 写回 |
 | **弱点图谱** | 对话顶栏「弱点图谱」→ 全屏易混/薄弱/前置依赖力导向图 |
 | **OpenClaw via MCP** | 可选分发渠道；与 REST 共用领域操作 |
 | **Harness** | Case 快照（API / CLI）；提示词改动可测，不进设置页 |
@@ -112,7 +112,8 @@ cd web && npm install && npm run dev   # :5173
 
 详见 `skills/gotit/SKILL.md`。微信通道：`docs/openclaw-wechat.md`。
 早晚计划触达（早=当日计划 / 晚=今日复盘+明日询问；资讯默认晚 20:00 独立推）：`docs/openclaw-digest.md`、`skills/digest/`。
-Apple 提醒事项/备忘录 → gotit 日计划：`docs/openclaw-apple-plan.md`、`skills/apple-plan/`。
+Apple 提醒事项/备忘录 → gotit 日计划：`docs/openclaw-apple-plan.md`、`skills/apple-plan/`。  
+面试安排 → Mac 日历：`docs/openclaw-apple-interview.md`、`skills/apple-interview/`。
 
 ## 日常怎么用
 
@@ -135,12 +136,13 @@ Apple 提醒事项/备忘录 → gotit 日计划：`docs/openclaw-apple-plan.md`
 | 笔记 / claim / 计划 / 简历深挖 | 完成 |
 | REST ↔ MCP + harness（API/CLI） | 完成 |
 | OpenClaw 微信早晚计划触达（资讯独立可选） | 完成（P1c） |
-| OpenClaw→gotit 写回 + 设置「计划推送」「动态」 | 完成 |
+| OpenClaw→gotit 写回 + 设置「提醒」+ 顶栏「动态」 | 完成 |
 | Apple 计划桥（提醒事项/备忘录 → gotit 日计划） | 完成（P1d） |
+| 面试安排 → Apple 日历自动同步 | 完成 |
 | 弱点图谱（失败事件、易混边、对话顶栏一键全屏） | 完成 |
 | 工作流回合写入同一 thread | 完成 |
 | 面试安排 + 到期提醒（MCP/投递 skill） | 完成（P3d） |
-| 面试倒计时升温（分档 + 可关低频 nudge） | 完成（P4） |
+| 临近备考提醒（分档 + 可关低频 nudge） | 完成（P4） |
 | 挂题短讯 / 语音回讲 / 微信 coding skill | 完成（P3b/P3c/P2） |
 | Companion 白名单工具（今日/欠账/开考/记忆 + 轨迹） | 完成 |
 | 气泡 tool 轨迹 + 一键跟进开考 | 完成 |
