@@ -128,7 +128,11 @@ async def set_harness_decision(
     decision: str,
     note: str | None = None,
 ) -> HarnessRun:
-    """Record human holdout decision on ``summary`` (no schema migration)."""
+    """Record human holdout decision on ``summary`` only.
+
+    Audit-only: does **not** call ``register_prompts`` / ``install_skill`` or
+    otherwise mutate prompts/skills. adopt ≠ auto-apply (VISION P5).
+    """
     if decision not in {"adopt", "observe", "reject"}:
         raise ValueError(f"unknown harness decision: {decision}")
     row = await session.get(HarnessRunRow, run_id)
@@ -147,13 +151,20 @@ async def list_harness_runs(
     session: AsyncSession,
     *,
     label: str | None = None,
+    decision: str | None = None,
     limit: int = 50,
 ) -> list[HarnessRun]:
-    stmt = select(HarnessRunRow).order_by(HarnessRunRow.created_at.desc()).limit(limit)
+    """List runs newest-first. ``decision`` filters ``summary.decision`` (audit)."""
+    # Over-fetch when filtering JSON audit field (SQLite/Postgres portable).
+    fetch = limit * 5 if decision is not None else limit
+    stmt = select(HarnessRunRow).order_by(HarnessRunRow.created_at.desc()).limit(fetch)
     if label is not None:
         stmt = stmt.where(HarnessRunRow.label == label)
     rows = list((await session.execute(stmt)).scalars().all())
-    return [_harness_run_view(r) for r in rows]
+    views = [_harness_run_view(r) for r in rows]
+    if decision is not None:
+        views = [v for v in views if (v.summary or {}).get("decision") == decision]
+    return views[:limit]
 
 
 async def list_harness_case_results(

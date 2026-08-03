@@ -40,4 +40,15 @@ async def test_gold_harness_passes(session: AsyncSession) -> None:
         session, build_gold_cases(session), case_set="gold", label="pytest"
     )
     assert run.verdict == "pass"
-    assert run.summary == {"total": 3, "passed": 3, "failed": 0}
+    assert run.summary["total"] == 3
+    assert run.summary["passed"] == 3
+    assert run.summary["failed"] == 0
+    # Contract rollups (vacuous True when gold set has no tagged cases).
+    for key in (
+        "gate_consistent",
+        "routing_ok",
+        "no_spurious_write",
+        "failure_hook_ok",
+    ):
+        assert key in run.summary
+        assert run.summary[key] is True

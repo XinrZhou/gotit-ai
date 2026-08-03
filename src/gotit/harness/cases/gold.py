@@ -50,7 +50,11 @@ def _case_gate_pairs() -> Case:
             )
         return CaseResult(
             passed=all_ok,
-            metrics={"pairs": len(rows), "failed": sum(1 for r in rows if not r["ok"])},
+            metrics={
+                "rollup": "gate_consistent",
+                "pairs": len(rows),
+                "failed": sum(1 for r in rows if not r["ok"]),
+            },
             trace=rows,
         )
 

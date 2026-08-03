@@ -78,9 +78,12 @@ async def create_harness_run(body: HarnessRunCreate) -> HarnessRunDetail:
 async def list_runs(
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
     label: str | None = None,
+    decision: DecisionName | None = None,
 ) -> list[HarnessRun]:
     async with session_scope() as session:
-        return await day_ops.list_harness_runs(session, label=label, limit=limit)
+        return await day_ops.list_harness_runs(
+            session, label=label, decision=decision, limit=limit
+        )
 
 
 @router.get(

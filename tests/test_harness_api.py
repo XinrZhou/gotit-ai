@@ -22,6 +22,14 @@ async def test_run_dev_and_adopt(
     assert run["verdict"] in {"pass", "fail"}
     assert run["summary"]["total"] >= 1
     assert len(body["cases"]) == run["summary"]["total"]
+    for key in (
+        "gate_consistent",
+        "routing_ok",
+        "no_spurious_write",
+        "failure_hook_ok",
+    ):
+        assert key in run["summary"]
+        assert isinstance(run["summary"][key], bool)
 
     run_id = run["id"]
     r = await client.patch(
@@ -39,6 +47,12 @@ async def test_run_dev_and_adopt(
     assert r.status_code == 200
     ids = [x["id"] for x in r.json()]
     assert run_id in ids
+
+    r = await client.get(
+        "/v1/harness/runs?decision=adopt&limit=10", headers=auth_headers
+    )
+    assert r.status_code == 200
+    assert any(x["id"] == run_id for x in r.json())
 
     r = await client.get(f"/v1/harness/runs/{run_id}", headers=auth_headers)
     assert r.status_code == 200
