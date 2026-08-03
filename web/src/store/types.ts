@@ -82,6 +82,8 @@ export type Store = {
   setLibraryOpen: (open: boolean) => void;
   masteryGraphOpen: boolean;
   setMasteryGraphOpen: (open: boolean) => void;
+  shellActivityOpen: boolean;
+  setShellActivityOpen: (open: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   workflowThreadId: string | null;
@@ -103,6 +105,7 @@ export type Store = {
   clearIngestUi: () => void;
   dismissIngestReady: () => void;
   requestExamineFromIngest: () => void;
+  queueVerifyClaim: (claim: Claim) => void;
   pendingExamineClaim: Claim | null;
   clearPendingExamineClaim: () => void;
   showCompose: boolean;

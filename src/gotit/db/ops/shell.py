@@ -404,6 +404,48 @@ async def list_shell_activity(
     return pooled[:limit]
 
 
+_SHELL_ACTIVITY_KINDS = frozenset({KIND_SHELL_EVENT, KIND_INTEREST})
+
+
+async def delete_shell_activity(
+    session: AsyncSession,
+    memory_id: UUID,
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> None:
+    """Delete one shell_event or interest row. Raises KeyError if missing."""
+    row = await session.get(MemoryEntryRow, memory_id)
+    if row is None or row.user_id != user_id:
+        raise KeyError(f"shell activity not found: {memory_id}")
+    if row.kind not in _SHELL_ACTIVITY_KINDS:
+        raise ValueError(f"not shell activity kind: {row.kind}")
+    await session.delete(row)
+    await session.flush()
+
+
+async def delete_shell_activity_many(
+    session: AsyncSession,
+    memory_ids: list[UUID],
+    *,
+    user_id: str = DEFAULT_USER_ID,
+) -> int:
+    """Delete shell_event/interest rows by id. Returns deleted count."""
+    if not memory_ids:
+        return 0
+    deleted = 0
+    for mid in memory_ids:
+        row = await session.get(MemoryEntryRow, mid)
+        if row is None or row.user_id != user_id:
+            continue
+        if row.kind not in _SHELL_ACTIVITY_KINDS:
+            continue
+        await session.delete(row)
+        deleted += 1
+    if deleted:
+        await session.flush()
+    return deleted
+
+
 async def get_digest_prefs(
     session: AsyncSession,
     *,
@@ -592,13 +634,18 @@ async def build_graph_v0(
     user_id: str = DEFAULT_USER_ID,
     claim_limit: int = 200,
     interest_limit: int = 100,
+    active_days: int = 14,
 ) -> GraphView:
     """claim–topic–project + confused_with / depends_on; interest may attach to topic."""
+    from datetime import UTC, datetime, timedelta
+
     from gotit.core.mastery_graph import CONFUSED_THRESHOLD
     from gotit.db.ops.graph import (
         fail_counts_by_claim,
+        latest_fail_by_claim,
         list_confused_edges,
         list_depends_edges,
+        mastered_claim_ids,
     )
 
     stmt = (
@@ -620,11 +667,36 @@ async def build_graph_v0(
     interests = await list_memory(
         session, user_id=user_id, kind=KIND_INTEREST, limit=interest_limit
     )
+    claim_uuids = [c.id for c in claims]
     fail_counts = await fail_counts_by_claim(
-        session, user_id=user_id, claim_ids=[c.id for c in claims]
+        session, user_id=user_id, claim_ids=claim_uuids
+    )
+    latest_fails = await latest_fail_by_claim(
+        session, user_id=user_id, claim_ids=claim_uuids
     )
     confused = await list_confused_edges(session, user_id=user_id, min_weight=1)
     depends = await list_depends_edges(session, user_id=user_id)
+    prereq_ids = list({e.target_claim_id for e in depends})
+    mastered = await mastered_claim_ids(
+        session, user_id=user_id, claim_ids=prereq_ids
+    )
+
+    now = datetime.now(UTC)
+    window = timedelta(days=max(1, active_days))
+
+    def _is_recent(fail: object) -> bool:
+        created = getattr(fail, "created_at", None)
+        if created is None:
+            return False
+        if getattr(created, "tzinfo", None) is None:
+            created = created.replace(tzinfo=UTC)
+        delta = now - created
+        return bool(delta <= window)
+
+    topic_by_id = {c.id: (c.topic or "").strip() or None for c in claims}
+    label_by_id = {
+        c.id: (_strip_html(c.text)[:120] or "未命名命题") for c in claims
+    }
 
     nodes: dict[str, GraphNode] = {}
     edges: list[GraphEdge] = []
@@ -647,16 +719,30 @@ async def build_graph_v0(
         cid = f"claim:{claim.id}"
         status = claim.status.value if hasattr(claim.status, "value") else str(claim.status)
         plain = _strip_html(claim.text)[:120] or "未命名命题"
+        latest = latest_fails.get(claim.id)
+        pref = claim.preferred_check_mode
+        pref_val = pref.value if pref is not None and hasattr(pref, "value") else pref
+        meta: dict[str, object] = {
+            "claim_id": str(claim.id),
+            "status": status,
+            "fail_count": fail_counts.get(claim.id, 0),
+            "topic": claim.topic,
+            "preferred_check_mode": pref_val,
+            "project_id": str(claim.project_id) if claim.project_id else None,
+            "last_fail_at": latest.created_at.isoformat() if latest else None,
+            "last_fail_reason": (
+                ((latest.reason or latest.gate_verdict) or "").strip()[:80] or None
+                if latest
+                else None
+            ),
+            "recent": bool(latest and _is_recent(latest)),
+        }
         _add_node(
             GraphNode(
                 id=cid,
                 type="claim",
                 label=plain,
-                meta={
-                    "status": status,
-                    "fail_count": fail_counts.get(claim.id, 0),
-                    "topic": claim.topic,
-                },
+                meta=meta,
             )
         )
         if claim.topic:
@@ -687,26 +773,52 @@ async def build_graph_v0(
         if edge.source_claim_id not in claim_ids or edge.target_claim_id not in claim_ids:
             continue
         w = int(edge.weight)
+        src_t = topic_by_id.get(edge.source_claim_id)
+        tgt_t = topic_by_id.get(edge.target_claim_id)
+        cross = bool(src_t and tgt_t and src_t != tgt_t)
+        tip_src = latest_fails.get(edge.source_claim_id)
+        tip_tgt = latest_fails.get(edge.target_claim_id)
+        tip = tip_src or tip_tgt
+        if tip_src and tip_tgt:
+            tip = (
+                tip_src
+                if tip_src.created_at >= tip_tgt.created_at
+                else tip_tgt
+            )
+        reason = None
+        if tip is not None:
+            reason = ((tip.reason or tip.gate_verdict) or "").strip()[:80] or None
         edges.append(
             GraphEdge(
                 source=f"claim:{edge.source_claim_id}",
                 target=f"claim:{edge.target_claim_id}",
                 rel="confused_with",
                 weight=w,
-                meta={"active": w >= CONFUSED_THRESHOLD},
+                meta={
+                    "active": w >= CONFUSED_THRESHOLD,
+                    "cross_topic": cross,
+                    "source_topic": src_t,
+                    "target_topic": tgt_t,
+                    "reason_summary": reason,
+                },
             )
         )
 
     for edge in depends:
         if edge.source_claim_id not in claim_ids or edge.target_claim_id not in claim_ids:
             continue
+        unmet = edge.target_claim_id not in mastered
         edges.append(
             GraphEdge(
                 source=f"claim:{edge.source_claim_id}",
                 target=f"claim:{edge.target_claim_id}",
                 rel="depends_on",
                 weight=int(edge.weight),
-                meta={},
+                meta={
+                    "unmet": unmet,
+                    "prereq_label": label_by_id.get(edge.target_claim_id, "")[:80]
+                    or None,
+                },
             )
         )
 

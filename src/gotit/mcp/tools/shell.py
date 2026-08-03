@@ -105,6 +105,28 @@ async def gotit_list_shell_activity(
         )
     return [e.model_dump(mode="json") for e in entries]
 
+
+@mcp.tool()
+async def gotit_delete_shell_activity(
+    memory_ids: list[str],
+) -> dict[str, object]:
+    """Delete shell_event / interest activity rows by memory id."""
+    from uuid import UUID
+
+    await ensure_db()
+    ids: list[UUID] = []
+    for raw in memory_ids:
+        try:
+            ids.append(UUID(raw))
+        except ValueError as exc:
+            raise ValueError(f"invalid memory_id: {raw}") from exc
+    async with session_scope() as session:
+        deleted = await day_ops.delete_shell_activity_many(
+            session, ids, user_id=_user_id()
+        )
+    return {"deleted": deleted}
+
+
 @mcp.tool()
 async def gotit_get_digest_prefs() -> dict[str, object]:
     """Get OpenClaw digest prefs (plan cron + optional AI/YouTube feeds)."""

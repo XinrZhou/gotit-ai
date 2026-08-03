@@ -84,6 +84,7 @@ from gotit.mcp.tools.projects import (
 from gotit.mcp.tools.prompts import gotit_list_prompts, gotit_register_prompts
 from gotit.mcp.tools.resume import gotit_apply_resume, gotit_get_resume, gotit_upload_resume
 from gotit.mcp.tools.shell import (
+    gotit_delete_shell_activity,
     gotit_get_digest_prefs,
     gotit_list_shell_activity,
     gotit_obs_graph,
@@ -141,6 +142,7 @@ __all__ = [
     "gotit_record_interest",
     "gotit_promote_interest",
     "gotit_list_shell_activity",
+    "gotit_delete_shell_activity",
     "gotit_get_digest_prefs",
     "gotit_put_digest_prefs",
     "gotit_sync_digest_cron",

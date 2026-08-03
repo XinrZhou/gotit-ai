@@ -1,7 +1,7 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .head {
@@ -9,70 +9,101 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 28px;
+}
+
+.headLead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .headActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
   margin: 0;
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.rampRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-
-.rampMeta {
-  font-size: 11px;
-  color: var(--faint);
   letter-spacing: -0.01em;
+  color: var(--faint);
 }
 
-.filterChip {
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
+.rampInline {
   font-size: 12px;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--muted);
 }
 
-.filterChip:hover {
+.card {
+  border-radius: 10px;
+  overflow: hidden;
   background: var(--soft);
-  color: var(--ink);
 }
 
-.filterActive {
+.switch {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  padding: 0;
   background: var(--fill);
-  color: var(--ink);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.switchSm {
+  width: 32px;
+  height: 18px;
+}
+
+.switchSm .switchKnob {
+  width: 14px;
+  height: 14px;
+}
+
+.switchSm.switchOn .switchKnob {
+  transform: translateX(14px);
+}
+
+.switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.switchOn {
+  background: var(--ink);
+}
+
+.switchKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease;
+  pointer-events: none;
+}
+
+.switchOn .switchKnob {
+  transform: translateX(14px);
 }
 
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: 12px;
-  background: var(--soft);
 }
 
 .listItem {
@@ -107,7 +138,7 @@
 
 .listMeta {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -116,14 +147,13 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .empty {
-  padding: 20px 14px;
+  padding: 16px 14px;
   font-size: 13px;
   color: var(--muted);
-  text-align: center;
 }
 
 .sheetTitle {

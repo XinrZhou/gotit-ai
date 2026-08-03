@@ -101,7 +101,7 @@ export function DigestPrefsPanel() {
         body: JSON.stringify(buildBody(prefs, keywordsText)),
       });
       applySaved(saved);
-      setFlash("计划推送设置已保存");
+      setFlash("提醒设置已保存");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -231,13 +231,13 @@ export function DigestPrefsPanel() {
   };
 
   if (!loaded) {
-    return <p className={styles.hint}>加载计划推送设置…</p>;
+    return <p className={styles.hint}>加载提醒设置…</p>;
   }
 
   return (
     <div className={styles.digest}>
       <header className={styles.header}>
-        <h3 className={styles.sectionTitle}>计划推送</h3>
+        <h3 className={styles.sectionTitle}>计划提醒</h3>
         <p className={styles.hint}>
           早推当日计划，晚推今日复盘+明日安排；资讯默认晚上八点单独推（不与计划混发）。改完点「保存并同步」。
         </p>

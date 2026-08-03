@@ -101,6 +101,27 @@ async def test_shell_event_interest_activity_profile_graph(
     rels = {e["rel"] for e in g["edges"]}
     assert "interest_topic" in rels
 
+    interest_id = interest.json()["id"]
+    one = await client.delete(
+        f"/v1/shell/activity/{event_id}", headers=auth_headers
+    )
+    assert one.status_code == 200, one.text
+    assert one.json()["deleted"] == 1
+
+    batch = await client.post(
+        "/v1/shell/activity/delete",
+        headers=auth_headers,
+        json={"ids": [interest_id]},
+    )
+    assert batch.status_code == 200, batch.text
+    assert batch.json()["deleted"] == 1
+
+    act2 = await client.get("/v1/shell/activity?limit=20", headers=auth_headers)
+    assert act2.status_code == 200
+    ids = {row["id"] for row in act2.json()}
+    assert event_id not in ids
+    assert interest_id not in ids
+
 
 @pytest.mark.asyncio
 async def test_digest_prefs_roundtrip(

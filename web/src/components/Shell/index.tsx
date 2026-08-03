@@ -3,7 +3,8 @@ import { ProjectModal } from "../ProjectModal";
 import { ResumeUploadModal } from "../ResumeUploadModal";
 import { ResumeViewerModal } from "../ResumeViewerModal";
 import { DrillMaterialModal } from "../DrillMaterialModal";
-import { MasteryGraphPanel } from "../MasteryGraphPanel";
+import { Modal } from "../Modal";
+import { ShellActivityPanel } from "../ShellActivityPanel";
 import { Sidebar } from "../Sidebar";
 import { Toast } from "../Toast";
 import { ViewNoteModal } from "../ViewNoteModal";
@@ -18,8 +19,8 @@ export function Shell() {
     flash,
     libraryOpen,
     setLibraryOpen,
-    masteryGraphOpen,
-    setMasteryGraphOpen,
+    shellActivityOpen,
+    setShellActivityOpen,
   } = useStore();
 
   return (
@@ -48,20 +49,26 @@ export function Shell() {
 
       <Toast error={error} flash={flash} />
 
-      {masteryGraphOpen ? (
-        <MasteryGraphPanel
-          fullscreen
-          onClose={() => setMasteryGraphOpen(false)}
-        />
+      {shellActivityOpen ? (
+        <Modal
+          title="动态"
+          wide
+          flush
+          onClose={() => setShellActivityOpen(false)}
+        >
+          <div className={styles.activityBody}>
+            <ShellActivityPanel />
+          </div>
+        </Modal>
       ) : null}
 
+      <SettingsPage />
       <NoteComposeModal />
       <ViewNoteModal />
       <ProjectModal />
+      <DrillMaterialModal />
       <ResumeUploadModal />
       <ResumeViewerModal />
-      <DrillMaterialModal />
-      <SettingsPage />
     </div>
   );
 }

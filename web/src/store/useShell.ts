@@ -20,6 +20,7 @@ export function useShell() {
   /** 资料/项目侧栏；默认收起，避免三栏空旷 */
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [masteryGraphOpen, setMasteryGraphOpen] = useState(false);
+  const [shellActivityOpen, setShellActivityOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workflowThreadId, setWorkflowThreadId] = useState<string | null>(null);
   const [userProfile, setUserProfileState] = useState<UserProfile>(() =>
@@ -79,6 +80,8 @@ export function useShell() {
     setLibraryOpen,
     masteryGraphOpen,
     setMasteryGraphOpen,
+    shellActivityOpen,
+    setShellActivityOpen,
     settingsOpen,
     setSettingsOpen,
     workflowThreadId,

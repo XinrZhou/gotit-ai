@@ -136,6 +136,13 @@
   height: min(640px, calc(100vh - 48px));
 }
 
+/* List panels (e.g. 动态): shorter + more margin than fill */
+.modalWide.modalFlush:not(.modalTitleless) {
+  width: min(640px, calc(100vw - 48px));
+  height: min(520px, calc(100vh - 120px));
+  max-height: calc(100vh - 120px);
+}
+
 .modalHead {
   display: flex;
   align-items: flex-start;

@@ -4,6 +4,8 @@ import type { ResumeDocument, ResumeProject } from "../../types";
 import { Modal } from "../Modal";
 import styles from "./index.module.scss";
 
+const ACCEPT = ".pdf,.docx,.txt,.md";
+
 export function ResumeUploadModal() {
   const {
     showResumeModal,
@@ -15,6 +17,8 @@ export function ResumeUploadModal() {
     setError,
   } = useStore();
   const [file, setFile] = useState<File | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [doc, setDoc] = useState<ResumeDocument | null>(null);
@@ -25,6 +29,8 @@ export function ResumeUploadModal() {
 
   function reset() {
     setFile(null);
+    setPasteText("");
+    setDragOver(false);
     setUploadId(null);
     setFilePath(null);
     setDoc(null);
@@ -32,12 +38,17 @@ export function ResumeUploadModal() {
     setUploading(false);
   }
 
-  async function onUpload() {
-    if (!file || uploading) return;
+  function pickFile(next: File | null) {
+    setFile(next);
+    if (next) setPasteText("");
+  }
+
+  async function uploadChosen(chosen: File) {
+    if (uploading) return;
     setUploading(true);
     setError("");
     try {
-      const res = await onUploadResume(file);
+      const res = await onUploadResume(chosen);
       setUploadId(res.upload_id);
       setFilePath(res.file_path);
       setDoc(res.document);
@@ -47,6 +58,18 @@ export function ResumeUploadModal() {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function onUpload() {
+    if (file) {
+      await uploadChosen(file);
+      return;
+    }
+    const text = pasteText.trim();
+    if (!text) return;
+    const blob = new File([text], "resume.txt", { type: "text/plain" });
+    setFile(blob);
+    await uploadChosen(blob);
   }
 
   function editProject(idx: number, patch: Partial<ResumeProject>) {
@@ -77,6 +100,7 @@ export function ResumeUploadModal() {
     reset();
   }
 
+  const canUpload = Boolean(file) || Boolean(pasteText.trim());
   const parsing = uploading;
 
   return (
@@ -111,8 +135,8 @@ export function ResumeUploadModal() {
           <button
             type="button"
             className="btn-ink"
-            disabled={uploading || !file}
-            onClick={onUpload}
+            disabled={uploading || !canUpload}
+            onClick={() => void onUpload()}
           >
             {uploading ? "解析中…" : "上传并解析"}
           </button>
@@ -121,35 +145,83 @@ export function ResumeUploadModal() {
     >
       {resume ? (
         <div className={styles.warn}>
-          已有简历（{resume.document.projects.length} 个项目）。再次导入会<b>清空重建</b>项目库，你手写的笔记和考题会保留（仅脱离旧项目）。
+          已有简历（{resume.document.projects.length} 个项目）。再次导入会
+          <b>清空重建</b>
+          项目库，你手写的笔记和考题会保留（仅脱离旧项目）。
         </div>
       ) : null}
 
       {stage === "pick" ? (
         <div className={styles.pick}>
-          <label className={styles.dropzone}>
+          <p className={styles.channelsHint}>文件 · 拖拽 · 粘贴文本</p>
+          <label
+            className={`${styles.dropzone} ${dragOver ? styles.dropzoneActive : ""}`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const dropped = e.dataTransfer.files?.[0] ?? null;
+              if (dropped) pickFile(dropped);
+            }}
+          >
             <input
               type="file"
-              accept=".pdf,.docx,.txt,.md"
+              accept={ACCEPT}
               className={styles.hiddenInput}
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
               disabled={uploading}
             />
             <div className={styles.dropIcon}>↥</div>
             <div className={styles.dropText}>
-              {file ? file.name : "把简历拖到这里，或点击选择"}
+              {file && !pasteText.trim()
+                ? file.name
+                : "把简历拖到这里，或点击选择"}
             </div>
             <div className={styles.dropHint}>
               支持 PDF / DOCX / TXT / MD，≤ 10MB
             </div>
           </label>
-          {file ? (
+
+          <div className={styles.pasteBlock}>
+            <label className={styles.pasteLabel} htmlFor="resume-paste">
+              或粘贴文本
+            </label>
+            <textarea
+              id="resume-paste"
+              className={styles.pasteArea}
+              value={pasteText}
+              disabled={uploading}
+              placeholder="把简历正文粘贴到这里…"
+              rows={6}
+              onChange={(e) => {
+                setPasteText(e.target.value);
+                if (e.target.value.trim()) setFile(null);
+              }}
+            />
+          </div>
+
+          {file && !pasteText.trim() ? (
             <div className={styles.fileMeta}>
               <span className={styles.fileName}>{file.name}</span>
               <span className={styles.fileSize}>{formatSize(file.size)}</span>
             </div>
           ) : null}
-          {parsing ? <div className={styles.overlay}><Spinner label="正在解析…" /></div> : null}
+          {parsing ? (
+            <div className={styles.overlay}>
+              <Spinner label="正在解析…" />
+            </div>
+          ) : null}
         </div>
       ) : doc ? (
         <div className={styles.preview}>
@@ -160,14 +232,19 @@ export function ResumeUploadModal() {
             <input
               className={styles.basicsInput}
               value={doc.basics.name ?? ""}
-              onChange={(e) => setDoc({ ...doc, basics: { ...doc.basics, name: e.target.value } })}
+              onChange={(e) =>
+                setDoc({ ...doc, basics: { ...doc.basics, name: e.target.value } })
+              }
               placeholder="姓名"
             />
             <input
               className={styles.basicsInput}
               value={doc.basics.target_role ?? ""}
               onChange={(e) =>
-                setDoc({ ...doc, basics: { ...doc.basics, target_role: e.target.value } })
+                setDoc({
+                  ...doc,
+                  basics: { ...doc.basics, target_role: e.target.value },
+                })
               }
               placeholder="目标岗位"
             />
@@ -209,7 +286,10 @@ export function ResumeUploadModal() {
                   value={p.tech_stack.join(", ")}
                   onChange={(e) =>
                     editProject(i, {
-                      tech_stack: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                      tech_stack: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
                     })
                   }
                   placeholder="技术栈，逗号分隔"
@@ -217,7 +297,9 @@ export function ResumeUploadModal() {
                 <textarea
                   className={styles.projBody}
                   value={p.description}
-                  onChange={(e) => editProject(i, { description: e.target.value })}
+                  onChange={(e) =>
+                    editProject(i, { description: e.target.value })
+                  }
                   placeholder="项目描述"
                   rows={5}
                 />
@@ -233,7 +315,11 @@ export function ResumeUploadModal() {
             ) : null}
           </div>
 
-          {parsing ? <div className={styles.overlay}><Spinner label="正在解析…" /></div> : null}
+          {parsing ? (
+            <div className={styles.overlay}>
+              <Spinner label="正在解析…" />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Modal>

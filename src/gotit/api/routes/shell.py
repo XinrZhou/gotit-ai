@@ -243,6 +243,51 @@ async def shell_activity(
         )
 
 
+class ShellActivityDeleteBody(BaseModel):
+    ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+
+class ShellActivityDeleteResult(BaseModel):
+    deleted: int
+
+
+@router.delete(
+    "/v1/shell/activity/{memory_id}",
+    response_model=ShellActivityDeleteResult,
+    dependencies=[Depends(require_api_key)],
+)
+async def delete_shell_activity(
+    memory_id: UUID,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ShellActivityDeleteResult:
+    try:
+        async with session_scope() as session:
+            await day_ops.delete_shell_activity(
+                session, memory_id, user_id=_user_id(settings)
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ShellActivityDeleteResult(deleted=1)
+
+
+@router.post(
+    "/v1/shell/activity/delete",
+    response_model=ShellActivityDeleteResult,
+    dependencies=[Depends(require_api_key)],
+)
+async def delete_shell_activity_batch(
+    body: ShellActivityDeleteBody,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ShellActivityDeleteResult:
+    async with session_scope() as session:
+        n = await day_ops.delete_shell_activity_many(
+            session, body.ids, user_id=_user_id(settings)
+        )
+    return ShellActivityDeleteResult(deleted=n)
+
+
 @router.get(
     "/v1/shell/digest-prefs",
     response_model=DigestPrefs,

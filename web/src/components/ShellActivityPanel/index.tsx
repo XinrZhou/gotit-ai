@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../../api";
-import { stripHtml } from "../../../lib/format";
-import { useStore } from "../../../store";
-import type { InterestPromoteResult, MemoryEntry } from "../../../types";
+import { api } from "../../api";
+import { Modal } from "../Modal";
+import { stripHtml } from "../../lib/format";
+import { useStore } from "../../store";
+import type { InterestPromoteResult, MemoryEntry } from "../../types";
 import styles from "./index.module.scss";
 
 type Category = "all" | "morning" | "evening" | "news" | "interest";
@@ -55,19 +56,32 @@ function fmtShort(iso: string): string {
 }
 
 /** Compact relative clock for dense list rows. */
-function fmtCompactAt(iso: string): string {
+function fmtClock(iso: string): string {
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return "";
+  return `${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
+}
+
+function dayBucket(iso: string | null | undefined): { key: string; label: string } {
+  if (!iso) return { key: "unknown", label: "更早" };
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return { key: "unknown", label: "更早" };
   const now = new Date();
-  const hm = `${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
   const sod = startOfDay(now).getTime();
   const day = startOfDay(t).getTime();
-  if (day === sod) return hm;
-  if (day === sod - 86400000) return `昨天 ${hm}`;
+  const key = `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
+  if (day === sod) return { key, label: "今天" };
+  if (day === sod - 86400000) return { key, label: "昨天" };
   if (t.getFullYear() === now.getFullYear()) {
-    return `${t.getMonth() + 1}/${t.getDate()} ${hm}`;
+    return { key, label: `${t.getMonth() + 1}月${t.getDate()}日` };
   }
-  return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()}`;
+  return { key, label: `${t.getFullYear()}年${t.getMonth() + 1}月${t.getDate()}日` };
+}
+
+/** Empty cron stubs — hide from mixed「全部」, keep in typed tabs. */
+function isHollowActivity(e: MemoryEntry): boolean {
+  const title = activityTitle(e);
+  return title === "暂无计划" || title === "暂无资讯";
 }
 
 function categoryLabel(e: MemoryEntry): string {
@@ -312,7 +326,7 @@ function inTimeRange(
   return t >= fromBound && t <= toBound;
 }
 
-export function ShellObsPanel() {
+export function ShellActivityPanel() {
   const { setError, setFlash } = useStore();
   const [activity, setActivity] = useState<MemoryEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -328,6 +342,9 @@ export function ShellObsPanel() {
     return { year: n.getFullYear(), month: n.getMonth() };
   });
   const [selected, setSelected] = useState<MemoryEntry | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
   const calRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -397,6 +414,45 @@ export function ShellObsPanel() {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const onConfirmDelete = async () => {
+    if (!pendingDeleteIds?.length) return;
+    const ids = pendingDeleteIds;
+    setBusy(true);
+    try {
+      if (ids.length === 1) {
+        await api(`/v1/shell/activity/${ids[0]}`, {
+          method: "DELETE",
+        });
+      } else {
+        await api<{ deleted: number }>("/v1/shell/activity/delete", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+      }
+      setFlash(ids.length === 1 ? "已删除" : `已删除 ${ids.length} 条`);
+      setPendingDeleteIds(null);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      if (selected && ids.includes(selected.id)) {
+        setSelected(null);
+      }
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!timeOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -424,6 +480,8 @@ export function ShellObsPanel() {
     return [...activity]
       .filter((e) => {
         if (category !== "all" && activityCategory(e) !== category) return false;
+        // Mixed feed: skip empty plan/news stubs so the list reads as signal.
+        if (category === "all" && isHollowActivity(e)) return false;
         return inTimeRange(e, fromBound, toBound);
       })
       .sort((a, b) => {
@@ -432,6 +490,17 @@ export function ShellObsPanel() {
         return tb - ta;
       });
   }, [activity, category, timePreset, customRange]);
+
+  const grouped = useMemo(() => {
+    const out: { key: string; label: string; items: MemoryEntry[] }[] = [];
+    for (const e of filtered) {
+      const { key, label } = dayBucket(e.created_at);
+      const last = out[out.length - 1];
+      if (last && last.key === key) last.items.push(e);
+      else out.push({ key, label, items: [e] });
+    }
+    return out;
+  }, [filtered]);
 
   const visibleCategories = useMemo(() => {
     const { fromBound, toBound } = timeBounds(timePreset, customRange);
@@ -477,6 +546,36 @@ export function ShellObsPanel() {
 
     return (
       <div className={styles.panel}>
+        {pendingDeleteIds ? (
+          <Modal
+            title="删除动态"
+            onClose={() => setPendingDeleteIds(null)}
+            actions={
+              <>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => setPendingDeleteIds(null)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="btn-ink"
+                  disabled={busy}
+                  onClick={() => void onConfirmDelete()}
+                >
+                  删除
+                </button>
+              </>
+            }
+          >
+            <p className={styles.confirmCopy}>
+              删除后不可恢复。确定删除这条动态？
+            </p>
+          </Modal>
+        ) : null}
         <div className={styles.sectionHead}>
           <button
             type="button"
@@ -484,6 +583,14 @@ export function ShellObsPanel() {
             onClick={() => setSelected(null)}
           >
             ← 返回
+          </button>
+          <button
+            type="button"
+            className={styles.deleteLink}
+            disabled={busy}
+            onClick={() => setPendingDeleteIds([selected.id])}
+          >
+            删除
           </button>
         </div>
         <div className={styles.detailCard}>
@@ -606,6 +713,39 @@ export function ShellObsPanel() {
 
   return (
     <div className={styles.panel}>
+      {pendingDeleteIds ? (
+        <Modal
+          title="删除动态"
+          onClose={() => setPendingDeleteIds(null)}
+          actions={
+            <>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={busy}
+                onClick={() => setPendingDeleteIds(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-ink"
+                disabled={busy}
+                onClick={() => void onConfirmDelete()}
+              >
+                删除
+              </button>
+            </>
+          }
+        >
+          <p className={styles.confirmCopy}>
+            {pendingDeleteIds.length === 1
+              ? "删除后不可恢复。确定删除这条动态？"
+              : `删除后不可恢复。确定删除选中的 ${pendingDeleteIds.length} 条？`}
+          </p>
+        </Modal>
+      ) : null}
+
       <div className={styles.toolbar}>
         <div className={styles.chips} role="tablist" aria-label="类别">
           {visibleCategories.map((c) => (
@@ -623,6 +763,26 @@ export function ShellObsPanel() {
         </div>
 
         <div className={styles.toolbarRight}>
+          <button
+            type="button"
+            className={`${styles.timeBtn} ${selectMode ? styles.timeBtnActive : ""}`}
+            onClick={() => {
+              setSelectMode((v) => !v);
+              setSelectedIds(new Set());
+            }}
+          >
+            {selectMode ? "取消选择" : "选择"}
+          </button>
+          {selectMode && selectedIds.size > 0 ? (
+            <button
+              type="button"
+              className={styles.deleteLink}
+              disabled={busy}
+              onClick={() => setPendingDeleteIds([...selectedIds])}
+            >
+              删除 {selectedIds.size}
+            </button>
+          ) : null}
           <div className={styles.timeWrap} ref={calRef}>
             <button
               type="button"
@@ -790,37 +950,67 @@ export function ShellObsPanel() {
       </div>
 
       <ul className={styles.list}>
-        {filtered.map((e) => {
-          const cat = categoryLabel(e);
-          const extra = activityExtra(e);
-          return (
-            <li key={e.id}>
-              <button
-                type="button"
-                className={styles.row}
-                onClick={() => setSelected(e)}
-              >
-                <div className={styles.rowBody}>
-                  <span className={styles.title}>{activityTitle(e)}</span>
-                  {extra ? <span className={styles.extra}>{extra}</span> : null}
-                </div>
-                <div className={styles.rowMeta}>
-                  {e.kind === "interest" ? (
-                    <span className={styles.cat}>
-                      {promotedClaimIds(e).length > 0 ? "已可考" : "可变成题"}
-                    </span>
-                  ) : null}
-                  {cat && category === "all" ? (
-                    <span className={styles.cat}>{cat}</span>
-                  ) : null}
-                  <span className={styles.time}>
-                    {e.created_at ? fmtCompactAt(e.created_at) : ""}
-                  </span>
-                </div>
-              </button>
-            </li>
-          );
-        })}
+        {grouped.map((g) => (
+          <li key={g.key} className={styles.dayGroup}>
+            <div className={styles.dayHead}>{g.label}</div>
+            <ul className={styles.dayList}>
+              {g.items.map((e) => {
+                const cat = categoryLabel(e);
+                const extra = activityExtra(e);
+                const hollow = isHollowActivity(e);
+                const title = activityTitle(e);
+                const checked = selectedIds.has(e.id);
+                const metaBits: string[] = [];
+                if (e.kind === "interest") {
+                  metaBits.push(
+                    promotedClaimIds(e).length > 0 ? "已可考" : "可变成题",
+                  );
+                } else if (cat && category === "all") {
+                  metaBits.push(cat);
+                }
+                if (e.created_at) metaBits.push(fmtClock(e.created_at));
+                const meta = metaBits.join(" · ");
+                return (
+                  <li key={e.id}>
+                    <div className={styles.rowWrap}>
+                      {selectMode ? (
+                        <button
+                          type="button"
+                          className={`${styles.check} ${checked ? styles.checkOn : ""}`}
+                          aria-pressed={checked}
+                          aria-label={checked ? "取消选中" : "选中"}
+                          onClick={() => toggleSelect(e.id)}
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className={styles.row}
+                        onClick={() => {
+                          if (selectMode) toggleSelect(e.id);
+                          else setSelected(e);
+                        }}
+                      >
+                        <div className={styles.rowBody}>
+                          <span
+                            className={`${styles.title} ${hollow ? styles.titleHollow : ""}`}
+                          >
+                            {title}
+                          </span>
+                          {extra ? (
+                            <span className={styles.extra}>{extra}</span>
+                          ) : null}
+                          {meta ? (
+                            <span className={styles.meta}>{meta}</span>
+                          ) : null}
+                        </div>
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
         {filtered.length === 0 ? (
           <li className={styles.empty}>暂无动态</li>
         ) : null}

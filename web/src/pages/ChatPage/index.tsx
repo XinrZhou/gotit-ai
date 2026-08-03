@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { api } from "../../api";
 import {
   KarenAvatar,
@@ -16,6 +24,12 @@ import {
 import { DailyBrief } from "../../components/DailyBrief";
 import { CalibrationPanel } from "../../components/CalibrationPanel";
 import { ModeHeader } from "./ModeHeader";
+
+const MasteryGraphPanel = lazy(() =>
+  import("../../components/MasteryGraphPanel").then((m) => ({
+    default: m.MasteryGraphPanel,
+  })),
+);
 import { MessageBody } from "./MessageBody";
 import {
   CompanionToolTrail,
@@ -323,6 +337,8 @@ export function ChatPage() {
     setLibraryOpen,
     masteryGraphOpen,
     setMasteryGraphOpen,
+    shellActivityOpen,
+    setShellActivityOpen,
     setSettingsOpen,
     userProfile,
     setWorkflowThreadId,
@@ -978,10 +994,25 @@ export function ChatPage() {
       <section className={styles.conversation}>
         <header
           className={`${styles.conversationTop} ${
-            inWorkflow ? "" : styles.conversationTopSparse
+            masteryGraphOpen || inWorkflow ? "" : styles.conversationTopSparse
           }`}
         >
-          {inWorkflow ? (
+          {masteryGraphOpen ? (
+            <div className={styles.conversationTopLead}>
+              <div className={styles.graphModeHead}>
+                <button
+                  type="button"
+                  className={styles.graphBack}
+                  onClick={() => setMasteryGraphOpen(false)}
+                >
+                  ← 搭子
+                </button>
+                <div className={styles.graphModeCopy}>
+                  <span className={styles.graphModeTitle}>弱点图谱</span>
+                </div>
+              </div>
+            </div>
+          ) : inWorkflow ? (
             <div className={styles.conversationTopLead}>
               <ModeHeader mode={mode} onBack={() => setMode("chat")} />
             </div>
@@ -992,12 +1023,26 @@ export function ChatPage() {
               className={`${styles.graphTopBtn} ${masteryGraphOpen ? styles.graphTopBtnActive : ""}`}
               onClick={() => {
                 setLibraryOpen(false);
-                setMasteryGraphOpen(true);
+                setShellActivityOpen(false);
+                setMasteryGraphOpen(!masteryGraphOpen);
               }}
               aria-pressed={masteryGraphOpen}
-              title="打开弱点图谱"
+              title={masteryGraphOpen ? "关闭弱点图谱" : "打开弱点图谱"}
             >
               弱点图谱
+            </button>
+            <button
+              type="button"
+              className={`${styles.graphTopBtn} ${shellActivityOpen ? styles.graphTopBtnActive : ""}`}
+              onClick={() => {
+                setLibraryOpen(false);
+                setMasteryGraphOpen(false);
+                setShellActivityOpen(true);
+              }}
+              aria-pressed={shellActivityOpen}
+              title="打开动态"
+            >
+              动态
             </button>
             <button
               type="button"
@@ -1038,7 +1083,13 @@ export function ChatPage() {
           </div>
         </header>
 
-        {inWorkflow ? (
+        {masteryGraphOpen ? (
+          <div className={styles.graphPane} aria-label="弱点图谱">
+            <Suspense fallback={<p className={styles.emptyHint}>图谱加载中…</p>}>
+              <MasteryGraphPanel />
+            </Suspense>
+          </div>
+        ) : inWorkflow ? (
           <div className={styles.workflowPane}>
             <div className={styles.workflowPaneBody}>
               {mode === "examine" ? <ExaminePage /> : null}

@@ -52,12 +52,12 @@
 }
 
 .pane {
-  padding: 20px 44px 20px 22px;
+  padding: 22px 44px 28px 22px;
   overflow-y: auto;
   background: var(--bg);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 28px;
   min-width: 0;
   min-height: 0;
 }
@@ -82,11 +82,17 @@
 }
 
 .paneTitle {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--faint);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .hint {
@@ -94,6 +100,38 @@
   font-size: 12.5px;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.fileLink {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1.25px;
+  text-decoration-color: currentColor;
+  text-underline-offset: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.fileLink:hover {
+  color: var(--ink);
+}
+
+.fileLink:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .group {
@@ -128,6 +166,15 @@
   min-width: 0;
 }
 
+.groupActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .groupLabel {
   font-size: 14px;
   color: var(--ink);
@@ -140,6 +187,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.groupMetaWrap {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .profileRow {
@@ -225,9 +278,14 @@
 
 .sectionHead {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 28px;
+}
+
+.sectionHead .paneTitle {
+  margin: 0;
 }
 
 .row {
@@ -281,13 +339,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 360px;
+  max-width: 280px;
 }
 
 .listActions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -347,7 +405,7 @@
 }
 
 .empty {
-  padding: 18px 14px;
+  padding: 16px 14px;
   font-size: 13px;
   color: var(--muted);
 }

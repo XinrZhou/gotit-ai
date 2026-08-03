@@ -74,7 +74,6 @@ export function InterviewsPanel() {
     enabled: true,
     max_nudges_per_week: 2,
   });
-  const [includeDone, setIncludeDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -82,9 +81,8 @@ export function InterviewsPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const q = includeDone ? "?include_done=true" : "";
       const [data, upcoming, prefs] = await Promise.all([
-        api<InterviewEvent[]>(`/v1/interviews${q}`),
+        api<InterviewEvent[]>("/v1/interviews"),
         api<InterviewUpcoming[]>("/v1/interviews/upcoming"),
         api<InterviewRampPrefs>("/v1/interviews/ramp-prefs"),
       ]);
@@ -96,7 +94,7 @@ export function InterviewsPanel() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [includeDone, setError]);
+  }, [setError]);
 
   useEffect(() => {
     void refresh();
@@ -125,7 +123,7 @@ export function InterviewsPanel() {
         method: "PUT",
         body: JSON.stringify(next),
       });
-    }, rampPrefs.enabled ? "已关闭倒计时升温" : "已开启倒计时升温");
+    }, rampPrefs.enabled ? "已关闭备考提醒" : "已开启备考提醒");
 
   const openCreate = () => {
     setEditingId(null);
@@ -270,20 +268,35 @@ export function InterviewsPanel() {
   }
 
   return (
-    <div className={styles.panel}>
+    <section className={styles.panel}>
       <div className={styles.head}>
-        <p className={styles.sectionTitle}>面试安排</p>
+        <div className={styles.headLead}>
+          <p className={styles.sectionTitle}>面试安排</p>
+          <span
+            className={styles.rampInline}
+            title="开启后，临近面试时今日简报会多提项目练习；到期提醒始终保留。添加/修改会同步到 Mac 日历「面试」"
+          >
+            备考提醒
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={rampPrefs.enabled}
+            aria-label={
+              rampPrefs.enabled ? "关闭备考提醒" : "开启备考提醒"
+            }
+            title="开启后，临近面试时今日简报会多提项目练习；到期提醒始终保留"
+            className={`${styles.switch} ${styles.switchSm} ${rampPrefs.enabled ? styles.switchOn : ""}`}
+            disabled={busy}
+            onClick={onToggleRamp}
+          >
+            <span className={styles.switchKnob} />
+          </button>
+        </div>
         <div className={styles.headActions}>
           <button
             type="button"
-            className={`${styles.filterChip} ${includeDone ? styles.filterActive : ""}`}
-            onClick={() => setIncludeDone((v) => !v)}
-          >
-            含已完成
-          </button>
-          <button
-            type="button"
-            className="btn-ink"
+            className="btn-ghost"
             disabled={busy}
             onClick={openCreate}
           >
@@ -291,80 +304,65 @@ export function InterviewsPanel() {
           </button>
         </div>
       </div>
-      <p className={styles.hint}>
-        记录真实面试时间；OpenClaw 会按提前 24h / 2h 推送提醒。临近 3～7
-        天可另发低频「升温」提示（可关），建议练项目表达（练习场，不过门）。
-      </p>
-      <div className={styles.rampRow}>
-        <button
-          type="button"
-          className={`${styles.filterChip} ${rampPrefs.enabled ? styles.filterActive : ""}`}
-          disabled={busy}
-          onClick={onToggleRamp}
-        >
-          倒计时升温 {rampPrefs.enabled ? "开" : "关"}
-        </button>
-        <span className={styles.rampMeta}>
-          每周最多 {rampPrefs.max_nudges_per_week} 条 · 关了仍保留 24h/2h 提醒
-        </span>
+      <div className={styles.card}>
+        <ul className={styles.list}>
+          {items.map((item) => {
+            const ramp = upcomingById[item.id];
+            return (
+              <li key={item.id} className={styles.listItem}>
+                <button
+                  type="button"
+                  className={styles.listMain}
+                  onClick={() => openEdit(item)}
+                >
+                  <span className={styles.listTitle}>
+                    {item.company} · {item.role_title}
+                  </span>
+                  <span className={styles.listMeta}>
+                    {fmtScheduled(item.scheduled_at)}
+                    {item.round ? ` · ${roundLabel(item.round)}` : ""}
+                    {item.status !== "scheduled" ? ` · ${item.status}` : ""}
+                    {ramp?.tier_hint ? ` · ${ramp.tier_hint}` : ""}
+                  </span>
+                </button>
+                <div className={styles.listActions}>
+                  {item.status === "scheduled" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={busy}
+                        onClick={() => onStatus(item.id, "done")}
+                      >
+                        完成
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={busy}
+                        onClick={() => onStatus(item.id, "cancelled")}
+                      >
+                        取消
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onDelete(item.id)}
+                  >
+                    删除
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+          {items.length === 0 ? (
+            <li className={styles.empty}>暂无面试安排</li>
+          ) : null}
+        </ul>
       </div>
-      <ul className={styles.list}>
-        {items.map((item) => {
-          const ramp = upcomingById[item.id];
-          return (
-          <li key={item.id} className={styles.listItem}>
-            <button
-              type="button"
-              className={styles.listMain}
-              onClick={() => openEdit(item)}
-            >
-              <span className={styles.listTitle}>
-                {item.company} · {item.role_title}
-              </span>
-              <span className={styles.listMeta}>
-                {fmtScheduled(item.scheduled_at)}
-                {item.round ? ` · ${roundLabel(item.round)}` : ""}
-                {item.status !== "scheduled" ? ` · ${item.status}` : ""}
-                {ramp?.tier_hint ? ` · ${ramp.tier_hint}` : ""}
-              </span>
-            </button>
-            <div className={styles.listActions}>
-              {item.status === "scheduled" ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={busy}
-                    onClick={() => onStatus(item.id, "done")}
-                  >
-                    完成
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={busy}
-                    onClick={() => onStatus(item.id, "cancelled")}
-                  >
-                    取消
-                  </button>
-                </>
-              ) : null}
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={busy}
-                onClick={() => onDelete(item.id)}
-              >
-                删除
-              </button>
-            </div>
-          </li>
-          );
-        })}
-        {items.length === 0 ? (
-          <li className={styles.empty}>暂无面试安排</li>
-        ) : null}
-      </ul>
-    </div>
+    </section>
   );
 }

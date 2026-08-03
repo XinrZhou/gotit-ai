@@ -101,6 +101,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLibraryOpen: shell.setLibraryOpen,
     masteryGraphOpen: shell.masteryGraphOpen,
     setMasteryGraphOpen: shell.setMasteryGraphOpen,
+    shellActivityOpen: shell.shellActivityOpen,
+    setShellActivityOpen: shell.setShellActivityOpen,
     settingsOpen: shell.settingsOpen,
     setSettingsOpen: shell.setSettingsOpen,
     workflowThreadId: shell.workflowThreadId,

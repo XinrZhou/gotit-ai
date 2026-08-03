@@ -10,18 +10,27 @@ import { useStore } from "../../store";
 import type { McpConnector, SkillDetail, SkillInfo } from "../../types";
 import { DigestPrefsPanel } from "./DigestPrefsPanel";
 import { InterviewsPanel } from "./InterviewsPanel";
-import { ShellObsPanel } from "./ShellObsPanel";
 import styles from "./index.module.scss";
 
-type Tab = "general" | "skills" | "connectors" | "digest" | "shell";
+type Tab = "me" | "reminders" | "advanced";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "general", label: "资料" },
-  { id: "skills", label: "Skills" },
-  { id: "connectors", label: "MCP" },
-  { id: "digest", label: "计划推送" },
-  { id: "shell", label: "动态" },
+  { id: "me", label: "我" },
+  { id: "reminders", label: "提醒" },
+  { id: "advanced", label: "高级" },
 ];
+
+function resumeFileName(path: string | null | undefined): string {
+  if (!path?.trim()) return "resume.pdf";
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  if (ext && /^[a-z0-9]{1,5}$/.test(ext)) return `resume.${ext}`;
+  return "resume.pdf";
+}
+
+const APPLE_PLAN_IMPORT_CMD =
+  'uv run python skills/apple-plan/import_plan.py reminders --list "学习计划" --apply';
+
+const APPLE_PLAN_DOC = "docs/openclaw-apple-plan.md";
 
 type SkillSheet =
   | { kind: "install" }
@@ -60,7 +69,7 @@ export function SettingsPage() {
     userProfile,
     setUserProfile,
   } = useStore();
-  const [tab, setTab] = useState<Tab>("general");
+  const [tab, setTab] = useState<Tab>("me");
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [connectors, setConnectors] = useState<McpConnector[]>([]);
   const [busy, setBusy] = useState(false);
@@ -322,9 +331,7 @@ export function SettingsPage() {
         </nav>
 
         <div
-          className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}${
-            !sheetOpen && tab === "shell" ? ` ${styles.paneFill}` : ""
-          }`}
+          className={`${styles.pane}${sheetOpen ? ` ${styles.paneSheet}` : ""}`}
         >
           {skillSheet ? (
             <div className={styles.sheet}>
@@ -474,10 +481,10 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {!sheetOpen && tab === "general" ? (
+          {!sheetOpen && tab === "me" ? (
             <>
-              <div>
-                <p className={styles.paneTitle}>称呼</p>
+              <section className={styles.section}>
+                <p className={styles.paneTitle}>我是谁</p>
                 <div className={styles.group}>
                   <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
                     <div className={styles.profileRow}>
@@ -550,262 +557,297 @@ export function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div>
+              <section className={styles.section}>
                 <p className={styles.paneTitle}>简历</p>
                 <div className={styles.group}>
                   <div className={styles.groupRow}>
                     <div className={styles.groupMain}>
-                      <span className={styles.groupLabel}>
-                        {resume ? "已导入" : "未导入"}
-                      </span>
-                      <span className={styles.groupMeta}>
-                        {resume
-                          ? "可查看或重新导入，给项目练习当上下文（练习场，不过门）"
-                          : "导入后可用于项目练习（练习场，不过门）"}
-                      </span>
-                    </div>
-                    <div className={styles.row}>
                       {resume ? (
                         <button
                           type="button"
-                          className="btn-ghost"
+                          className={styles.fileLink}
                           disabled={busy}
+                          title="查看简历"
                           onClick={() => {
-                            setSettingsOpen(false);
                             setShowResumeViewer(true);
                           }}
                         >
-                          查看
+                          {resumeFileName(resume.file_path)}
                         </button>
-                      ) : null}
+                      ) : (
+                        <>
+                          <span className={styles.groupLabel}>未导入</span>
+                          <span className={styles.groupMeta}>
+                            文件 · 拖拽 · 粘贴文本
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className={styles.row}>
                       <button
                         type="button"
                         className="btn-ghost"
                         disabled={busy}
                         onClick={() => {
-                          setSettingsOpen(false);
                           setShowResumeModal(true);
                         }}
                       >
-                        {resume ? "重新导入" : "导入"}
+                        导入…
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
               <InterviewsPanel />
 
-              <div>
-                <p className={styles.paneTitle}>Apple 计划桥</p>
+              <section className={styles.section}>
+                <p className={styles.paneTitle}>Apple 同步</p>
                 <div className={styles.group}>
-                  <div className={`${styles.groupRow} ${styles.groupRowStack}`}>
+                  <div className={styles.groupRow}>
                     <div className={styles.groupMain}>
-                      <span className={styles.groupLabel}>Mac 提醒事项 ↔ gotit 日计划</span>
-                      <span className={styles.groupMeta}>
-                        默认列表「学习计划」。对话建计划后 OpenClaw 会 push 到提醒事项；
-                        也可在提醒事项改完回「导入计划」。浏览器不读 Apple。
-                      </span>
-                      <span className={styles.groupMeta}>
-                        说明：docs/openclaw-apple-plan.md · skills/apple-plan/
+                      <span className={styles.groupLabel}>面试 → 日历</span>
+                      <span className={styles.groupMetaWrap}>
+                        添加/修改自动写入日历「面试」；完成或删除会移除。需本机日历权限
                       </span>
                     </div>
                   </div>
+                  <div className={styles.groupRow}>
+                    <div className={styles.groupMain}>
+                      <span className={styles.groupLabel}>
+                        日计划 →「学习计划」提醒事项
+                      </span>
+                      <span className={styles.groupMetaWrap}>
+                        与日计划双向同步，需本机 OpenClaw
+                      </span>
+                    </div>
+                    <div className={styles.groupActions}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        title={APPLE_PLAN_IMPORT_CMD}
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(APPLE_PLAN_IMPORT_CMD)
+                            .then(() => setFlash("已复制导入命令"))
+                            .catch(() => setError("复制失败"));
+                        }}
+                      >
+                        复制命令
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        title={APPLE_PLAN_DOC}
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(APPLE_PLAN_DOC)
+                            .then(() => setFlash("已复制说明路径"))
+                            .catch(() => setError("复制失败"));
+                        }}
+                      >
+                        说明
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </>
           ) : null}
 
-          {!sheetOpen && tab === "skills" ? (
+          {!sheetOpen && tab === "reminders" ? <DigestPrefsPanel /> : null}
+
+          {!sheetOpen && tab === "advanced" ? (
             <>
-              <div className={styles.sectionHead}>
-                <p className={styles.paneTitle}>已安装</p>
-                <div className={styles.row}>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".md,text/markdown,text/plain"
-                    hidden
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void onFileSkill(f);
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={busy}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    上传
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ink"
-                    disabled={busy}
-                    onClick={() => {
-                      setSkillMd("");
-                      setSkillSheet({ kind: "install" });
-                    }}
-                  >
-                    粘贴
-                  </button>
+              <section className={styles.section}>
+                <div className={styles.sectionHead}>
+                  <p className={styles.paneTitle}>Skills</p>
+                  <div className={styles.row}>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept=".md,text/markdown,text/plain"
+                      hidden
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void onFileSkill(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      上传
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        setSkillMd("");
+                        setSkillSheet({ kind: "install" });
+                      }}
+                    >
+                      粘贴
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className={styles.group}>
-                <ul className={styles.list}>
-                  {skills.map((s) => (
-                    <li key={s.name} className={styles.listItem}>
-                      <div className={styles.listMain}>
-                        <span className={styles.listName}>{s.name}</span>
-                        <span className={styles.listMeta}>
-                          {s.source === "builtin" ? "内置" : "自定义"}
-                          {s.notes ? ` · ${s.notes}` : ""}
-                        </span>
-                      </div>
-                      <div className={styles.listActions}>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          disabled={busy}
-                          onClick={() => void onOpenSkill(s.name)}
-                        >
-                          {s.source === "user" ? "编辑" : "查看"}
-                        </button>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={s.enabled}
-                          aria-label={s.enabled ? `关闭 ${s.name}` : `启用 ${s.name}`}
-                          className={`${styles.switch} ${s.enabled ? styles.switchOn : ""}`}
-                          disabled={busy}
-                          onClick={() => onToggleSkill(s.name, !s.enabled)}
-                        >
-                          <span className={styles.switchKnob} />
-                        </button>
-                        {s.source === "user" ? (
+                <div className={styles.group}>
+                  <ul className={styles.list}>
+                    {skills.map((s) => (
+                      <li key={s.name} className={styles.listItem}>
+                        <div className={styles.listMain}>
+                          <span className={styles.listName}>{s.name}</span>
+                          <span className={styles.listMeta}>
+                            {s.source === "builtin" ? "内置" : "自定义"}
+                          </span>
+                        </div>
+                        <div className={styles.listActions}>
                           <button
                             type="button"
                             className="btn-ghost"
                             disabled={busy}
-                            onClick={() => onDeleteSkill(s.name)}
+                            onClick={() => void onOpenSkill(s.name)}
+                          >
+                            {s.source === "user" ? "编辑" : "查看"}
+                          </button>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={s.enabled}
+                            aria-label={
+                              s.enabled ? `关闭 ${s.name}` : `启用 ${s.name}`
+                            }
+                            className={`${styles.switch} ${s.enabled ? styles.switchOn : ""}`}
+                            disabled={busy}
+                            onClick={() => onToggleSkill(s.name, !s.enabled)}
+                          >
+                            <span className={styles.switchKnob} />
+                          </button>
+                          {s.source === "user" ? (
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={busy}
+                              onClick={() => onDeleteSkill(s.name)}
+                            >
+                              删除
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                    {skills.length === 0 ? (
+                      <li className={styles.empty}>暂无 Skill</li>
+                    ) : null}
+                  </ul>
+                </div>
+              </section>
+
+              <section className={styles.section}>
+                <div className={styles.sectionHead}>
+                  <p className={styles.paneTitle}>MCP</p>
+                  <div className={styles.row}>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        setJsonPaste("");
+                        setConnOpen("json");
+                      }}
+                    >
+                      粘贴 JSON
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={openConnAdd}
+                    >
+                      添加
+                    </button>
+                  </div>
+                </div>
+                <div className={styles.group}>
+                  <ul className={styles.list}>
+                    {connectors.map((c) => (
+                      <li key={c.id} className={styles.listItem}>
+                        <div className={styles.listMain}>
+                          <span className={styles.listName}>
+                            <span
+                              className={`${styles.dot} ${
+                                c.last_status === "ok"
+                                  ? styles.dotOk
+                                  : c.last_status === "error"
+                                    ? styles.dotErr
+                                    : ""
+                              }`}
+                              title={c.last_error ?? c.last_status}
+                            />
+                            {c.name}
+                          </span>
+                          <span className={styles.listMeta}>
+                            {c.transport}
+                            {c.last_status !== "unknown"
+                              ? ` · ${c.last_status}`
+                              : ""}
+                          </span>
+                        </div>
+                        <div className={styles.listActions}>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => openConnEdit(c)}
+                          >
+                            编辑
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => onProbe(c.id)}
+                          >
+                            探测
+                          </button>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={c.enabled}
+                            aria-label={
+                              c.enabled ? `关闭 ${c.name}` : `启用 ${c.name}`
+                            }
+                            className={`${styles.switch} ${c.enabled ? styles.switchOn : ""}`}
+                            disabled={busy}
+                            onClick={() => onToggleConnector(c.id, !c.enabled)}
+                          >
+                            <span className={styles.switchKnob} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => onDeleteConnector(c.id)}
                           >
                             删除
                           </button>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                  {skills.length === 0 ? (
-                    <li className={styles.empty}>暂无 Skill</li>
-                  ) : null}
-                </ul>
-              </div>
-            </>
-          ) : null}
-
-          {!sheetOpen && tab === "connectors" ? (
-            <>
-              <div className={styles.sectionHead}>
-                <p className={styles.paneTitle}>服务器</p>
-                <div className={styles.row}>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={busy}
-                    onClick={() => {
-                      setJsonPaste("");
-                      setConnOpen("json");
-                    }}
-                  >
-                    粘贴 JSON
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ink"
-                    disabled={busy}
-                    onClick={openConnAdd}
-                  >
-                    添加
-                  </button>
+                        </div>
+                      </li>
+                    ))}
+                    {connectors.length === 0 ? (
+                      <li className={styles.empty}>暂无 MCP</li>
+                    ) : null}
+                  </ul>
                 </div>
-              </div>
-              <div className={styles.group}>
-                <ul className={styles.list}>
-                  {connectors.map((c) => (
-                    <li key={c.id} className={styles.listItem}>
-                      <div className={styles.listMain}>
-                        <span className={styles.listName}>
-                          <span
-                            className={`${styles.dot} ${
-                              c.last_status === "ok"
-                                ? styles.dotOk
-                                : c.last_status === "error"
-                                  ? styles.dotErr
-                                  : ""
-                            }`}
-                            title={c.last_error ?? c.last_status}
-                          />
-                          {c.name}
-                        </span>
-                        <span className={styles.listMeta}>
-                          {c.transport}
-                          {c.last_status !== "unknown" ? ` · ${c.last_status}` : ""}
-                          {c.last_error ? ` · ${c.last_error}` : ""}
-                        </span>
-                      </div>
-                      <div className={styles.listActions}>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          disabled={busy}
-                          onClick={() => openConnEdit(c)}
-                        >
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={c.enabled}
-                          aria-label={c.enabled ? `关闭 ${c.name}` : `启用 ${c.name}`}
-                          className={`${styles.switch} ${c.enabled ? styles.switchOn : ""}`}
-                          disabled={busy}
-                          onClick={() => onToggleConnector(c.id, !c.enabled)}
-                        >
-                          <span className={styles.switchKnob} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          disabled={busy}
-                          onClick={() => onProbe(c.id)}
-                        >
-                          探测
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          disabled={busy}
-                          onClick={() => onDeleteConnector(c.id)}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                  {connectors.length === 0 ? (
-                    <li className={styles.empty}>暂无 MCP</li>
-                  ) : null}
-                </ul>
-              </div>
+              </section>
             </>
           ) : null}
-
-          {!sheetOpen && tab === "digest" ? <DigestPrefsPanel /> : null}
-          {!sheetOpen && tab === "shell" ? <ShellObsPanel /> : null}
         </div>
       </div>
     </Modal>
