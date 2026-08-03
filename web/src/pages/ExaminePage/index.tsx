@@ -2,6 +2,7 @@ import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
 import { SquidwardAvatar } from "../../components/Avatars";
+import { VerifyDoneBar } from "../../components/VerifyDoneBar";
 import { dueReasonLine, stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { Claim } from "../../types";
@@ -36,11 +37,36 @@ export function ExaminePage() {
     examineAnswer,
     setExamineAnswer,
     examineSessionDone,
+    examineOutcome,
+    clearExamineSession,
     onExamineAnswer,
     setShowCompose,
+    setMode,
   } = useStore();
 
   const inSession = Boolean(examineNote || examineClaimId);
+
+  const backToToday = () => {
+    clearExamineSession();
+    setMode("chat");
+  };
+
+  const continueAlmost = () => {
+    const id = examineOutcome?.claim_id ?? examineClaimId;
+    if (!id) return;
+    const text =
+      examineOutcome?.claim_label?.trim() ||
+      examineLabel ||
+      "接着练";
+    onExamineStartClaim({
+      id,
+      text,
+      status: "in_progress",
+      topic: null,
+      source_note_id: null,
+      next_review_at: null,
+    });
+  };
 
   if (inSession) {
     return (
@@ -62,7 +88,29 @@ export function ExaminePage() {
             submitLabel="发送"
             busy={busy}
           />
-        ) : null}
+        ) : examineOutcome ? (
+          <VerifyDoneBar
+            outcome={examineOutcome}
+            busy={busy}
+            onBackToToday={backToToday}
+            onContinue={
+              examineOutcome.gate_verdict === "almost"
+                ? continueAlmost
+                : undefined
+            }
+          />
+        ) : (
+          <div className={styles.doneFallback}>
+            <button
+              type="button"
+              className={styles.doneFallbackBtn}
+              disabled={busy}
+              onClick={backToToday}
+            >
+              回今天
+            </button>
+          </div>
+        )}
       </>
     );
   }

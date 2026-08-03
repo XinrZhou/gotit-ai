@@ -142,9 +142,33 @@ export type TopicExamineVerdict = {
   session_done?: boolean;
 };
 
+/** Writeback slice from apply_examine_verdict (already on the wire). */
+export type VerifyWriteback = {
+  claim?: {
+    id?: string;
+    text?: string;
+    status?: string;
+    next_review_at?: string | null;
+  } | null;
+  plan_items?: unknown[];
+  verdict?: MasteryVerdict | string;
+  schedule_reason?: string | null;
+  interval_days?: number | null;
+  failure_digest_id?: string | null;
+};
+
+/** Session-done summary for Verify Done bar — no new domain state. */
+export type VerifyOutcome = {
+  gate_verdict: MasteryVerdict;
+  gate_reason?: string | null;
+  writeback: VerifyWriteback | null;
+  claim_id?: string | null;
+  claim_label?: string | null;
+};
+
 export type TopicExamineResponse = {
   verdict: TopicExamineVerdict;
-  writeback: { claim: { status: string }; plan_items: unknown[] } | null;
+  writeback: VerifyWriteback | null;
   verify?: VerifyPath | null;
   /** Learner-facing prior-miss tip when re-examining. */
   failure_hint?: string | null;
@@ -159,7 +183,7 @@ export type TeachVerdict = {
 
 export type TeachResponse = {
   verdict: TeachVerdict;
-  writeback?: { claim: { status: string }; plan_items: unknown[] } | null;
+  writeback?: VerifyWriteback | null;
   verify?: VerifyPath | null;
   failure_hint?: string | null;
 };

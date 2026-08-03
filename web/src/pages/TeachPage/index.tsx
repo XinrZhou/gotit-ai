@@ -3,6 +3,7 @@ import { ChatLog } from "../../components/ChatLog";
 import { Composer } from "../../components/Composer";
 import { EmptyState } from "../../components/EmptyState";
 import { PatrickAvatar } from "../../components/Avatars";
+import { VerifyDoneBar } from "../../components/VerifyDoneBar";
 import { dueReasonLine, stripHtml } from "../../lib/format";
 import { useStore } from "../../store";
 import type { Claim } from "../../types";
@@ -125,12 +126,37 @@ export function TeachPage() {
     setTeachClaimId,
     teachChat,
     teachDone,
+    teachOutcome,
+    clearTeachSession,
     onTeachStart,
     onTeachStartClaim,
     setShowCompose,
+    setMode,
   } = useStore();
 
   const inSession = teachChat.length > 0 || Boolean(teachClaimId);
+
+  const backToToday = () => {
+    clearTeachSession();
+    setMode("chat");
+  };
+
+  const continueAlmost = () => {
+    const id = teachOutcome?.claim_id ?? teachClaimId;
+    if (!id) return;
+    const text =
+      teachOutcome?.claim_label?.trim() ||
+      teachTopic.trim() ||
+      "接着讲";
+    onTeachStartClaim({
+      id,
+      text,
+      status: "in_progress",
+      topic: null,
+      source_note_id: null,
+      next_review_at: null,
+    });
+  };
 
   if (inSession) {
     return (
@@ -146,7 +172,29 @@ export function TeachPage() {
           }
           busy={busy}
         />
-        {!teachDone ? <TeachAnswerBar /> : null}
+        {!teachDone ? (
+          <TeachAnswerBar />
+        ) : teachOutcome ? (
+          <VerifyDoneBar
+            outcome={teachOutcome}
+            busy={busy}
+            onBackToToday={backToToday}
+            onContinue={
+              teachOutcome.gate_verdict === "almost" ? continueAlmost : undefined
+            }
+          />
+        ) : (
+          <div className={styles.doneFallback}>
+            <button
+              type="button"
+              className={styles.doneFallbackBtn}
+              disabled={busy}
+              onClick={backToToday}
+            >
+              回今天
+            </button>
+          </div>
+        )}
       </>
     );
   }

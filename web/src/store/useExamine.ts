@@ -1,6 +1,16 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
-import type { Claim, DayNote, TopicExamineResponse, VerifyPath } from "../types";
+import {
+  gateReasonFromVerify,
+  outcomeFromWire,
+} from "../lib/verifyOutcome";
+import type {
+  Claim,
+  DayNote,
+  TopicExamineResponse,
+  VerifyOutcome,
+  VerifyPath,
+} from "../types";
 import type { ChatTurn } from "./types";
 
 type Deps = {
@@ -31,6 +41,23 @@ function formatExamineError(e: unknown): string {
   return raw.trim() || "刚才没判上，请再试一次。";
 }
 
+function outcomeFromExamineRes(
+  res: TopicExamineResponse,
+  fallbackClaimId: string | null,
+  fallbackLabel: string,
+): VerifyOutcome | null {
+  const gate =
+    res.verify?.gate_verdict ??
+    (res.verdict.done ? res.verdict.verdict : null);
+  return outcomeFromWire({
+    gate_verdict: gate,
+    gate_reason: gateReasonFromVerify(res.verify),
+    writeback: res.writeback,
+    claim_id: res.verdict.current_claim_id ?? fallbackClaimId,
+    claim_label: res.writeback?.claim?.text ?? fallbackLabel,
+  });
+}
+
 export function useExamine({
   refresh,
   setBusy,
@@ -43,11 +70,24 @@ export function useExamine({
   const [examineChat, setExamineChat] = useState<ChatTurn[]>([]);
   const [examineAnswer, setExamineAnswer] = useState("");
   const [examineSessionDone, setExamineSessionDone] = useState(false);
+  const [examineOutcome, setExamineOutcome] = useState<VerifyOutcome | null>(
+    null,
+  );
 
   const threadBody = useCallback(
     () => (workflowThreadId ? { thread_id: workflowThreadId } : {}),
     [workflowThreadId],
   );
+
+  const clearExamineSession = useCallback(() => {
+    setExamineNote(null);
+    setExamineClaimId(null);
+    setExamineLabel("");
+    setExamineChat([]);
+    setExamineAnswer("");
+    setExamineSessionDone(false);
+    setExamineOutcome(null);
+  }, []);
 
   const onExamineStart = useCallback(
     (note: DayNote) => {
@@ -57,6 +97,7 @@ export function useExamine({
       setExamineChat([]);
       setExamineAnswer("");
       setExamineSessionDone(false);
+      setExamineOutcome(null);
       void (async () => {
         setBusy(true);
         setError("");
@@ -76,7 +117,12 @@ export function useExamine({
               failure_hint: res.failure_hint ?? null,
             },
           ]);
-          if (res.verdict.session_done) setExamineSessionDone(true);
+          if (res.verdict.session_done) {
+            setExamineSessionDone(true);
+            setExamineOutcome(
+              outcomeFromExamineRes(res, null, note.title?.trim() || "考点"),
+            );
+          }
         } catch (err) {
           const msg = formatExamineError(err);
           setError(msg);
@@ -99,6 +145,7 @@ export function useExamine({
       setExamineChat([]);
       setExamineAnswer("");
       setExamineSessionDone(false);
+      setExamineOutcome(null);
       void (async () => {
         setBusy(true);
         setError("");
@@ -122,6 +169,9 @@ export function useExamine({
           ]);
           if (res.verdict.session_done || res.verdict.done) {
             setExamineSessionDone(true);
+            setExamineOutcome(
+              outcomeFromExamineRes(res, claim.id, claim.text.slice(0, 80)),
+            );
           }
         } catch (err) {
           const msg = formatExamineError(err);
@@ -178,7 +228,16 @@ export function useExamine({
             verify: asVerify(res.verify),
           },
         ]);
-        if (done) setExamineSessionDone(true);
+        if (done) {
+          setExamineSessionDone(true);
+          setExamineOutcome(
+            outcomeFromExamineRes(
+              res,
+              examineClaimId,
+              examineLabel || "考点",
+            ),
+          );
+        }
         await refresh();
       } catch (err) {
         const msg = formatExamineError(err);
@@ -197,6 +256,7 @@ export function useExamine({
     examineAnswer,
     examineChat,
     examineSessionDone,
+    examineLabel,
     refresh,
     setBusy,
     setError,
@@ -211,6 +271,8 @@ export function useExamine({
     examineAnswer,
     setExamineAnswer,
     examineSessionDone,
+    examineOutcome,
+    clearExamineSession,
     onExamineStart,
     onExamineStartClaim,
     onExamineAnswer,

@@ -13,6 +13,8 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
+| **`verify-return-loop/`** | Phase6.2 P0：考完回流 — 结果/影响/回今天（不改 gate） |
+| **`daily-brief-semantic-cleanup/`** | Phase6.1：Brief「欠」= due+今日计划；笔记可考不叫欠 |
 | **`apple-interview-calendar/`** | 面试安排自动同步 Mac 日历「面试」 |
 | **`settings-ia-shell-activity/`** | Settings 我/提醒/高级；动态顶栏 + 删除 API |
 | **`main-path-converge/`** | 产品故事 S1–S8：空态/深挖诚实/过关可感（UX 作者自管；近归档） |

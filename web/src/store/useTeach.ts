@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, uploadFile } from "../api";
-import type { Claim, MasteryVerdict, TeachResponse, VerifyPath } from "../types";
+import {
+  gateReasonFromVerify,
+  outcomeFromWire,
+} from "../lib/verifyOutcome";
+import type {
+  Claim,
+  MasteryVerdict,
+  TeachResponse,
+  VerifyOutcome,
+  VerifyPath,
+} from "../types";
 import type { ChatTurn } from "./types";
 
 type Deps = {
@@ -36,6 +46,7 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
   const [teachAnswer, setTeachAnswer] = useState("");
   const [teachChat, setTeachChat] = useState<ChatTurn[]>([]);
   const [teachDone, setTeachDone] = useState(false);
+  const [teachOutcome, setTeachOutcome] = useState<VerifyOutcome | null>(null);
   const [teachSttAvailable, setTeachSttAvailable] = useState(false);
   const [teachTranscribing, setTeachTranscribing] = useState(false);
 
@@ -60,11 +71,30 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
     [teachClaimId],
   );
 
+  const clearTeachSession = useCallback(() => {
+    setTeachTopic("");
+    setTeachClaimId(null);
+    setTeachAnswer("");
+    setTeachChat([]);
+    setTeachDone(false);
+    setTeachOutcome(null);
+  }, []);
+
   const applyVerdict = useCallback(
-    (res: TeachResponse, prependUser?: string) => {
+    (
+      res: TeachResponse,
+      opts?: {
+        prependUser?: string;
+        claimId?: string | null;
+        claimLabel?: string | null;
+      },
+    ) => {
       const v = res.verdict;
       const verify = asVerify(res.verify);
       const verdict = displayVerdict(res);
+      const prependUser = opts?.prependUser;
+      const claimId = opts?.claimId ?? null;
+      const claimLabel = opts?.claimLabel ?? null;
       if (v.done) {
         setTeachChat((prev) => {
           const base = prependUser
@@ -82,6 +112,21 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
           ];
         });
         setTeachDone(true);
+        // Free-topic teach without claim writeback: no Done bar schedule story.
+        if (res.writeback && verdict) {
+          setTeachOutcome(
+            outcomeFromWire({
+              gate_verdict: verdict,
+              gate_reason: gateReasonFromVerify(res.verify),
+              writeback: res.writeback,
+              claim_id: claimId ?? res.writeback.claim?.id ?? null,
+              claim_label:
+                claimLabel ?? res.writeback.claim?.text ?? null,
+            }),
+          );
+        } else {
+          setTeachOutcome(null);
+        }
         if (res.writeback) void refresh();
       } else {
         setTeachChat((prev) => {
@@ -110,6 +155,7 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
       setError("");
       setTeachChat([]);
       setTeachDone(false);
+      setTeachOutcome(null);
       try {
         const res = await api<TeachResponse>("/v1/teach", {
           method: "POST",
@@ -119,7 +165,10 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
             ...threadBody(),
           }),
         });
-        applyVerdict(res);
+        applyVerdict(res, {
+          claimId: teachClaimId,
+          claimLabel: teachTopic.slice(0, 80) || null,
+        });
       } catch (err) {
         setError(String(err));
       } finally {
@@ -128,6 +177,7 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
     })();
   }, [
     teachTopic,
+    teachClaimId,
     claimBody,
     threadBody,
     applyVerdict,
@@ -143,6 +193,7 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
       setTeachAnswer("");
       setTeachChat([]);
       setTeachDone(false);
+      setTeachOutcome(null);
       void (async () => {
         setBusy(true);
         setError("");
@@ -155,7 +206,10 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
               ...threadBody(),
             }),
           });
-          applyVerdict(res);
+          applyVerdict(res, {
+            claimId: claim.id,
+            claimLabel: topic.slice(0, 80),
+          });
         } catch (err) {
           setError(String(err));
         } finally {
@@ -184,7 +238,11 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
             ...threadBody(),
           }),
         });
-        applyVerdict(res, userText);
+        applyVerdict(res, {
+          prependUser: userText,
+          claimId: teachClaimId,
+          claimLabel: teachTopic.slice(0, 80) || null,
+        });
       } catch (err) {
         setError(String(err));
         setTeachChat((prev) => [...prev, { role: "user", text: userText }]);
@@ -197,6 +255,7 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
     teachAnswer,
     teachChat,
     teachDone,
+    teachClaimId,
     claimBody,
     threadBody,
     applyVerdict,
@@ -233,6 +292,8 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
     teachAnswer,
     setTeachAnswer,
     teachDone,
+    teachOutcome,
+    clearTeachSession,
     teachSttAvailable,
     teachTranscribing,
     onTeachStart,

@@ -3,26 +3,27 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-03 (apple-interview-calendar).
+> Last reviewed: 2026-08-03 (positioning: personal single-user growth loop).
 
 ## Product (one line)
 
-Daily **learning companion**: personality agents chat in threads, remember
-weaknesses, and run verify workflows. **Verified = done.** Chat owns the
-surface; verification is the **core loop** (mastery criterion = pass the gate).
-Warm companion, honest gate — not a generic tutor chat, Anki+LLM, or
-multi-agent demo.
+**Personal single-user** system for long-term **technical growth**. Daily
+learning companion: agents chat in threads, remember weaknesses, run verify
+workflows. **Verified = done.** Chat owns the surface; verification is the
+**core loop** (mastery criterion = pass the gate). Not a note dump, not
+multi-tenant SaaS — warm companion, honest gate.
 
 ## Current main path (truth)
 
 ```text
 打开 App
-  → 空聊天 / 今日简报（欠练 + 计划；有则一键开练）
-  → 无料时：添加资料 → 出题 →「去开考」
+  → 空聊天 / 今日简报（**欠练** = due ∪ 今日未核销计划；有则一键开练）
+  → 无欠时：账清（库里还有料）或「添加资料」→ 出题 →「去开考」
   → 考我 / 回讲（Critic + deterministic_gate）
      · 深挖 = 项目练习场（会话可写 thread；**不过门**，不算掌握）
   → 芯片：过了 / 还差点 / 欠着下次
-  → 欠清或主动「今日收工」
+  → **Done 条**：影响（排程/状态，来自 writeback）+「回今天」（almost 可「接着练」）
+  → 回空首页看最新 Brief / 账清；欠清或主动「今日收工」
 ```
 
 Learner empty states: owed → brief is primary; idle →「添加资料」is primary
@@ -44,6 +45,20 @@ Apple 桥（日计划↔提醒事项；面试↔日历）、Harness API/CLI、CA
 
 **Personal / single-user** (not multi-tenant SaaS): one `GOTIT_USER_ID` +
 shared bearer `GOTIT_API_KEY`. No per-user auth product work planned.
+Positioning: `docs/PRODUCT.md`.
+
+## Runtime processes (truth)
+
+| Process | Entry | Role |
+|---------|-------|------|
+| **API** | `uv run gotit-api` → `gotit.api.main` | Learner Web + REST; Bearer auth |
+| **MCP** | `uv run gotit-mcp` → `gotit.mcp.server` | OpenClaw / host tools → same `db.ops` |
+| **Web** | `cd web && npm run dev` | SPA; talks **only** to API (not MCP) |
+| **DB** | Compose `postgres` (or SQLite) | No app container in Compose |
+| **Worker** | — | **None** in-repo |
+| **Cron** | OpenClaw Gateway + `skills/*` | Digests / interview remind **outside** gotit; API only stores prefs + can run `install-cron.sh` |
+
+Harness / gold scripts (`scripts/run_harness.py`, …) are **dev/CI**, not learner runtime.
 
 ## Stack
 
@@ -80,6 +95,12 @@ Iron laws: REST ↔ MCP parity via `db.ops`; mastery **gate is deterministic cod
 
 Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` removed).
 
+**Notes → claims (truth):** Web / bootcamp / MCP `gotit_ingest_note` call
+`POST /v1/notes/{id}/ingest` (Compass when `LLM_API_KEY` set, else stub extract
+→ `db.ops.ingest_note` + optional plan items). Legacy `POST /v1/ingest` and MCP
+`gotit_ingest` remain **material→one stub claim** (response may carry
+`LoopState`); **not** the product ingest path — no Web caller.
+
 ## Agents (UI nicknames)
 
 | id | UI | Role |
@@ -93,13 +114,16 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 ## Shipped capabilities
 
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
-- **Daily verify brief**: empty chat / empty thread / examine picker show
-  owed (`due_claims` from `/v1/today`) + today's plan with one-tap 开考
-  (claim-id or note-id examine); each owed row shows quiet `due_reason_text`
+- **Daily verify brief**: empty chat / empty thread show **owed only** —
+  `due_claims` from `/v1/today` ∪ today's unverified plan items with a claim
+  (one-tap 开考 / 回讲). Notes with claims are library availability — **not**
+  titled「欠」and do not alone open the brief (账清 empty state instead).
+  Each owed due-row shows quiet `due_reason_text`
   (why today — overdue / almost / scheduled / confuse / depends / queued;
-  templates include fail-count hints when relevant);
-  when interview ramp is light/warm/urgent and prefs on, `/v1/today` also
-  carries `interview_focus` (quiet/featured drill hint + `open_drill`) so
+   templates include fail-count hints when relevant); plan-open rows without a
+  due reason say「今日计划」. Examine picker may still list notes for optional
+  practice. When interview ramp is light/warm/urgent and prefs on, `/v1/today`
+  also carries `interview_focus` (quiet/featured drill hint + `open_drill`) so
   empty chat can one-tap 深挖 without rewriting ramp tiers
 - **Chat plan grounding**: each companion turn gets today's `plan_items` skeleton
   (Asia/Shanghai); ask-plan replies are enforced as short opener + exact markdown
@@ -205,19 +229,25 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   欠着下次；主题考完另标）；chip 读 `metadata.verdict`，不解析气泡文案
   + **VerifyTrajectory** 考→核→门 step row from `examine_verdict` /
     `recheck_verdict` / `gate_verdict`
+  + **VerifyDoneBar**（session done）：gate.reason + writeback 排程影响一行 +
+    「回今天」（almost 另有「接着练」）；离开工作流后 Brief/账清反映最新 owed
 - **Workflow turns in thread**: examine / teach / drill optionally append to the
   active companion `messages` stream (`metadata.workflow`); Chat shows quiet badges
-- Notes → claims → plan; compose/view-note「出题」shows in-modal
-  generating → ready with「去开考」(first claim → examine); project + resume-driven
-  drill (resume import = projects + `ResumeRecord` only — **no** auto quiz notes);
-  memory; skills; harness
-  （个人 gold 对照见 `openspec/changes/archive/2026-07-30-companion-tools-and-schedule/notes-gold.md`：`uv run python scripts/run_gold_compare.py`）
+- Notes → claims → plan via **`/v1/notes/{id}/ingest`** (see Layout note);
+  compose/view-note「出题」shows in-modal generating → ready with「去开考」
+  (first claim → examine); project + resume-driven drill (resume import =
+  projects + `ResumeRecord` only — **no** auto quiz notes); memory; skills;
+  harness（个人 gold 对照见
+  `openspec/changes/archive/2026-07-30-companion-tools-and-schedule/notes-gold.md`：
+  `uv run python scripts/run_gold_compare.py`）
 - MCP tools mirror chat/verify/day/skills/connectors/… (see `mcp/server.py`)
 - **Mastery graph** (Postgres edges, no RAG): fail → confuse growth; optional
-  `depends_on` prereq edges; budget subgraph injects into Axiom; fullscreen
-  「弱点图谱」(`cytoscape` + fcose，主栏内嵌非全屏); `/v1/obs/graph` enriches meta
-  (`claim_id`, `recent`, `cross_topic`, `unmet`, `preferred_check_mode`, …)
-  for launch + explain — `openspec/changes/mastery-graph-deepen/`
+  `depends_on` prereq edges; budget subgraph injects into Axiom; top-bar
+  「弱点图谱」opens **in the main column** (`cytoscape` + fcose — keeps left
+  threads + top bar, **not** a separate fullscreen route); `/v1/obs/graph`
+  enriches meta (`claim_id`, `recent`, `cross_topic`, `unmet`,
+  `preferred_check_mode`, …) for launch + explain —
+  `openspec/changes/mastery-graph-deepen/`
 
 ## OpenClaw shell (not in gotit core)
 
@@ -257,12 +287,15 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 
 - **Now (product UX):** main-path friction converge
   (`openspec/changes/main-path-converge/`)
+- Retire or clearly deprecate legacy `POST /v1/ingest` + MCP `gotit_ingest`
+  stubs (+ `LoopState` only used there) once no external callers remain
 - Harness holdout UI / auto-adopt still out (metric rollups shipped in API/CLI)
 - Drill ↔ mastery: either wire claim-close through `verify_finalize`, or keep
-  drill explicitly **prep-only** in all user-facing copy (code today = prep-only;
-  ingest no longer auto-tags project claims as drill)
+  drill explicitly **prep-only** in all user-facing copy (code today =
+  `finish_drill_session` only — **no** `verify_finalize`; ingest no longer
+  auto-tags project claims as drill)
 - Full APPLY verify workflow (**removed from public PATCH preferred modes**;
-  legacy `apply` in DB still resolves → probe)
+  legacy `apply` in DB still resolves → probe via `check_routing`)
 - Broad per-agent multi-model binding beyond Critic (Axiom/others still share
   global `LLM_*`; Critic may use `identity.llm_config` or `CRITIC_*`)
 - Broad agent-as-tool beyond the companion **builtin whitelist** + optional user

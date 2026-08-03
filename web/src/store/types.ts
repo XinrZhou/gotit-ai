@@ -16,6 +16,7 @@ import type {
   ResumeDocument,
   ResumeRecord,
   ResumeUploadResponse,
+  VerifyOutcome,
   VerifyPath,
 } from "../types";
 
@@ -126,6 +127,8 @@ export type Store = {
   examineAnswer: string;
   setExamineAnswer: (s: string) => void;
   examineSessionDone: boolean;
+  examineOutcome: VerifyOutcome | null;
+  clearExamineSession: () => void;
   onExamineStart: (note: DayNote) => void;
   onExamineStartClaim: (claim: Claim) => void;
   onExamineAnswer: () => void;
@@ -137,6 +140,8 @@ export type Store = {
   teachAnswer: string;
   setTeachAnswer: (s: string) => void;
   teachDone: boolean;
+  teachOutcome: VerifyOutcome | null;
+  clearTeachSession: () => void;
   teachSttAvailable: boolean;
   teachTranscribing: boolean;
   onTeachStart: () => void;
