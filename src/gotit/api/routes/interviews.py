@@ -80,7 +80,7 @@ async def upsert_interview(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> InterviewEventView:
     async with session_scope() as session:
-        return await day_ops.upsert_interview(
+        view = await day_ops.upsert_interview(
             session,
             interview_id=body.id,
             company=body.company,
@@ -92,6 +92,10 @@ async def upsert_interview(
             remind_offsets_hours=body.remind_offsets_hours,
             user_id=_user_id(settings),
         )
+    from gotit.bridge.calendar import sync_interview_to_calendar
+
+    sync_interview_to_calendar(view)
+    return view
 
 
 @router.get(
@@ -184,11 +188,15 @@ async def patch_interview(
     fields = body.model_dump(exclude_unset=True)
     async with session_scope() as session:
         try:
-            return await day_ops.patch_interview(
+            view = await day_ops.patch_interview(
                 session, interview_id, user_id=_user_id(settings), **fields
             )
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    from gotit.bridge.calendar import sync_interview_to_calendar
+
+    sync_interview_to_calendar(view)
+    return view
 
 
 @router.delete(
@@ -206,6 +214,9 @@ async def delete_interview(
             )
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    from gotit.bridge.calendar import rm_interview
+
+    rm_interview(interview_id)
     return {"status": "deleted"}
 
 

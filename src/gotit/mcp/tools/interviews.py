@@ -52,7 +52,15 @@ async def gotit_upsert_interview(
             remind_offsets_hours=remind_offsets_hours,
             user_id=_user_id(),
         )
-    return row.model_dump(mode="json")
+    from gotit.bridge.calendar import sync_interview_to_calendar
+
+    out = row.model_dump(mode="json")
+    apple_err = sync_interview_to_calendar(row)
+    if apple_err:
+        out["apple_sync_error"] = apple_err
+    else:
+        out["apple_synced"] = True
+    return out
 
 @mcp.tool()
 async def gotit_update_interview_status(
@@ -68,7 +76,15 @@ async def gotit_update_interview_status(
             InterviewStatus(status),
             user_id=_user_id(),
         )
-    return row.model_dump(mode="json")
+    from gotit.bridge.calendar import sync_interview_to_calendar
+
+    out = row.model_dump(mode="json")
+    apple_err = sync_interview_to_calendar(row)
+    if apple_err:
+        out["apple_sync_error"] = apple_err
+    else:
+        out["apple_synced"] = True
+    return out
 
 @mcp.tool()
 async def gotit_list_due_interview_reminders(

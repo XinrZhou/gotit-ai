@@ -1,0 +1,149 @@
+#!/usr/bin/osascript -l JavaScript
+/**
+ * Upsert or remove Calendar events tagged with [gotit-interview:<uuid>].
+ *
+ * argv[0]: calendar name (fallback: first calendar)
+ * argv[1]: JSON
+ *   { "op": "upsert",
+ *     "id": "uuid",
+ *     "title": "...",
+ *     "start": "ISO-8601",
+ *     "end": "ISO-8601",
+ *     "notes": "...",
+ *     "alarms_hours_before": [24, 2] }
+ *   { "op": "rm", "id": "uuid" }
+ */
+function run(argv) {
+  var calName = (argv && argv[0]) ? String(argv[0]) : "面试";
+  var raw = (argv && argv[1]) ? String(argv[1]) : "{}";
+  var payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: "JSON 无效: " + String(e) });
+  }
+
+  var id = String(payload.id || "").trim();
+  if (!id) {
+    return JSON.stringify({ ok: false, error: "missing id" });
+  }
+  var marker = "[gotit-interview:" + id + "]";
+  var op = String(payload.op || "upsert").trim();
+
+  try {
+    var app = Application("Calendar");
+    app.includeStandardAdditions = true;
+
+    var cals = app.calendars.whose({ name: calName })();
+    var cal;
+    if (!cals || cals.length === 0) {
+      var all = app.calendars();
+      if (!all || all.length === 0) {
+        return JSON.stringify({ ok: false, error: "本机没有可用日历" });
+      }
+      cal = all[0];
+      calName = String(cal.name());
+    } else {
+      cal = cals[0];
+    }
+
+    function findTagged() {
+      var found = [];
+      var events = cal.events();
+      for (var i = 0; i < events.length; i++) {
+        var ev = events[i];
+        var desc = "";
+        try {
+          desc = String(ev.description() || "");
+        } catch (e0) {}
+        if (desc.indexOf(marker) >= 0) found.push(ev);
+      }
+      return found;
+    }
+
+    function wipeTagged() {
+      var tagged = findTagged();
+      var n = 0;
+      for (var i = 0; i < tagged.length; i++) {
+        try {
+          app.delete(tagged[i]);
+          n++;
+        } catch (eDel) {
+          try {
+            tagged[i].delete();
+            n++;
+          } catch (eDel2) {}
+        }
+      }
+      return n;
+    }
+
+    if (op === "rm") {
+      var removed = wipeTagged();
+      return JSON.stringify({
+        ok: true,
+        op: "rm",
+        calendar: calName,
+        removed: removed,
+      });
+    }
+
+    var title = String(payload.title || "").trim();
+    var startIso = String(payload.start || "").trim();
+    var endIso = String(payload.end || "").trim();
+    if (!title || !startIso || !endIso) {
+      return JSON.stringify({ ok: false, error: "upsert 需要 title/start/end" });
+    }
+
+    var start = new Date(startIso);
+    var end = new Date(endIso);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return JSON.stringify({ ok: false, error: "start/end 时间无效" });
+    }
+
+    var notesBody = String(payload.notes || "").trim();
+    var desc = marker + (notesBody ? "\n" + notesBody : "");
+
+    wipeTagged();
+
+    var event = app.Event({
+      summary: title,
+      startDate: start,
+      endDate: end,
+      description: desc,
+    });
+    cal.events.push(event);
+
+    var alarms = payload.alarms_hours_before || [];
+    if (alarms && alarms.length) {
+      try {
+        var alarmObjs = [];
+        for (var a = 0; a < alarms.length; a++) {
+          var hours = Number(alarms[a]);
+          if (!isFinite(hours) || hours <= 0) continue;
+          // Calendar alarm trigger interval is minutes before start (negative).
+          var mins = -Math.round(hours * 60);
+          alarmObjs.push(app.CalendarAlarm({ triggerInterval: mins }));
+        }
+        if (alarmObjs.length) {
+          // Re-fetch last matching event to attach alarms if needed.
+          var just = findTagged();
+          if (just.length) {
+            just[0].alarms = alarmObjs;
+          }
+        }
+      } catch (eAlarm) {
+        // Alarms are best-effort; event itself already created.
+      }
+    }
+
+    return JSON.stringify({
+      ok: true,
+      op: "upsert",
+      calendar: calName,
+      title: title,
+    });
+  } catch (err) {
+    return JSON.stringify({ ok: false, error: String(err) });
+  }
+}
