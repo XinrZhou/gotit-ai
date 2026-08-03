@@ -13,12 +13,14 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
-| **`main-path-converge/`** | 产品故事 S1–S5：空态主动作、深挖诚实、过关可感 |
+| **`main-path-converge/`** | 产品故事 S1–S8：空态/深挖诚实/过关可感（UX 作者自管；近归档） |
 
 ## Recently archived
 
 | Archive | Notes |
 |---------|-------|
+| `archive/2026-08-03-eval-harness-loop/` | Harness metric rollups + deeper offline cases |
+| `archive/2026-08-03-failure-writeback-regress/` | Failure digest → re-examine inject + schedule table |
 | `archive/2026-08-03-verify-spine-deepen/` | Gate signals + ContextBudget + Harness API/CLI |
 | `archive/2026-08-03-form-follows-claim/` | `preferred_check_mode` CTA routing |
 | `archive/2026-08-03-cat-param-writeback/` | Item-param writeback on gate / calib |
@@ -51,6 +53,7 @@ Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 
 - Drill mastery honesty: keep prep-only copy **or** wire claim-close finalize
 - Full APPLY verify form (today → probe)
-- Auto prompt/skill register on harness adopt
+- Auto prompt/skill register on harness adopt（仍禁止；审计 only）
 - Broad per-agent multi-model beyond Critic
 - ~~Broad agent-as-tool against full MCP catalog~~ — **not near-term** (whitelist stays)
+- Mastery-graph deepen（用法 + topic 簇；非百科 KG）— not opened yet

@@ -3,7 +3,7 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-03 (core-loop / mastery-criterion wording).
+> Last reviewed: 2026-08-03 (eval-harness-loop metric contract + failure writeback).
 
 ## Product (one line)
 
@@ -30,8 +30,12 @@ Learner empty states: owed → brief is primary; idle →「添加资料」is pr
 `openspec/changes/main-path-converge/design.md` (S1–S5).
 
 旁路（入口不强化）：弱点图谱、Settings（Skills/MCP/计划推送/动态）、
-Apple 桥、Harness API/CLI、CAT 题参写回。当前波次默认 **收主路径摩擦**
-（活跃 OpenSpec 仅 `openspec/changes/main-path-converge/`），不默认拉长验证主链路。
+Apple 桥、Harness API/CLI、CAT 题参写回。当前波次：
+- UX / 主路径摩擦：`openspec/changes/main-path-converge/`（作者自管）
+- 评测闭环 + 失败写回可回归已归档：
+  `archive/2026-08-03-eval-harness-loop/`、
+  `archive/2026-08-03-failure-writeback-regress/`
+不默认拉长 Agent 自主度 / RAG / 自动 adopt。
 
 ## Deploy posture
 
@@ -132,7 +136,15 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   Apple 计划桥导入说明
 - **Harness API** (dev/CI, not a Settings tab): `POST/GET/PATCH /v1/harness/runs`
   runs `dev`/`gold` + human `adopt|observe|reject` in `summary` (no auto prompt
-  change); CLI `scripts/run_harness.py` remains
+  change); CLI `scripts/run_harness.py` remains. Run `summary` contract keys:
+  `total`/`passed`/`failed` plus `gate_consistent` / `routing_ok` /
+  `no_spurious_write` / `failure_hook_ok` (bool rollups from case
+  `metrics.rollup`; vacuous True if no tagged case). Dev cases deepen gate
+  signals, `check_routing`, stub no-fake-write, failure digest→budget inject
+  (no real `LLM_API_KEY`). `GET ?decision=` filters audit decisions.
+  **Eval loop**: offline case → harness run → fixed metrics → human
+  adopt|observe|reject (audit only; VISION P5 — holdout before adopt;
+  adopt ≠ auto-apply prompt/skill).
 - Nav rail = brand + library + threads (no account footer)
 - Conversation top-right: **弱点图谱** (fullscreen mastery graph) + account /
   Settings
@@ -150,7 +162,7 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
     (`GateResult.signals`; never upgrades). `None` = not provided (stubs OK).
   + **ContextBudget** (`core/context_budget.py`): compose graph + failure-lesson
     blocks with per-block + total char caps; trim lessons first; wired in
-    `axiom.build_prompt`
+    `axiom.build_prompt` **and** `build_topic_prompt` (same trim-lessons-first)
   + **Spaced review** (`core/schedule.py`, deterministic — never LLM):
     `passed` clears due; `almost` stays due today; `owe_next` →
     `next_review_at = as_of + min(30, 1+2×prior_failures)`;
@@ -218,17 +230,21 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   Settings「资料」列表 + 升温开关；companion `get_upcoming_interview`；
   今日简报 `interview_focus` 与 ramp 粘合（prefs 关则无偏置条）；
   投递 `skills/interview-remind/`（offset + ramp 同 cron）
-- **Failure digest**（P3b）：examine `almost|owe_next` → `failure_digest` memory（同 claim+verdict
-  去重）；`skills/failure-digest/` 推微信；再考时 **budgeted** 注入 Axiom（同 claim /
-  confuse 邻居 / 同 topic；`FAILURE_LESSON_MAX_ITEMS=3` · `MAX_CHARS=600`）；
-  examine/teach 与 DailyBrief 欠账行安静展示 `failure_hint`
+- **Failure → 再练**（P2/P4）：`almost|owe_next` → `failure_digest`（同 claim+verdict
+  去重；`passed` 不写）；`skills/failure-digest/` 可推微信；再 examine /
+  claim-bound teach 经 `select_failure_lessons` + `budget_failure_lesson_block`
+  注入（同 claim → confuse 邻 → 同 topic；≤3 条 / ≤600 字）；ops
+  `failure_writeback_and_lessons` 供 harness；DailyBrief `failure_hint` 短提示不
+  替代注入块；排程三档见 `schedule.py`（passed 清 due / almost 当日 /
+  owe_next +min(30,1+2×fails)）
 - **Voice teach / coding**（P3c/P2）：应用内回讲支持录音转写（`STT_*` / `LLM_*`）或
   纯文本；claim 关闭走共享 finalize；OpenClaw skills `voice-teach` / `coding` 仍可用
 
 ## Not done yet (honest)
 
-- **Now (product):** main-path friction converge — not new verticals
+- **Now (product UX):** main-path friction converge
   (`openspec/changes/main-path-converge/`)
+- Harness holdout UI / auto-adopt still out (metric rollups shipped in API/CLI)
 - Drill ↔ mastery: either wire claim-close through `verify_finalize`, or keep
   drill explicitly **prep-only** in all user-facing copy (code today = prep-only;
   ingest no longer auto-tags project claims as drill)
