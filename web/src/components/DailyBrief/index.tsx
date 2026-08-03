@@ -140,7 +140,7 @@ export function DailyBrief({
       <header className={styles.head}>
         <div className={styles.headText}>
           <h2 className={styles.headTitle}>今天还欠这些</h2>
-          <p className={styles.headSub}>点一条，过一遍门</p>
+          <p className={styles.headSub}>从下面挑一条开考，过关才算会</p>
         </div>
         {more > 0 && onViewAll ? (
           <button
@@ -157,33 +157,35 @@ export function DailyBrief({
       </header>
 
       <ul className={styles.list}>
-        {rows.map((r) => (
-          <li key={r.key}>
-            <button
-              type="button"
-              className={styles.row}
-              disabled={busy}
-              onClick={r.onOpen}
-            >
-              <span className={styles.rowBody}>
-                <span className={styles.title} title={r.label}>
-                  {r.label}
+        {rows.map((r, i) => {
+          const metaTitle = [r.reason, r.lesson].filter(Boolean).join(" · ");
+          return (
+            <li key={r.key}>
+              <button
+                type="button"
+                className={`${styles.row}${i === 0 ? ` ${styles.rowPrimary}` : ""}`}
+                disabled={busy}
+                onClick={r.onOpen}
+              >
+                <span className={styles.rowBody}>
+                  <span className={styles.title} title={r.label}>
+                    {r.label}
+                  </span>
+                  {metaTitle ? (
+                    <span className={styles.meta} title={metaTitle}>
+                      {r.reason ? <span>{r.reason}</span> : null}
+                      {r.reason && r.lesson ? " · " : null}
+                      {r.lesson ? (
+                        <span className={styles.metaLesson}>{r.lesson}</span>
+                      ) : null}
+                    </span>
+                  ) : null}
                 </span>
-                {r.reason ? (
-                  <span className={styles.reason} title={r.reason}>
-                    {r.reason}
-                  </span>
-                ) : null}
-                {r.lesson ? (
-                  <span className={styles.lesson} title={r.lesson}>
-                    {r.lesson}
-                  </span>
-                ) : null}
-              </span>
-              <span className={styles.cta}>{r.cta}</span>
-            </button>
-          </li>
-        ))}
+                <span className={styles.cta}>{r.cta}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

@@ -186,8 +186,8 @@ export function TeachPage() {
           <div className={styles.pickerCopy}>
             <div className={styles.pickerTitle}>选一条回讲</div>
             <div className={styles.pickerSub}>
-              {rows.length > 0 ? `共 ${rows.length} 条 · ` : ""}
-              口说或打字 · 过了 / 还差点 / 欠着下次
+              {rows.length > 0 ? `共 ${rows.length} 条可讲 · ` : ""}
+              口说或打字 · 过关才算会
             </div>
           </div>
         </header>

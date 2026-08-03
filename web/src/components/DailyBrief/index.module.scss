@@ -5,7 +5,7 @@
 }
 
 .home {
-  max-width: 440px;
+  max-width: none;
 }
 
 .thread {
@@ -14,40 +14,41 @@
 
 .head {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 10px;
-  padding: 0 4px;
+  margin-bottom: 14px;
+  padding: 0 2px;
 }
 
 .headText {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .headTitle {
   margin: 0;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   color: var(--ink);
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .headSub {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--faint);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .headCount {
   flex-shrink: 0;
+  padding-bottom: 2px;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -59,8 +60,7 @@
   flex-shrink: 0;
   border: none;
   background: transparent;
-  padding: 2px 0;
-  margin: 0;
+  padding: 4px 0 2px;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -82,25 +82,24 @@
 .list {
   list-style: none;
   margin: 0;
-  padding: 2px 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  background: var(--soft);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+  gap: 0;
+  background: transparent;
 }
 
-.list > li + li {
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
+.list > li + li .row {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   margin: 0;
-  padding: 13px 14px 13px 16px;
+  padding: 16px 4px 16px 2px;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -109,13 +108,24 @@
   transition: background 0.15s ease;
 }
 
+.rowPrimary {
+  background: transparent;
+}
+
 .row:hover:not(:disabled) {
-  background: var(--fill);
+  background: transparent;
+}
+
+.row:hover:not(:disabled) .title {
+  color: var(--ink);
 }
 
 .row:focus-visible {
   outline: none;
-  background: var(--fill);
+}
+
+.row:focus-visible .title {
+  color: var(--ink);
 }
 
 .row:disabled {
@@ -128,58 +138,66 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 }
 
 .title {
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 400;
   color: var(--ink);
-  letter-spacing: -0.015em;
-  line-height: 1.35;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  transition: color 0.15s ease;
 }
 
-.reason {
-  font-size: 12px;
+.rowPrimary .title {
+  font-weight: 500;
+}
+
+.meta {
+  font-size: 12.5px;
   font-weight: 400;
   color: var(--muted);
   letter-spacing: -0.01em;
-  line-height: 1.35;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.lesson {
-  font-size: 11.5px;
-  font-weight: 400;
+.metaLesson {
   color: var(--faint);
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .cta {
   flex-shrink: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: -0.01em;
-  padding: 5px 11px;
+  padding: 7px 13px;
   border-radius: 8px;
-  background: var(--fill);
-  color: var(--ink);
+  background: transparent;
+  color: var(--muted);
   line-height: 1.2;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.row:hover:not(:disabled) .cta,
-.row:focus-visible .cta {
-  background: var(--bg);
+.rowPrimary .cta {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.row:hover:not(:disabled) .cta {
   color: var(--ink);
+}
+
+.rowPrimary:hover:not(:disabled) .cta,
+.rowPrimary:focus-visible .cta {
+  background: var(--ink);
+  color: var(--bg);
+  opacity: 0.88;
 }

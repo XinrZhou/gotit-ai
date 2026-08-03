@@ -144,7 +144,7 @@ export function ExaminePage() {
           <div className={styles.pickerCopy}>
             <div className={styles.pickerTitle}>选一条开考</div>
             <div className={styles.pickerSub}>
-              共 {rows.length} 条 · 过了 / 还差点 / 欠着下次
+              共 {rows.length} 条可考 · 过关才算会
             </div>
           </div>
         </header>

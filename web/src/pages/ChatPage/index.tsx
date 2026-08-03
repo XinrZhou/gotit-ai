@@ -1081,34 +1081,57 @@ export function ChatPage() {
                 <div className={styles.briefStage}>
                   <DailyBrief
                     variant="home"
-                    maxItems={4}
+                    maxItems={5}
                     onExamineClaim={(c) => void startVerifyClaim(c)}
                     onExamineNoteId={(id) => void startExamineNote(id)}
                     onViewAll={() => void startWorkflow("examine")}
                   />
                   <footer className={styles.briefFooter}>
-                    {showCloseCta ? (
-                      <button
-                        type="button"
-                        className={styles.briefClose}
-                        disabled={closingDay || storeBusy}
-                        onClick={() => void onCloseDay()}
-                      >
-                        今天收工
-                      </button>
-                    ) : null}
-                    <nav className={styles.briefAltNav} aria-label="其它方式">
-                      {WORKFLOWS.map((w) => (
+                    <nav className={styles.briefAltNav} aria-label="次要入口">
+                      {WORKFLOWS.map((w, i) => (
+                        <span key={w.mode} className={styles.briefAltItem}>
+                          {i > 0 ? (
+                            <span className={styles.briefMetaDot} aria-hidden>
+                              ·
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={styles.briefAltChip}
+                            onClick={() => void startWorkflow(w.mode)}
+                            title={w.hint}
+                          >
+                            {w.mode === "drill" ? "深挖" : w.label}
+                          </button>
+                        </span>
+                      ))}
+                      <span className={styles.briefAltItem}>
+                        <span className={styles.briefMetaDot} aria-hidden>
+                          ·
+                        </span>
                         <button
-                          key={w.mode}
                           type="button"
                           className={styles.briefAltChip}
-                          onClick={() => void startWorkflow(w.mode)}
-                          title={w.hint}
+                          onClick={() => void createThread()}
                         >
-                          {w.label}
+                          先聊聊
                         </button>
-                      ))}
+                      </span>
+                      {showCloseCta ? (
+                        <span className={styles.briefAltItem}>
+                          <span className={styles.briefMetaDot} aria-hidden>
+                            ·
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.briefAltChip}
+                            disabled={closingDay || storeBusy}
+                            onClick={() => void onCloseDay()}
+                          >
+                            今天收工
+                          </button>
+                        </span>
+                      ) : null}
                     </nav>
                   </footer>
                 </div>
@@ -1189,13 +1212,15 @@ export function ChatPage() {
                   今天收工
                 </button>
               ) : null}
-              <button
-                type="button"
-                className={styles.emptyChatLink}
-                onClick={() => void createThread()}
-              >
-                开新对话
-              </button>
+              {!hasDailyBrief ? (
+                <button
+                  type="button"
+                  className={styles.emptyChatLink}
+                  onClick={() => void createThread()}
+                >
+                  开新对话
+                </button>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -1349,7 +1374,7 @@ export function ChatPage() {
                       <div className={styles.briefStage}>
                         <DailyBrief
                           variant="thread"
-                          maxItems={4}
+                          maxItems={5}
                           onExamineClaim={(c) => void startVerifyClaim(c)}
                           onExamineNoteId={(id) => void startExamineNote(id)}
                           onViewAll={() => void startWorkflow("examine")}
@@ -1362,28 +1387,39 @@ export function ChatPage() {
                           />
                         ) : null}
                         <footer className={styles.briefFooter}>
-                          {showCloseCta ? (
-                            <button
-                              type="button"
-                              className={styles.briefClose}
-                              disabled={closingDay || storeBusy}
-                              onClick={() => void onCloseDay()}
-                            >
-                              今天收工
-                            </button>
-                          ) : null}
-                          <nav className={styles.briefAltNav} aria-label="其它方式">
-                            {WORKFLOWS.map((w) => (
-                              <button
-                                key={w.mode}
-                                type="button"
-                                className={styles.briefAltChip}
-                                onClick={() => void startWorkflow(w.mode)}
-                                title={w.hint}
-                              >
-                                {w.label}
-                              </button>
+                          <nav className={styles.briefAltNav} aria-label="次要入口">
+                            {WORKFLOWS.map((w, i) => (
+                              <span key={w.mode} className={styles.briefAltItem}>
+                                {i > 0 ? (
+                                  <span className={styles.briefMetaDot} aria-hidden>
+                                    ·
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className={styles.briefAltChip}
+                                  onClick={() => void startWorkflow(w.mode)}
+                                  title={w.hint}
+                                >
+                                  {w.mode === "drill" ? "深挖" : w.label}
+                                </button>
+                              </span>
                             ))}
+                            {showCloseCta ? (
+                              <span className={styles.briefAltItem}>
+                                <span className={styles.briefMetaDot} aria-hidden>
+                                  ·
+                                </span>
+                                <button
+                                  type="button"
+                                  className={styles.briefAltChip}
+                                  disabled={closingDay || storeBusy}
+                                  onClick={() => void onCloseDay()}
+                                >
+                                  今天收工
+                                </button>
+                              </span>
+                            ) : null}
                           </nav>
                         </footer>
                       </div>
