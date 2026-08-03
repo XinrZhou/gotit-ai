@@ -134,9 +134,14 @@ Memory write model:
 | failure_digest | derived cache | push + lesson tip (upsert fill follow_up) |
 | bootcamp / prefs / note / event / shell | memory OK | product / user |
 
-`prior_failures` / due fail severity: trajectory `owe_next` counts only (same
-helper). `/v1/today` adds `mastery_snapshot` + plan-item `due_reason_*`;
+`prior_failures` / due fail severity / Brief「曾挂过」: trajectory `owe_next`
+counts only. Graph / obs node sizing uses `fail_event_count` (= `fail_events`
+rows for almost|owe_next); meta keeps alias `fail_count` for older UI.
+`/v1/today` adds `mastery_snapshot` + plan-item `due_reason_*`;
 interview_focus / bootcamp carry `lane`.
+
+REST/MCP claim-close entries share `api.verify_finalize.finalize_claim_by_id`
+(load claim → `finalize_examine_with_gate`). No `apply_examine_result` stub.
 
 Active change: `openspec/changes/state-boundary-tighten/`.
 
@@ -144,10 +149,11 @@ Five-question check (after this tighten):
 
 1. Why practice today? — due_reason on due + plan items; lanes for interview/bootcamp.
 2. Practice lifecycle? — prepare (companion open-*) vs closed (finalize / calib writer).
-3. Multiple gate writers? — verify → finalize only; calib explicit source; no routes/mcp
-   direct `apply_examine_verdict`.
+3. Multiple gate writers? — verify → finalize only; calib explicit source; no
+   binary `apply_examine_result`; routes/mcp use `finalize_claim_by_id`.
 4. Memory dump? — digest is cache; claim/graph authoritative for mastery/fail structure.
 5. New learning mode? — prepare CTA + finalize/writer; do not fork mastery write.
+6. Fail counts? — schedule/Brief = trajectory owe_next; graph = fail_event_count.
 
 ## Shipped capabilities
 

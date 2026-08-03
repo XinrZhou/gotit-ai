@@ -14,7 +14,7 @@ from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
 from gotit.api.stt import SttUnavailable, stt_available, transcribe_audio
-from gotit.api.verify_finalize import finalize_examine_with_gate
+from gotit.api.verify_finalize import finalize_claim_by_id
 from gotit.api.workflow_persist import persist_workflow_exchange, teach_agent_text
 from gotit.core.agents.echo import build_echo_agent, run_echo
 from gotit.core.failure_lessons import learner_failure_hint
@@ -70,22 +70,14 @@ async def _finalize_teach_claim(
     answer: str | None,
     thread_id: UUID | None,
 ) -> dict[str, Any]:
-    examine_verdict = teach_examine_verdict(you_taught_well)
-    async with session_scope() as session:
-        claim = await session.get(ClaimRow, claim_id)
-        if claim is None or claim.user_id != user_id:
-            raise KeyError(f"claim not found: {claim_id}")
-        return await finalize_examine_with_gate(
-            session,
-            claim_id=claim_id,
-            claim_text=claim.text,
-            topic=claim.topic,
-            examine_verdict=examine_verdict,
-            learner_answer=answer,
-            user_id=user_id,
-            settings=settings,
-            thread_id=thread_id,
-        )
+    return await finalize_claim_by_id(
+        claim_id=claim_id,
+        examine_verdict=teach_examine_verdict(you_taught_well),
+        user_id=user_id,
+        settings=settings,
+        answer=answer,
+        thread_id=thread_id,
+    )
 
 
 async def _persist_teach(

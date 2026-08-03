@@ -668,7 +668,8 @@ async def build_graph_v0(
         session, user_id=user_id, kind=KIND_INTEREST, limit=interest_limit
     )
     claim_uuids = [c.id for c in claims]
-    fail_counts = await fail_counts_by_claim(
+    # fail_event_count (almost|owe_next rows) — graph sizing; ≠ schedule owe_next.
+    fail_event_counts = await fail_counts_by_claim(
         session, user_id=user_id, claim_ids=claim_uuids
     )
     latest_fails = await latest_fail_by_claim(
@@ -725,7 +726,9 @@ async def build_graph_v0(
         meta: dict[str, object] = {
             "claim_id": str(claim.id),
             "status": status,
-            "fail_count": fail_counts.get(claim.id, 0),
+            # Graph event tally (almost|owe_next). Alias fail_count kept for UI.
+            "fail_event_count": fail_event_counts.get(claim.id, 0),
+            "fail_count": fail_event_counts.get(claim.id, 0),
             "topic": claim.topic,
             "preferred_check_mode": pref_val,
             "project_id": str(claim.project_id) if claim.project_id else None,

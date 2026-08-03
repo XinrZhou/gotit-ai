@@ -72,12 +72,24 @@ async def test_fill_queue_and_examine_writeback(session: AsyncSession) -> None:
     plan = await day_ops.fill_today_from_queue(session, day)
     assert any(i.claim_id == claim.id and i.source == PlanItemSource.QUEUE for i in plan.items)
 
-    fail = await day_ops.apply_examine_result(session, claim.id, passed=False, as_of=day)
-    assert fail["passed"] is False
+    fail = await day_ops.write_mastery_outcome(
+        session,
+        claim.id,
+        verdict="owe_next",
+        source=day_ops.MASTERY_SOURCE_VERIFY,
+        as_of=day,
+    )
+    assert fail["verdict"] == "owe_next"
     assert fail["claim"]["status"] == MasteryStatus.QUEUED.value
     assert fail["claim"]["next_review_at"] == (day + timedelta(days=1)).isoformat()
 
-    ok = await day_ops.apply_examine_result(session, claim.id, passed=True, as_of=day)
+    ok = await day_ops.write_mastery_outcome(
+        session,
+        claim.id,
+        verdict="passed",
+        source=day_ops.MASTERY_SOURCE_VERIFY,
+        as_of=day,
+    )
     assert ok["claim"]["status"] == MasteryStatus.MASTERED.value
 
 

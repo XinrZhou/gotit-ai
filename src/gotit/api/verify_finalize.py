@@ -18,6 +18,39 @@ from gotit.core.agents.critic import build_critic_agent, run_critic, stub_critic
 from gotit.core.loop import VerifyWorkflow, deterministic_gate
 from gotit.core.models import GateResult
 from gotit.db import ops as day_ops
+from gotit.db import session_scope
+from gotit.db.models import ClaimRow
+
+
+async def finalize_claim_by_id(
+    *,
+    claim_id: UUID,
+    examine_verdict: str,
+    user_id: str,
+    settings: Settings,
+    answer: str | None = None,
+    thread_id: UUID | None = None,
+    examine_score: float | None = None,
+    examine_evidence: str | None = None,
+) -> dict[str, Any]:
+    """Load claim by id then ``finalize_examine_with_gate`` (REST + MCP entry)."""
+    async with session_scope() as session:
+        claim = await session.get(ClaimRow, claim_id)
+        if claim is None or claim.user_id != user_id:
+            raise KeyError(f"claim not found: {claim_id}")
+        return await finalize_examine_with_gate(
+            session,
+            claim_id=claim_id,
+            claim_text=claim.text,
+            topic=claim.topic,
+            examine_verdict=examine_verdict,
+            examine_score=examine_score,
+            examine_evidence=examine_evidence,
+            learner_answer=answer,
+            user_id=user_id,
+            settings=settings,
+            thread_id=thread_id,
+        )
 
 
 async def finalize_examine_with_gate(

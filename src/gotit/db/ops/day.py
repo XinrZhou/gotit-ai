@@ -227,7 +227,8 @@ async def _sort_due_claims(
     )
     from gotit.db.ops.memory import prior_failure_counts_by_claim
 
-    fail_counts = await prior_failure_counts_by_claim(
+    # Trajectory owe_next priors for SR sort — not fail_events / graph sizing.
+    owe_next_counts = await prior_failure_counts_by_claim(
         session, user_id=user_id, claim_ids=[c.id for c in due]
     )
     edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
@@ -253,7 +254,7 @@ async def _sort_due_claims(
         key=lambda c: due_sort_key(
             as_of=as_of,
             next_review_at=c.next_review_at,
-            fail_count=fail_counts.get(c.id, 0),
+            fail_count=owe_next_counts.get(c.id, 0),
             confuse_weight=weights.get(c.id, 0),
             depends_blocked=blocked.get(c.id, False),
             claim_id=c.id,
@@ -289,7 +290,8 @@ async def _due_claim_views(
         (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
     ]
     weights = confuse_weights_from_edges([c.id for c in due], edges)
-    fail_counts = await prior_failure_counts_by_claim(
+    # Schedule / Brief「曾挂过」: trajectory owe_next only (≠ graph fail_event_count).
+    owe_next_counts = await prior_failure_counts_by_claim(
         session, user_id=user_id, claim_ids=[c.id for c in due]
     )
     depends_rows = await list_depends_edges(session, user_id=user_id)
@@ -350,7 +352,7 @@ async def _due_claim_views(
             confuse_weight=weights.get(c.id, 0),
             confuse_neighbor_label=labels.get(nid) if nid else None,
             depends_prereq_label=labels.get(pid) if pid else None,
-            fail_count=fail_counts.get(c.id, 0),
+            fail_count=owe_next_counts.get(c.id, 0),
         )
         out.append(
             _claim_view(

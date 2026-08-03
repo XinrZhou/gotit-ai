@@ -115,7 +115,7 @@ function filterWeakGraph(raw: GraphView): GraphView {
   }
   if (keepClaim.size === 0) {
     for (const n of raw.nodes) {
-      if (n.type === "claim" && Number(n.meta?.fail_count ?? 0) > 0) {
+      if (n.type === "claim" && Number(n.meta?.fail_event_count ?? n.meta?.fail_count ?? 0) > 0) {
         keepClaim.add(n.id);
       }
     }
@@ -205,7 +205,7 @@ function toElements(view: GraphView): ElementDefinition[] {
   const els: ElementDefinition[] = [];
   for (const n of view.nodes) {
     if (n.type !== "claim" && n.type !== "topic") continue;
-    const fails = Number(n.meta?.fail_count ?? 0);
+    const fails = Number(n.meta?.fail_event_count ?? n.meta?.fail_count ?? 0);
     const label = cleanLabel(n.label) || (n.type === "topic" ? "主题" : "命题");
     const topicKey =
       n.type === "topic"
@@ -614,7 +614,11 @@ export function MasteryGraphPanel({ embedded = true }: { embedded?: boolean }) {
     sel?.kind === "claim" ? claimFromNode(sel.node) : null;
   const cta = selectedClaim ? ctaForClaim(selectedClaim) : null;
   const failCount =
-    sel?.kind === "claim" ? Number(sel.node.meta?.fail_count ?? 0) : 0;
+    sel?.kind === "claim"
+      ? Number(
+          sel.node.meta?.fail_event_count ?? sel.node.meta?.fail_count ?? 0,
+        )
+      : 0;
 
   const emptyLine =
     focus === "recent" ? "近 14 天暂无还差点" : "暂时没有要盯的弱点";
@@ -702,7 +706,7 @@ export function MasteryGraphPanel({ embedded = true }: { embedded?: boolean }) {
               <p className={styles.sideLabel}>{cleanLabel(sel.node.label)}</p>
               <div className={styles.sideChips}>
                 {failCount > 0 ? (
-                  <span className={styles.chipWarn}>没过 {failCount} 次</span>
+                  <span className={styles.chipWarn}>失手 {failCount} 次</span>
                 ) : (
                   <span className={styles.chip}>还没考过</span>
                 )}

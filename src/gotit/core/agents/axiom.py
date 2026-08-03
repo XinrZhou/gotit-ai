@@ -3,7 +3,7 @@
 Multi-turn: each call returns an `ExamineVerdict`. When `done=false`, `follow_up`
 is the next question to ask the learner. When `done=true`, `verdict` is one of
 `passed | almost | owe_next` and the orchestration layer writes back via
-`db.ops.apply_examine_verdict`.
+``finalize_examine_with_gate`` → ``write_mastery_outcome``.
 """
 
 from __future__ import annotations

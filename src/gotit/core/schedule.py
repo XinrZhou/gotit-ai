@@ -117,7 +117,11 @@ def due_sort_key(
     depends_blocked: bool = False,
     claim_id: UUID | str,
 ) -> tuple[int, int, int, int, str]:
-    """Sort key for due lists / fill-from-queue (ascending = highest priority)."""
+    """Sort key for due lists / fill-from-queue (ascending = highest priority).
+
+    ``fail_count`` here means trajectory ``owe_next`` priors (SR weighting),
+    not ``fail_events`` / graph ``fail_event_count``.
+    """
     return (
         -overdue_days(as_of=as_of, next_review_at=next_review_at),
         1 if depends_blocked else 0,
@@ -239,7 +243,11 @@ def explain_due_reason(
     depends_prereq_label: str | None = None,
     fail_count: int = 0,
 ) -> tuple[DueReasonCode, str]:
-    """Human-facing due reason for today views (server-assembled; UI does not parse formula)."""
+    """Human-facing due reason for today views (server-assembled; UI does not parse formula).
+
+    ``fail_count`` = trajectory ``owe_next`` count (Brief「曾挂过」); not graph
+    ``fail_event_count`` (almost|owe_next event rows).
+    """
     status_l = (status or "").lower()
     fails = max(int(fail_count), 0)
     if status_l == "in_progress":

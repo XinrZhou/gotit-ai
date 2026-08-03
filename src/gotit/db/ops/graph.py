@@ -351,6 +351,11 @@ async def fail_counts_by_claim(
     user_id: str,
     claim_ids: list[UUID] | None = None,
 ) -> dict[UUID, int]:
+    """Count ``fail_events`` rows per claim (gate ``almost`` | ``owe_next``).
+
+    Graph / obs sizing only. **Not** the schedule ``owe_next`` prior used by
+    ``prior_failure_counts_by_claim`` / due sort / Brief「曾挂过」hints.
+    """
     stmt = (
         select(FailEventRow.claim_id, func.count())
         .where(FailEventRow.user_id == user_id)

@@ -53,3 +53,10 @@ Claim + plan (+ digest trigger)
 - Calib trajectory increases prior_failures → schedule intervals; pin with tests (calib almost counts as prior for next verify)
 - Digest upsert must not reset `notified`
 - Stopping soft IN_PROGRESS may change Brief “almost_today” for prepare-only clicks (intended)
+
+## Follow-up (accepted debt paydown)
+
+- Removed binary `apply_examine_result` (tests → `write_mastery_outcome`)
+- Documented dual fail counts: schedule/Brief = trajectory `owe_next`; graph =
+  `fail_event_count` (alias `fail_count` kept)
+- REST/MCP share `finalize_claim_by_id` (thin load+finalize; no new service layer)

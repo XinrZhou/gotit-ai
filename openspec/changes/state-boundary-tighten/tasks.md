@@ -34,3 +34,9 @@
 ## Verify
 
 - [x] Relevant pytest + five-question review note in SYSTEM
+
+## Follow-up debt (post-acceptance P1/P2)
+
+- [x] Remove `apply_examine_result` stub; tests use `write_mastery_outcome`
+- [x] Clarify fail count: schedule/Brief = owe_next; graph = `fail_event_count`
+- [x] Share `finalize_claim_by_id` for REST examine/teach + MCP

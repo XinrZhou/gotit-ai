@@ -20,50 +20,6 @@ MASTERY_SOURCE_CALIBRATION = "calibration"
 MASTERY_SOURCE_HARNESS = "harness"
 
 
-async def apply_examine_result(
-    session: AsyncSession,
-    claim_id: UUID,
-    *,
-    passed: bool,
-    user_id: str = DEFAULT_USER_ID,
-    as_of: date | None = None,
-) -> dict[str, object]:
-    """Deprecated binary stub writeback — prefer ``write_mastery_outcome``.
-
-    Kept for harness/legacy tests only. Production verify/calib paths must not
-    call this.
-    """
-    today = as_of or date.today()
-    claim = await session.get(ClaimRow, claim_id)
-    if claim is None or claim.user_id != user_id:
-        raise KeyError(f"claim not found: {claim_id}")
-
-    stmt = select(PlanItemRow).where(PlanItemRow.claim_id == claim_id)
-    items = list((await session.execute(stmt)).scalars().all())
-
-    if passed:
-        claim.status = MasteryStatus.MASTERED.value
-        claim.next_review_at = None
-        for item in items:
-            item.status = PlanItemStatus.VERIFIED.value
-    else:
-        # Stub binary fail ≡ owe_next with no prior failures (interval = 1d).
-        sched = schedule_after_verdict(
-            "owe_next", prior_failures=0, as_of=today
-        )
-        claim.status = MasteryStatus.QUEUED.value
-        claim.next_review_at = sched.next_review_at
-        for item in items:
-            item.status = PlanItemStatus.FAILED.value
-
-    await session.flush()
-    return {
-        "claim": _claim_view(claim).model_dump(mode="json"),
-        "plan_items": [_plan_item_view(i).model_dump(mode="json") for i in items],
-        "passed": passed,
-    }
-
-
 async def write_mastery_outcome(
     session: AsyncSession,
     claim_id: UUID,
