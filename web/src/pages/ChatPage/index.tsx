@@ -42,6 +42,7 @@ import { useResizableWidth } from "../../hooks/useResizableWidth";
 import { useStore } from "../../store";
 import { resolveCheckMode } from "../../lib/checkRouting";
 import { fmtDate, parseApiDate } from "../../lib/format";
+import { hasOwedForBrief } from "../../lib/owed";
 import { profileInitials, profileTint } from "../../lib/userProfile";
 import type {
   AgentIdentity,
@@ -345,6 +346,8 @@ export function ChatPage() {
     onExamineStart,
     onExamineStartClaim,
     onTeachStartClaim,
+    clearExamineSession,
+    clearTeachSession,
     onDrillStartWithPayload,
     dueClaims,
     items,
@@ -361,12 +364,11 @@ export function ChatPage() {
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
   const showBootcamp = Boolean(bootcamp?.show);
+  /** Brief only when there is true owed (due ∪ plan-open) — notes ≠ 欠. */
   const hasDailyBrief =
-    !dayClosed &&
-    !showBootcamp &&
-    (dueClaims.length > 0 ||
-      items.some((i) => i.status !== "verified" && i.claim_id) ||
-      notes.some((n) => n.claim_ids.length > 0));
+    !dayClosed && !showBootcamp && hasOwedForBrief(dueClaims, items);
+  /** No owed but library still has examinable notes → 账清, not fake brief. */
+  const booksCleared = !hasDailyBrief && !dayClosed && !showBootcamp && examineCount > 0;
   const showInterviewFocus = Boolean(interviewFocus) && !showBootcamp;
   const showFeaturedInterview =
     showInterviewFocus &&
@@ -1014,7 +1016,14 @@ export function ChatPage() {
             </div>
           ) : inWorkflow ? (
             <div className={styles.conversationTopLead}>
-              <ModeHeader mode={mode} onBack={() => setMode("chat")} />
+              <ModeHeader
+                mode={mode}
+                onBack={() => {
+                  clearExamineSession();
+                  clearTeachSession();
+                  setMode("chat");
+                }}
+              />
             </div>
           ) : null}
           <div className={styles.topActions}>
@@ -1134,7 +1143,6 @@ export function ChatPage() {
                     variant="home"
                     maxItems={5}
                     onExamineClaim={(c) => void startVerifyClaim(c)}
-                    onExamineNoteId={(id) => void startExamineNote(id)}
                     onViewAll={() => void startWorkflow("examine")}
                   />
                   <footer className={styles.briefFooter}>
@@ -1209,7 +1217,28 @@ export function ChatPage() {
                     />
                   ) : null}
                 </div>
-              ) : showInterviewFocus ? null : (
+              ) : showInterviewFocus ? null : booksCleared ? (
+                <div className={styles.emptyIntro}>
+                  <p className={styles.emptyLead}>今天账清了</p>
+                  <p className={styles.emptyHint}>
+                    没有排到今天的欠练。库里还有可考的，想练再点
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.emptyCalibrate}
+                    onClick={quietContinuePractice}
+                  >
+                    继续练
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.emptyChatLink}
+                    onClick={() => setShowCompose(true)}
+                  >
+                    添加资料
+                  </button>
+                </div>
+              ) : (
                 <div className={styles.emptyIntro}>
                   <p className={styles.emptyLead}>今天暂时没事</p>
                   <p className={styles.emptyHint}>
@@ -1402,7 +1431,7 @@ export function ChatPage() {
                 ) : null}
                 {!busy && messages.length === 0 ? (
                   <div
-                    className={`${styles.threadEmpty} ${hasDailyBrief || dayClosed || showInterviewFocus || showBootcamp ? styles.threadEmptyBrief : ""}`}
+                    className={`${styles.threadEmpty} ${hasDailyBrief || dayClosed || showInterviewFocus || showBootcamp || booksCleared ? styles.threadEmptyBrief : ""}`}
                   >
                     {showFeaturedInterview && interviewFocus ? (
                       <InterviewFocusBrief
@@ -1427,7 +1456,6 @@ export function ChatPage() {
                           variant="thread"
                           maxItems={5}
                           onExamineClaim={(c) => void startVerifyClaim(c)}
-                          onExamineNoteId={(id) => void startExamineNote(id)}
                           onViewAll={() => void startWorkflow("examine")}
                         />
                         {showQuietInterview && interviewFocus ? (
@@ -1497,7 +1525,28 @@ export function ChatPage() {
                           />
                         ) : null}
                       </>
-                    ) : showInterviewFocus ? null : (
+                    ) : showInterviewFocus ? null : booksCleared ? (
+                      <>
+                        <p className={styles.threadEmptyLead}>今天账清了</p>
+                        <p className={styles.threadEmptyHint}>
+                          没有排到今天的欠练。库里还有可考的，想练再点，或直接发消息
+                        </p>
+                        <button
+                          type="button"
+                          className={styles.emptyCalibrate}
+                          onClick={quietContinuePractice}
+                        >
+                          继续练
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.emptyChatLink}
+                          onClick={() => setShowCompose(true)}
+                        >
+                          添加资料
+                        </button>
+                      </>
+                    ) : (
                       <>
                         <p className={styles.threadEmptyLead}>今天暂时没事</p>
                         <p className={styles.threadEmptyHint}>

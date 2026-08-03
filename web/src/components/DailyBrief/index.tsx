@@ -1,12 +1,12 @@
-import type { Claim, PlanItem } from "../../types";
+import type { Claim } from "../../types";
 import { claimVerifyCta } from "../../lib/checkRouting";
 import { dueReasonLine, stripHtml } from "../../lib/format";
+import { planOpenItems } from "../../lib/owed";
 import { useStore } from "../../store";
 import styles from "./index.module.scss";
 
 type Props = {
   onExamineClaim: (claim: Claim) => void;
-  onExamineNoteId?: (noteId: string) => void;
   onViewAll?: () => void;
   variant?: "home" | "thread";
   maxItems?: number;
@@ -16,7 +16,16 @@ function cleanTitle(raw: string): string {
   return stripHtml(raw).replace(/\s+/g, " ").trim();
 }
 
-function claimFromPlan(item: PlanItem, dueClaims: Claim[]): Claim | null {
+type PlanRow = {
+  id: string;
+  title: string;
+  status: string;
+  claim_id: string | null;
+  topic: string | null;
+  project_id?: string | null;
+};
+
+function claimFromPlan(item: PlanRow, dueClaims: Claim[]): Claim | null {
   if (!item.claim_id) return null;
   const found = dueClaims.find((c) => c.id === item.claim_id);
   if (found) return found;
@@ -31,6 +40,11 @@ function claimFromPlan(item: PlanItem, dueClaims: Claim[]): Claim | null {
   };
 }
 
+/** Plan-open rows: never invent schedule reasons; fall back to「今日计划」. */
+function planOpenReason(claim: Claim): string {
+  return dueReasonLine(claim) || "今日计划";
+}
+
 type Row = {
   key: string;
   label: string;
@@ -40,26 +54,17 @@ type Row = {
   onOpen: () => void;
 };
 
-/** Today's owed/plan — click a row to open the preferred verify form. */
+/** Today's owed (due + plan-open) — notes are not「欠」. */
 export function DailyBrief({
   onExamineClaim,
-  onExamineNoteId,
   onViewAll,
   variant = "home",
   maxItems = 4,
 }: Props) {
-  const { dueClaims, items, notes, busy } = useStore();
+  const { dueClaims, items, busy } = useStore();
 
   const owedIds = new Set(dueClaims.map((c) => c.id));
-  const planOpen = items.filter(
-    (i) =>
-      i.status !== "verified" &&
-      i.claim_id &&
-      !owedIds.has(i.claim_id),
-  );
-  const noteEntries = onExamineNoteId
-    ? notes.filter((n) => n.claim_ids.length > 0)
-    : [];
+  const planOpen = planOpenItems(items as PlanRow[], owedIds);
 
   const seen = new Set<string>();
   const rows: Row[] = [];
@@ -90,45 +95,21 @@ export function DailyBrief({
     );
   }
   for (const item of planOpen) {
-    const claim = claimFromPlan(
-      {
-        id: item.id,
-        title: item.title,
-        source: "manual",
-        status: item.status,
-        claim_id: item.claim_id,
-        sort_order: 0,
-        due_at: null,
-        due_time: null,
-        project_id: item.project_id ?? null,
-        topic: item.topic,
-      },
-      dueClaims,
-    );
+    const claim = claimFromPlan(item, dueClaims);
     if (!claim) continue;
     push(
       `plan-${item.id}`,
       cleanTitle(item.title),
-      dueReasonLine(claim),
+      planOpenReason(claim),
       claim.failure_hint?.trim() || null,
       claimVerifyCta(claim),
       () => onExamineClaim(claim),
     );
   }
-  for (const n of noteEntries) {
-    push(
-      `note-${n.id}`,
-      cleanTitle(n.title?.trim() || n.excerpt || "未命名笔记"),
-      null,
-      null,
-      "开考",
-      () => onExamineNoteId?.(n.id),
-    );
-  }
 
   if (rows.length === 0) return null;
 
-  const total = dueClaims.length + planOpen.length + noteEntries.length;
+  const total = dueClaims.length + planOpen.length;
   const more = Math.max(0, total - rows.length);
   const allCount = more + rows.length;
 

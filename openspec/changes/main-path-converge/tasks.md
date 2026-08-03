@@ -45,6 +45,7 @@
 
 ## Later（下一波次）
 
+- Phase6 P0 Brief「欠」语义 → 已开 **`daily-brief-semantic-cleanup/`**（勿在本夹再做）
 - 失败教训注入体验再加深（已有 failure_hint + teach 注入；可加更多表面）
 - 深挖接 finalize（仅当备考真需要）
 - Harness UI / auto-adopt；全量 MCP 进聊天
