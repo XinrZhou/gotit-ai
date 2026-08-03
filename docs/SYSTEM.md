@@ -3,13 +3,29 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-02 (legacy-surface-cleanup).
+> Last reviewed: 2026-08-03 (doc honesty + main-path snapshot).
 
 ## Product (one line)
 
 Daily **learning companion**: personality agents chat in threads, remember
 weaknesses, and run verify workflows. **Verified = done.** Chat owns the
 surface; verification is the spine.
+
+## Current main path (truth)
+
+```text
+打开 App
+  → 空聊天 / 今日简报（欠练 + 计划；有则一键开练）
+  → 无料时：添加资料 → 出题 →「去开考」
+  → 考我 / 回讲（Critic + deterministic_gate）
+     · 深挖 = 项目练习场（会话可写 thread；**不过门**，不算掌握）
+  → 芯片：过了 / 还差点 / 欠着下次
+  → 欠清或主动「今日收工」
+```
+
+旁路（入口不强化）：弱点图谱、Settings（Skills/MCP/计划推送/动态）、
+Apple 桥、Harness API/CLI、CAT 题参写回。当前波次默认 **收主路径摩擦**
+（活跃 OpenSpec 仅 `openspec/changes/main-path-converge/`），不默认加新脊柱机制。
 
 ## Deploy posture
 
@@ -26,7 +42,7 @@ shared bearer `GOTIT_API_KEY`. No per-user auth product work planned.
 | Web | React + Vite + **npm** under `web/` |
 | LLM | OpenAI-compatible (`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`); e.g. 智谱 `glm-4-flash` |
 | Specs | OpenSpec · `docs/VISION.md` · `docs/adr/` · this file |
-| Gate | `./scripts/gate.sh` (ruff / mypy / pytest / harness / web build) |
+| Gate | `./scripts/gate.sh` (ruff / mypy / pytest / harness); web: `cd web && npm run build` separately |
 
 Default API port in `.env.example`: **8787** (local overrides may use 8790).
 
@@ -93,7 +109,10 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   companion `close_day`; `/v1/today` exposes `day_closed` / `close_summary`;
   empty chat soft-hides strong 开考 CTA after close (quiet「继续练」remains)
 - **Workflows in ChatPage**: 考我 / 回讲 / 项目深挖 (embedded pages; entry in
-  conversation top bar)
+  conversation top bar). **过门写回** only on examine + claim-bound teach
+  (+ thread/MCP claim-close via `verify_finalize`). Drill finishes the
+  session (`finish_drill_session`) — prep / interview practice, **not**
+  mastery close.
 - Library = left **drawer overlay** (notes / projects only)
 - Composer: agents/skills behind `+` tray; type `@` to switch sticky
   companion (strip token, no `@` in body); quiet Apple select; active skill
@@ -141,8 +160,9 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
     (probe|drill|apply|teach_back; null→probe); deterministic
     `core/check_routing.py` picks CTA / open-*; DailyBrief + action_blocks +
     companion `start_verify` route to 开考 / 回讲 / 深挖; APPLY and drill-without-
-    project degrade to probe; `PATCH /v1/claims/{id}` sets preference; ingest
-    may suggest teach_back/drill via light heuristics — gate path unchanged
+    project degrade to probe; open_drill still **prep-only** (no
+    `verify_finalize`); examine/teach gate path unchanged; ingest may suggest
+    teach_back/drill via light heuristics
 - **Cold-start calibration** (`core/calibration.py` + `db.ops.calibration`):
   CAT-lite (2PL info + adaptive θ + knowledge rotate + early stop ≤10);
   binary self-check (no Critic); correct→`passed`, incorrect→`almost` +
@@ -200,15 +220,20 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 
 ## Not done yet (honest)
 
+- **Now (product):** main-path friction converge — not new verticals
+  (`openspec/changes/main-path-converge/`)
+- Drill ↔ mastery: either wire claim-close through `verify_finalize`, or keep
+  drill explicitly **prep-only** in all user-facing copy (code today = prep-only)
+- Full APPLY verify workflow (`preferred_check_mode=apply` → probe today)
 - Broad per-agent multi-model binding beyond Critic (Axiom/others still share
   global `LLM_*`; Critic may use `identity.llm_config` or `CRITIC_*`)
 - Broad agent-as-tool beyond the companion **builtin whitelist** + optional user
-  MCP connectors (no auto-mount of the full gotit MCP catalog into chat)
+  MCP connectors (**not** auto-mounting the full gotit MCP catalog into chat —
+  not a near-term goal)
 - Rich profile / full KG store beyond mastery confuse + light `depends_on`
 - User-facing harness holdout UI (API/CLI only; Settings tab was wrong surface)
 - Auto prompt/skill register on harness `adopt` (decision is audit-only today)
 - Dedicated LLM holdout case set beyond `dev`/`gold` matrices
-- Full APPLY verify workflow (preferred `apply` currently degrades to probe)
 - Compass LLM auto-tag of `preferred_check_mode` (ingest heuristics only)
 - Item-param update using per-learner θ (v1 uses fixed θ=3 surprise reference)
 

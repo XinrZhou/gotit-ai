@@ -34,7 +34,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 |-----------|---------------|
 | **Companion chat** | Threads, @mention, in-character replies with memory; today's plan brief injected so「今日计划」is grounded; whitelist tools (`get_today` / due / open-examine / open-drill / failure lessons / memory / upcoming interview) with quiet bubble trail + one-tap「开考」/「深挖」 |
 | **A2A handoff** | Agents can cede the floor to a peer in the same turn (ball custody) |
-| **Workflows** | 考我 / 回讲 / 项目深挖 — started from the chat shell; turns land in the thread |
+| **Workflows** | 考我 / 回讲 / 项目深挖 — from the chat shell; turns may land in the thread. **Gate close** = examine + claim-bound teach only; drill is project practice, not mastery |
 | **Daily brief** | Empty chat shows owed + plan with one-tap 开考; optional day close; quiet interview deep-drill hint when ramp is on |
 | **Cold-start calibration** | Few high-info probes to seed schedule + confuse graph; empty chat CTA when nothing owed yet |
 | **First-pass bootcamp** | Empty library: note → claim → examine/calibration → see the gate |
@@ -44,7 +44,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
 | **Settings** | 资料 / Skills / MCP / 计划推送 / 动态 — profile, DIY skills, plan push prefs, OpenClaw activity |
 | **OpenClaw via MCP** | Optional channel; gotit exposes the same domain ops as REST |
-| **Harness** | Snapshot cases so prompt/skill changes stay measurable |
+| **Harness** | Snapshot cases via API/CLI (not a Settings tab) so prompt changes stay measurable |
 
 Crew (UI nicknames): **章鱼哥** (examiner) · **海绵宝宝** (curator) · **派大星** (teach-back) · **桑迪** (drill) · **凯伦** (critic).
 
@@ -137,7 +137,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | Chat-first nav (workflows embedded) | Done |
 | Verify loop + deterministic gate + Critic | Done |
 | Notes / claims / plan / resume drill | Done |
-| REST ↔ MCP parity + harness gate | Done |
+| REST ↔ MCP parity + harness (API/CLI) | Done |
 | OpenClaw WeChat digests (morning plan / evening wrap+tomorrow / optional news) | Done (P1c) |
 | OpenClaw→gotit shell writeback + Settings「计划推送」「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
@@ -149,8 +149,11 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 | Companion builtin tools (today/due/examine/memory + tool trail) | Done |
 | Chat UI for tool trail + one-tap follow start_examine | Done |
 | One-tap drill from open_drill / upcoming interview | Done |
-| Real agent tool-calling against full MCP catalog | Next |
-| Per-agent multi-model binding | Next |
+| **Main-path converge** (open → clear one gate; hide mechanism) | **In progress** |
+| Drill ↔ mastery honesty (prep-only copy, or later shared finalize) | Next |
+| Full APPLY verify form (`apply` → probe today) | Later |
+| Per-agent multi-model binding (Critic already optional) | Later |
+| Agent tool-calling against full MCP catalog in chat | **Not a near-term goal** (keep whitelist) |
 
 ## Philosophy
 
@@ -158,7 +161,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 |---|-----------|---------|
 | P1 | Verified = got it | Confidence is not evidence |
 | P2 | Fail is useful | A miss → lesson + recheck on a trajectory |
-| P3 | Form follows the claim | Claim preferred mode → examine / teach / drill (same gate) |
+| P3 | Form follows the claim | Preferred mode → examine / teach (gate); drill = project practice, not mastery by default |
 | P4 | Context on a budget | Inject the claim under test, not the whole notebook |
 | P5 | Harness-backed evolution | Prompt/skill changes need evidence |
 | P6 | Stable personality + rubric | Persona drift ≠ judgement drift |
