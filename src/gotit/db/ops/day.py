@@ -332,6 +332,12 @@ async def _due_claim_views(
         )
         labels = {r.id: r.text for r in rows}
 
+    from gotit.db.ops.memory import failure_hints_by_claim
+
+    hints = await failure_hints_by_claim(
+        session, user_id=user_id, claim_ids=[c.id for c in due]
+    )
+
     out: list[Claim] = []
     for c in due:
         nid = neighbor_by_claim.get(c.id)
@@ -346,7 +352,12 @@ async def _due_claim_views(
             fail_count=fail_counts.get(c.id, 0),
         )
         out.append(
-            _claim_view(c, due_reason_code=code, due_reason_text=text)
+            _claim_view(
+                c,
+                due_reason_code=code,
+                due_reason_text=text,
+                failure_hint=hints.get(c.id),
+            )
         )
     return out
 

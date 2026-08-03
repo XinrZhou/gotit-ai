@@ -209,6 +209,48 @@ async def mark_failure_digest_notified(
     return _memory_view(row)
 
 
+async def failure_hints_by_claim(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_ids: list[UUID],
+    limit: int = 80,
+) -> dict[UUID, str]:
+    """Map claim_id → quiet DailyBrief tip from newest matching failure_digest."""
+    from gotit.core.failure_lessons import brief_failure_hint
+
+    if not claim_ids:
+        return {}
+    wanted = {str(cid) for cid in claim_ids}
+    entries = await list_memory(
+        session, user_id=user_id, kind="failure_digest", limit=limit
+    )
+    # Newest first from list_memory; keep first hit per claim.
+    out: dict[UUID, str] = {}
+    for e in entries:
+        raw_id = e.content.get("claim_id")
+        if not isinstance(raw_id, str) or raw_id not in wanted:
+            continue
+        try:
+            cid = UUID(raw_id)
+        except ValueError:
+            continue
+        if cid in out:
+            continue
+        verdict = e.content.get("verdict")
+        if verdict not in {"almost", "owe_next"}:
+            continue
+        follow = e.content.get("follow_up")
+        claim_text = e.content.get("claim_text")
+        tip = brief_failure_hint(
+            follow_up=str(follow) if follow else None,
+            claim_text=str(claim_text) if claim_text else None,
+        )
+        if tip:
+            out[cid] = tip
+    return out
+
+
 async def build_failure_lesson_block(
     session: AsyncSession,
     *,

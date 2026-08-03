@@ -88,6 +88,21 @@ def _line_for(
     return f"- [{candidate.verdict}] {body[:line_max]}"
 
 
+def brief_failure_hint(
+    *,
+    follow_up: str | None,
+    claim_text: str | None = None,
+    max_chars: int = 72,
+) -> str | None:
+    """One quiet DailyBrief line from a failure_digest tip."""
+    tip = (follow_up or "").strip() or (claim_text or "").strip()
+    if not tip:
+        return None
+    if len(tip) > max_chars:
+        tip = tip[: max_chars - 1] + "…"
+    return f"曾栽过：{tip}"
+
+
 def learner_failure_hint(block: str | None, *, max_chars: int = 120) -> str | None:
     """Quiet one-liner for the learner UI from an examiner lesson block."""
     if not block or not block.strip():

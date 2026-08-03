@@ -97,6 +97,8 @@ export type Claim = {
   /** Present on `/v1/today` due list — why this claim is owed today. */
   due_reason_code?: string | null;
   due_reason_text?: string | null;
+  /** Quiet prior-miss tip on today/due views. */
+  failure_hint?: string | null;
 };
 
 /** `POST /v1/notes/{id}/ingest` body. */

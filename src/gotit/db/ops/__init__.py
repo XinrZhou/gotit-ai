@@ -116,6 +116,7 @@ from gotit.db.ops.memory import (
     append_trajectory,
     build_failure_lesson_block,
     count_prior_failures,
+    failure_hints_by_claim,
     list_memory,
     list_pending_failure_digests,
     list_trajectory,
@@ -306,6 +307,7 @@ __all__ = [
     "list_pending_failure_digests",
     "mark_failure_digest_notified",
     "build_failure_lesson_block",
+    "failure_hints_by_claim",
     # shell / obs (OpenClaw bridge)
     "record_shell_event",
     "record_interest",

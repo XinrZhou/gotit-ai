@@ -73,6 +73,7 @@ def _claim_view(
     *,
     due_reason_code: str | None = None,
     due_reason_text: str | None = None,
+    failure_hint: str | None = None,
 ) -> Claim:
     return Claim(
         id=row.id,
@@ -89,4 +90,5 @@ def _claim_view(
         ),
         due_reason_code=due_reason_code,
         due_reason_text=due_reason_text,
+        failure_hint=failure_hint,
     )

@@ -35,6 +35,7 @@ type Row = {
   key: string;
   label: string;
   reason: string | null;
+  lesson: string | null;
   cta: string;
   onOpen: () => void;
 };
@@ -67,6 +68,7 @@ export function DailyBrief({
     key: string,
     label: string,
     reason: string | null,
+    lesson: string | null,
     cta: string,
     onOpen: () => void,
   ) => {
@@ -74,7 +76,7 @@ export function DailyBrief({
     const norm = label.toLowerCase().slice(0, 96);
     if (seen.has(norm)) return;
     seen.add(norm);
-    rows.push({ key, label, reason, cta, onOpen });
+    rows.push({ key, label, reason, lesson, cta, onOpen });
   };
 
   for (const c of dueClaims) {
@@ -82,6 +84,7 @@ export function DailyBrief({
       `due-${c.id}`,
       cleanTitle(c.text),
       dueReasonLine(c),
+      c.failure_hint?.trim() || null,
       claimVerifyCta(c),
       () => onExamineClaim(c),
     );
@@ -107,6 +110,7 @@ export function DailyBrief({
       `plan-${item.id}`,
       cleanTitle(item.title),
       dueReasonLine(claim),
+      claim.failure_hint?.trim() || null,
       claimVerifyCta(claim),
       () => onExamineClaim(claim),
     );
@@ -115,6 +119,7 @@ export function DailyBrief({
     push(
       `note-${n.id}`,
       cleanTitle(n.title?.trim() || n.excerpt || "未命名笔记"),
+      null,
       null,
       "开考",
       () => onExamineNoteId?.(n.id),
@@ -167,6 +172,11 @@ export function DailyBrief({
                 {r.reason ? (
                   <span className={styles.reason} title={r.reason}>
                     {r.reason}
+                  </span>
+                ) : null}
+                {r.lesson ? (
+                  <span className={styles.lesson} title={r.lesson}>
+                    {r.lesson}
                   </span>
                 ) : null}
               </span>

@@ -219,7 +219,8 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   投递 `skills/interview-remind/`（offset + ramp 同 cron）
 - **Failure digest**（P3b）：examine `almost|owe_next` → `failure_digest` memory（同 claim+verdict
   去重）；`skills/failure-digest/` 推微信；再考时 **budgeted** 注入 Axiom（同 claim /
-  confuse 邻居 / 同 topic；`FAILURE_LESSON_MAX_ITEMS=3` · `MAX_CHARS=600`）
+  confuse 邻居 / 同 topic；`FAILURE_LESSON_MAX_ITEMS=3` · `MAX_CHARS=600`）；
+  examine/teach 与 DailyBrief 欠账行安静展示 `failure_hint`
 - **Voice teach / coding**（P3c/P2）：应用内回讲支持录音转写（`STT_*` / `LLM_*`）或
   纯文本；claim 关闭走共享 finalize；OpenClaw skills `voice-teach` / `coding` 仍可用
 

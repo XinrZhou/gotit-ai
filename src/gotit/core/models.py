@@ -62,6 +62,8 @@ class Claim(BaseModel):
     # Populated on today/due views (server-assembled; optional elsewhere).
     due_reason_code: str | None = None
     due_reason_text: str | None = None
+    # Quiet prior-miss tip for DailyBrief (from failure_digest); optional.
+    failure_hint: str | None = None
 
 
 class CheckResult(BaseModel):

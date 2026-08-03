@@ -356,6 +356,36 @@ async def test_depends_on_demotes_and_marks_reason(session: AsyncSession) -> Non
 
 
 @pytest.mark.asyncio
+async def test_today_due_includes_failure_hint(session: AsyncSession) -> None:
+    day = date(2026, 7, 30)
+    cid = uuid4()
+    session.add(
+        ClaimRow(
+            id=cid,
+            user_id="local",
+            text="attention QKV",
+            status=MasteryStatus.QUEUED.value,
+            next_review_at=day,
+        )
+    )
+    await session.flush()
+    digest = await day_ops.maybe_record_failure_digest(
+        session,
+        user_id="local",
+        claim_id=cid,
+        claim_text="attention QKV",
+        verdict="owe_next",
+        follow_up="没说清 Q/K/V",
+    )
+    assert digest is not None
+
+    today = await day_ops.get_today(session, day, user_id="local")
+    by_id = {c.id: c for c in today.due_claims}
+    assert cid in by_id
+    assert by_id[cid].failure_hint == "曾栽过：没说清 Q/K/V"
+
+
+@pytest.mark.asyncio
 async def test_depends_out_cap_and_budget_inject(session: AsyncSession) -> None:
     from gotit.core.mastery_graph import DEPENDS_OUT_MAX
     from gotit.db.ops import graph as graph_ops

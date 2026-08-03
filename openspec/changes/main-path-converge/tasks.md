@@ -58,3 +58,4 @@
 - [x] examine/teach 返回 `failure_hint`；ChatLog 安静展示
 - [x] PATCH preferred 去掉 apply；companion / badge「练深挖」
 - [x] `failure_hint` 写入 thread metadata（首轮）并在 ChatPage 展示
+- [x] DailyBrief 欠账行挂 `failure_hint`（from failure_digest；`--faint`）

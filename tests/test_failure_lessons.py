@@ -14,6 +14,7 @@ from gotit.core.failure_lessons import (
     FAILURE_LESSON_MAX_CHARS,
     FAILURE_LESSON_MAX_ITEMS,
     FailureLessonCandidate,
+    brief_failure_hint,
     budget_failure_lesson_block,
     format_failure_lesson_block,
     learner_failure_hint,
@@ -61,6 +62,18 @@ def test_learner_failure_hint_from_block() -> None:
     assert "Q/K/V" in hint
     assert learner_failure_hint(None) is None
     assert learner_failure_hint("") is None
+
+
+def test_brief_failure_hint() -> None:
+    assert brief_failure_hint(follow_up="漏了边界条件") == "曾栽过：漏了边界条件"
+    assert brief_failure_hint(follow_up=None, claim_text="claim only") == (
+        "曾栽过：claim only"
+    )
+    assert brief_failure_hint(follow_up=None, claim_text=None) is None
+    long = "x" * 100
+    tip = brief_failure_hint(follow_up=long, max_chars=20)
+    assert tip is not None and tip.startswith("曾栽过：") and tip.endswith("…")
+    assert len(tip) <= len("曾栽过：") + 20
 
 
 def test_select_prefers_same_claim_then_neighbor_then_topic() -> None:
