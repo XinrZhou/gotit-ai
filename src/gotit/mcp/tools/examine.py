@@ -251,7 +251,7 @@ async def gotit_examine(
         )
         err = await _persist(
             agent_text=examine_agent_text(
-                follow_up="", done=True, verdict=finalized["gate_verdict"]
+                follow_up="", done=True, verdict=str(finalized["gate_verdict"])
             ),
             extra=extra_direct,
         )
@@ -317,9 +317,13 @@ async def gotit_examine(
             )
         except KeyError as exc:
             return {"error": str(exc)}
-        writeback = finalized["writeback"]
+        wb = finalized.get("writeback")
+        writeback = wb if isinstance(wb, dict) else None
         verify = _verify_meta(finalized)
-        gate_verdict = finalized["gate_verdict"]  # type: ignore[assignment]
+        raw_gate = finalized.get("gate_verdict")
+        gate_verdict = (
+            raw_gate if raw_gate in {"passed", "almost", "owe_next"} else None
+        )
     extra_single: dict[str, object] = {
         "claim_id": claim_id,
         "session_done": bool(result.done),

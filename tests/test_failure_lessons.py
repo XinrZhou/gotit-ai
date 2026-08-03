@@ -9,7 +9,9 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from gotit.core.agents.axiom import build_prompt
+from gotit.core.agents.axiom import build_prompt, build_topic_prompt
+from gotit.core.agents.echo import build_prompt as build_echo_prompt
+from gotit.core.context_budget import DEFAULT_CONTEXT_BUDGET
 from gotit.core.failure_lessons import (
     FAILURE_LESSON_MAX_CHARS,
     FAILURE_LESSON_MAX_ITEMS,
@@ -41,8 +43,8 @@ def _cand(
         claim_text=claim_text,
         follow_up=follow_up,
         topic=topic,
-    created_at=datetime.now(UTC) - timedelta(hours=hours_ago),
-  )
+        created_at=datetime.now(UTC) - timedelta(hours=hours_ago),
+    )
 
 
 def test_learner_failure_hint_from_block() -> None:
@@ -99,6 +101,33 @@ def test_select_prefers_same_claim_then_neighbor_then_topic() -> None:
         str(other_topic),
     ]
     assert str(unrelated) not in {p.claim_id for p in picked}
+
+
+def test_select_dedupes_same_claim_verdict() -> None:
+    focus = uuid4()
+    cands = [
+        _cand(claim_id=str(focus), verdict="owe_next", follow_up="first", hours_ago=0),
+        _cand(claim_id=str(focus), verdict="owe_next", follow_up="dup", hours_ago=1),
+        _cand(claim_id=str(focus), verdict="almost", follow_up="other-tier", hours_ago=2),
+    ]
+    picked = select_failure_lessons(cands, claim_id=focus)
+    assert len(picked) == 2
+    assert {(p.claim_id, p.verdict) for p in picked} == {
+        (str(focus), "owe_next"),
+        (str(focus), "almost"),
+    }
+
+
+def test_select_empty_neighbors_ok() -> None:
+    focus = uuid4()
+    picked = select_failure_lessons(
+        [_cand(claim_id=str(focus), follow_up="solo")],
+        claim_id=focus,
+        neighbor_ids=[],
+        topic=None,
+    )
+    assert len(picked) == 1
+    assert picked[0].claim_id == str(focus)
 
 
 def test_select_empty_when_no_match() -> None:
@@ -194,6 +223,29 @@ def test_format_truncates_by_char_budget() -> None:
     assert capped.count("\n- ") < len(tips)
     assert "tip-a-same" in capped
 
+
+def test_budget_respects_default_max_chars() -> None:
+    focus = uuid4()
+    neighbors = [uuid4() for _ in range(FAILURE_LESSON_MAX_ITEMS + 2)]
+    cands = [
+        _cand(
+            claim_id=str(nid),
+            follow_up=("tip-" + "z" * 180),
+            claim_text=("claim-" + "y" * 80),
+            hours_ago=i,
+        )
+        for i, nid in enumerate(neighbors)
+    ]
+    block = budget_failure_lesson_block(
+        cands,
+        claim_id=focus,
+        neighbor_ids=neighbors,
+    )
+    assert block is not None
+    assert len(block) <= FAILURE_LESSON_MAX_CHARS
+    assert block.count("\n- ") <= FAILURE_LESSON_MAX_ITEMS
+
+
 def test_build_prompt_omits_block_when_none() -> None:
     base = build_prompt(
         claim_text="C",
@@ -214,6 +266,45 @@ def test_build_prompt_omits_block_when_none() -> None:
     )
     assert "Prior miss lessons" in with_lessons
     assert "## Claim under examination\nC" in with_lessons
+
+
+def test_topic_prompt_uses_compose_budget() -> None:
+    """Topic examine must not bypass ContextBudget (trim lessons first)."""
+    graph = "G" * 800
+    lesson = "## Prior miss lessons\n你曾在这些点栽过：\n- [owe_next] " + ("L" * 200)
+    raw_concat_len = len(graph) + len(lesson)
+    assert raw_concat_len > DEFAULT_CONTEXT_BUDGET.total_max_chars
+
+    prompt = build_topic_prompt(
+        topic="transformers",
+        claims=[],
+        history=[],
+        answer=None,
+        memory=[],
+        budget_block=graph,
+        failure_lesson_block=lesson,
+    )
+    assert "## Topic\ntransformers" in prompt
+    # Composed path: graph clipped to graph_max; lessons trimmed/dropped for total.
+    # Full raw graph must not appear unclipped.
+    assert "G" * 800 not in prompt
+    assert prompt.count("G") <= DEFAULT_CONTEXT_BUDGET.graph_max_chars
+
+
+def test_echo_prompt_injects_budgeted_block() -> None:
+    block = (
+        "## Prior miss lessons\n你曾在这些点栽过：\n- [almost] missed boundary"
+    )
+    prompt = build_echo_prompt(
+        topic="pointers",
+        history=[],
+        answer=None,
+        memory=[],
+        failure_lesson_block=block,
+    )
+    assert "Prior miss lessons" in prompt
+    assert "missed boundary" in prompt
+    assert "Topic the learner is teaching back" in prompt
 
 
 @pytest.fixture
@@ -301,3 +392,73 @@ async def test_build_failure_lesson_block_matches_claim(
         )
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_e2e_owe_next_digest_reinjects_into_examine_prompt(
+    session: AsyncSession,
+) -> None:
+    """Contract: owe_next → digest → re-examine prompt contains budgeted lessons."""
+    claim_id = uuid4()
+    day_id = uuid4()
+    session.add(
+        LearningDayRow(id=day_id, user_id="local", day=date(2026, 8, 3), timezone="UTC")
+    )
+    session.add(
+        ClaimRow(
+            id=claim_id,
+            user_id="local",
+            text="Explain self-attention Q/K/V",
+            status=MasteryStatus.NOT_YET.value,
+            topic="transformers",
+        )
+    )
+    await session.flush()
+
+    digest, block = await memory_ops.failure_writeback_and_lessons(
+        session,
+        user_id="local",
+        claim_id=claim_id,
+        claim_text="Explain self-attention Q/K/V",
+        verdict="owe_next",
+        topic="transformers",
+        follow_up="没分清 Query 与 Key",
+    )
+    assert digest is not None
+    assert block is not None
+    assert len(block) <= FAILURE_LESSON_MAX_CHARS
+    assert block.count("\n- ") <= FAILURE_LESSON_MAX_ITEMS
+
+    prompt = build_prompt(
+        claim_text="Explain self-attention Q/K/V",
+        history=[],
+        answer=None,
+        memory=[],
+        failure_lesson_block=block,
+    )
+    assert "Prior miss lessons" in prompt
+    assert "没分清 Query 与 Key" in prompt
+
+    # Dedup: second writeback same claim+verdict → no new digest; block still there.
+    digest2, block2 = await memory_ops.failure_writeback_and_lessons(
+        session,
+        user_id="local",
+        claim_id=claim_id,
+        claim_text="Explain self-attention Q/K/V",
+        verdict="owe_next",
+        topic="transformers",
+        follow_up="ignored dup tip",
+    )
+    assert digest2 is None
+    assert block2 is not None
+    assert "没分清 Query 与 Key" in block2
+
+    # Claim-bound teach shares the same block source.
+    echo_prompt = build_echo_prompt(
+        topic="transformers",
+        history=[],
+        answer=None,
+        memory=[],
+        failure_lesson_block=block2,
+    )
+    assert "Prior miss lessons" in echo_prompt

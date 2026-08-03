@@ -65,6 +65,58 @@ def test_compute_next_review_verdicts() -> None:
     assert owe1.interval_days == 3
 
 
+def test_schedule_three_tiers_due_on_as_of() -> None:
+    """Auditable table: passed clear / almost due today / owe_next not due today."""
+    day = date(2026, 8, 3)
+    passed = schedule_after_verdict("passed", prior_failures=0, as_of=day)
+    almost = schedule_after_verdict("almost", prior_failures=5, as_of=day)
+    owe = schedule_after_verdict("owe_next", prior_failures=0, as_of=day)
+
+    # Due today iff next_review_at is set and <= as_of (passed → None = not due).
+    def due_today(next_at: date | None) -> bool:
+        return next_at is not None and next_at <= day
+
+    assert not due_today(passed.next_review_at)
+    assert due_today(almost.next_review_at)
+    assert not due_today(owe.next_review_at)  # +1d → tomorrow
+
+    # prior_failures boundaries for owe_next
+    assert schedule_after_verdict(
+        "owe_next", prior_failures=2, as_of=day
+    ).interval_days == 5
+    assert schedule_after_verdict(
+        "owe_next", prior_failures=14, as_of=day
+    ).interval_days == 29
+    assert schedule_after_verdict(
+        "owe_next", prior_failures=15, as_of=day
+    ).interval_days == MAX_INTERVAL_DAYS
+    assert schedule_after_verdict(
+        "owe_next", prior_failures=100, as_of=day
+    ).interval_days == MAX_INTERVAL_DAYS
+
+    # due_reason codes align with schedule reason_codes for the three tiers.
+    code_almost, _ = explain_due_reason(
+        as_of=day, status="in_progress", next_review_at=almost.next_review_at
+    )
+    assert code_almost == "almost_today"
+    code_owe, _ = explain_due_reason(
+        as_of=day,
+        status="queued",
+        next_review_at=owe.next_review_at,  # tomorrow → not overdue today
+    )
+    # next_review > as_of falls through to owe_scheduled template (not yet due).
+    assert code_owe == "owe_scheduled"
+    # When the owe interval has arrived, still owe_scheduled (not almost).
+    code_owe_due, text = explain_due_reason(
+        as_of=day + timedelta(days=1),
+        status="queued",
+        next_review_at=owe.next_review_at,
+        fail_count=1,
+    )
+    assert code_owe_due == "owe_scheduled"
+    assert "曾挂过" in text or "按计划" in text
+
+
 def test_due_sort_overdue_before_confuse() -> None:
     day = date(2026, 7, 30)
     a = uuid4()

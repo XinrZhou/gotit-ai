@@ -327,3 +327,38 @@ async def build_failure_lesson_block(
         neighbor_ids=neighbors,
         topic=topic,
     )
+
+
+async def failure_writeback_and_lessons(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_id: UUID,
+    claim_text: str,
+    verdict: str,
+    topic: str | None = None,
+    follow_up: str | None = None,
+    neighbor_claim_ids: list[UUID] | None = None,
+) -> tuple[MemoryEntry | None, str | None]:
+    """Harness-friendly round: digest write (deduped) → budgeted lesson block.
+
+    Pure ops surface for eval cases — no REST/UI. ``digest`` is None when
+    verdict is not almost/owe_next or (claim_id, verdict) already exists.
+    """
+    digest = await maybe_record_failure_digest(
+        session,
+        user_id=user_id,
+        claim_id=claim_id,
+        claim_text=claim_text,
+        topic=topic,
+        verdict=verdict,
+        follow_up=follow_up,
+    )
+    block = await build_failure_lesson_block(
+        session,
+        user_id=user_id,
+        claim_id=claim_id,
+        topic=topic,
+        neighbor_claim_ids=neighbor_claim_ids,
+    )
+    return digest, block

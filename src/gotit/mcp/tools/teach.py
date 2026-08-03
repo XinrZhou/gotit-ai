@@ -111,9 +111,15 @@ async def gotit_teach(
                 thread_id=tid,
             )
         except KeyError as exc:
-            return {"error": str(exc)}, None, None  # type: ignore[return-value]
+            return {"error": str(exc)}, None, None
         verify = _verify_meta(finalized)
-        return finalized["writeback"], verify, finalized["gate_verdict"]  # type: ignore[return-value]
+        wb = finalized.get("writeback")
+        gv = finalized.get("gate_verdict")
+        return (
+            wb if isinstance(wb, dict) else None,
+            verify,
+            str(gv) if gv is not None else None,
+        )
 
     if you_taught_well is not None:
         verdict = TeachVerdict(

@@ -220,15 +220,19 @@ def build_topic_prompt(
     failure_lesson_block: str | None = None,
     budget_block: str | None = None,
 ) -> str:
+    from gotit.core.context_budget import compose_examine_context
+
+    # Same total-budget path as single-claim examine (trim lessons first).
+    composed = compose_examine_context(budget_block, failure_lesson_block)
     parts = [
         f"## Topic\n{topic}",
         f"## Claims to examine (id + text)\n{_format_claims(claims)}",
         f"## Relevant memory about this learner\n{_format_memory(memory)}",
     ]
-    if budget_block:
-        parts.append(budget_block)
-    if failure_lesson_block:
-        parts.append(failure_lesson_block)
+    if composed.budget_block:
+        parts.append(composed.budget_block)
+    if composed.failure_lesson_block:
+        parts.append(composed.failure_lesson_block)
     parts.append(f"## Conversation so far\n{_format_history(history)}")
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")

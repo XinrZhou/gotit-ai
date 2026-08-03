@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -27,8 +27,7 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_failure_digest_once_per_claim_verdict(session: AsyncSession) -> None:
+async def _seed_claim(session: AsyncSession, *, text: str = "Attention core") -> UUID:
     claim_id = uuid4()
     day_id = uuid4()
     session.add(
@@ -38,7 +37,7 @@ async def test_failure_digest_once_per_claim_verdict(session: AsyncSession) -> N
         ClaimRow(
             id=claim_id,
             user_id="local",
-            text="Attention is all you need 的核心是什么",
+            text=text,
             status=MasteryStatus.NOT_YET.value,
             topic="transformers",
         )
@@ -54,6 +53,12 @@ async def test_failure_digest_once_per_claim_verdict(session: AsyncSession) -> N
         )
     )
     await session.flush()
+    return claim_id
+
+
+@pytest.mark.asyncio
+async def test_failure_digest_once_per_claim_verdict(session: AsyncSession) -> None:
+    claim_id = await _seed_claim(session)
 
     wb1 = await claim_ops.apply_examine_verdict(
         session, claim_id, verdict="owe_next", user_id="local"
@@ -75,3 +80,41 @@ async def test_failure_digest_once_per_claim_verdict(session: AsyncSession) -> N
     )
     assert marked.content["notified"] is True
     assert await memory_ops.list_pending_failure_digests(session, user_id="local") == []
+
+
+@pytest.mark.asyncio
+async def test_passed_does_not_write_failure_digest(session: AsyncSession) -> None:
+    claim_id = await _seed_claim(session, text="Already known")
+    wb = await claim_ops.apply_examine_verdict(
+        session, claim_id, verdict="passed", user_id="local"
+    )
+    assert wb.get("failure_digest_id") is None
+    assert await memory_ops.list_pending_failure_digests(session, user_id="local") == []
+    # Direct ops also refuse non-failure verdicts.
+    assert (
+        await memory_ops.maybe_record_failure_digest(
+            session,
+            user_id="local",
+            claim_id=claim_id,
+            claim_text="Already known",
+            verdict="passed",
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_almost_and_owe_next_digests_coexist(session: AsyncSession) -> None:
+    claim_id = await _seed_claim(session, text="Partial then fail")
+    wb_almost = await claim_ops.apply_examine_verdict(
+        session, claim_id, verdict="almost", user_id="local"
+    )
+    assert wb_almost.get("failure_digest_id")
+    wb_owe = await claim_ops.apply_examine_verdict(
+        session, claim_id, verdict="owe_next", user_id="local"
+    )
+    assert wb_owe.get("failure_digest_id")
+    pending = await memory_ops.list_pending_failure_digests(session, user_id="local")
+    verdicts = {p.content["verdict"] for p in pending}
+    assert verdicts == {"almost", "owe_next"}
+    assert len(pending) == 2
