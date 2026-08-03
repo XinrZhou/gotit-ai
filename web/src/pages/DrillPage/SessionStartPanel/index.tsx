@@ -59,7 +59,7 @@ export function SessionStartPanel() {
       <div className={styles.panel}>
         <div className={styles.title}>开一轮深挖</div>
         <div className={styles.muted}>
-          桑迪会按简历（{resume?.document.projects.length ?? 0} 个项目）和资料往下问。
+          练习场：按简历往下问，帮你练表达——这一轮不过掌握门禁。
         </div>
 
         {projectPicked && focusProject ? (
@@ -186,7 +186,7 @@ export function SessionStartPanel() {
           disabled={busy || !resume}
           onClick={onDrillStartSession}
         >
-          {busy ? "处理中…" : "开始深挖"}
+          {busy ? "处理中…" : "开始练习"}
         </button>
       </div>
 

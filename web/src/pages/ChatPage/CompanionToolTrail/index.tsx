@@ -11,7 +11,7 @@ const TOOL_LABEL: Record<string, string> = {
   list_due_claims: "欠账",
   start_examine: "开考准备",
   start_verify: "开练准备",
-  start_drill: "深挖准备",
+  start_drill: "练习准备",
   get_failure_lessons: "教训",
   add_memory: "记下",
   get_upcoming_interview: "面试",
@@ -40,7 +40,7 @@ function isOpenDrill(v: unknown): v is OpenDrillPayload {
   return o.action === "open_drill" || Boolean(o.round);
 }
 
-/** Quiet companion tool chips + optional one-tap 开考 / 回讲 / 深挖. */
+/** Quiet companion tool chips + optional one-tap 开考 / 回讲 / 练深挖. */
 export function CompanionToolTrail({
   calls,
   onOpenExamine,
@@ -106,8 +106,9 @@ export function CompanionToolTrail({
           className={styles.cta}
           disabled={busy}
           onClick={() => onOpenDrill(drill)}
+          title="练习场 · 不过门 · 不算掌握"
         >
-          深挖
+          练深挖
         </button>
       ) : null}
     </div>

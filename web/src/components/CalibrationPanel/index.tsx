@@ -164,7 +164,7 @@ export function CalibrationPanel({ open, onClose, onFinished, noteId }: Props) {
                 · 共 {summary.item_count} 题
               </li>
               <li>
-                过了 {summary.passed_count} · 欠着 {summary.failed_count}
+                过了 {summary.passed_count} · 欠着下次 {summary.failed_count}
               </li>
               <li>今天欠账约 {summary.due_count} 条</li>
               {summary.confused_edges_seeded > 0 ? (

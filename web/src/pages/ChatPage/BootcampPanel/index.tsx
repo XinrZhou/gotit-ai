@@ -96,7 +96,7 @@ export function BootcampPanel({
       {step === "ingest" ? (
         <>
           <p className={styles.lead}>先拿一段笔记</p>
-          <p className={styles.hint}>我们抽出能考的一句，再一起过一遍门</p>
+          <p className={styles.hint}>抽出能考的一句，再过一遍门——有证据才算会</p>
           <textarea
             className={styles.paste}
             rows={4}

@@ -562,8 +562,8 @@ export function SettingsPage() {
                       </span>
                       <span className={styles.groupMeta}>
                         {resume
-                          ? "可查看或重新导入，用于项目深挖"
-                          : "导入后可用于项目深挖"}
+                          ? "可查看或重新导入，给项目练习当上下文（练习场，不过门）"
+                          : "导入后可用于项目练习（练习场，不过门）"}
                       </span>
                     </div>
                     <div className={styles.row}>

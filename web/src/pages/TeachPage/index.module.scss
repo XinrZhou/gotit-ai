@@ -190,3 +190,26 @@
   color: var(--faint);
   letter-spacing: -0.01em;
 }
+
+.emptyPrimary {
+  margin-top: 8px;
+  border: none;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.emptyPrimary:hover:not(:disabled) {
+  background: var(--soft);
+}
+
+.emptyPrimary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

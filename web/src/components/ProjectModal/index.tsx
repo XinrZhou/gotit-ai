@@ -61,7 +61,7 @@ export function ProjectModal() {
       }
     >
       <div className="muted">
-        项目可以是简历项目，也可以是工作主题。桑迪会按面试官的方式深挖。
+        项目可以是简历项目，也可以是工作主题。桑迪按面试官方式练你表达（练习场，不过掌握门）。
       </div>
       <input
         className="note-title-input"

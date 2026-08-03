@@ -152,7 +152,7 @@ export function useDrill({
           setDrillChat([
             {
               role: "examiner",
-              text: `深挖结束（深度 ${v.depth_reached}）${gaps}`,
+              text: `这一轮练习结束（深度 ${v.depth_reached}）${gaps} · 不过门，不算掌握`,
             },
           ]);
           setDrillDone(true);
@@ -232,7 +232,7 @@ export function useDrill({
             ...prev,
             {
               role: "examiner",
-              text: `深挖结束（深度 ${v.depth_reached}）${gaps}`,
+              text: `这一轮练习结束（深度 ${v.depth_reached}）${gaps} · 不过门，不算掌握`,
             },
           ]);
           setDrillDone(true);

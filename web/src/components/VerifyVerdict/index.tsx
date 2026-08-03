@@ -7,8 +7,9 @@ const LABELS: Record<MasteryVerdict, string> = {
   owe_next: "欠着下次",
 };
 
-/** Quiet companion note beside non-pass chips — honest, not pep talk. */
+/** Quiet companion note beside chips — honest, not pep talk. */
 const SIDE_HINT: Partial<Record<MasteryVerdict, string>> = {
+  passed: "有证据了",
   almost: "下次再碰",
   owe_next: "下次还会碰到",
 };

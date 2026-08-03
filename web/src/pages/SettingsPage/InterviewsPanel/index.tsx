@@ -293,7 +293,7 @@ export function InterviewsPanel() {
       </div>
       <p className={styles.hint}>
         记录真实面试时间；OpenClaw 会按提前 24h / 2h 推送提醒。临近 3～7
-        天可另发低频「升温」提示（可关），建议练项目深挖。
+        天可另发低频「升温」提示（可关），建议练项目表达（练习场，不过门）。
       </p>
       <div className={styles.rampRow}>
         <button

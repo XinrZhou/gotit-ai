@@ -37,6 +37,7 @@ export function ExaminePage() {
     setExamineAnswer,
     examineSessionDone,
     onExamineAnswer,
+    setShowCompose,
   } = useStore();
 
   const inSession = Boolean(examineNote || examineClaimId);
@@ -119,7 +120,15 @@ export function ExaminePage() {
       <div className={styles.picker}>
         <EmptyState avatar={<SquidwardAvatar />}>
           <strong>还没有可考的题</strong>
-          <div>先出题，或排进今日计划</div>
+          <div>先添加资料，抽出能考的一句再过门</div>
+          <button
+            type="button"
+            className={styles.emptyPrimary}
+            disabled={busy}
+            onClick={() => setShowCompose(true)}
+          >
+            添加资料
+          </button>
         </EmptyState>
       </div>
     );

@@ -72,7 +72,7 @@ const AGENT_UI: Record<
   },
   sage: {
     label: "桑迪",
-    hint: "面试官 · 按简历往下挖，指出讲不清的地方",
+    hint: "面试官 · 抠项目练表达（练习场，不过门）",
     avatar: () => <SandyAvatar />,
   },
   critic: {
@@ -91,9 +91,13 @@ const MODE_AGENT: Record<Mode, AgentName> = {
 };
 
 const WORKFLOWS: { mode: Exclude<Mode, "chat">; label: string; hint: string }[] = [
-  { mode: "examine", label: "考我", hint: "过了 / 还差点 / 欠着" },
-  { mode: "teach", label: "回讲", hint: "讲不清他会追问" },
-  { mode: "drill", label: "项目深挖", hint: "按简历往下挖" },
+  { mode: "examine", label: "考我", hint: "过了 / 还差点 / 欠着下次" },
+  { mode: "teach", label: "回讲", hint: "讲不清就追问 · 同一套门禁" },
+  {
+    mode: "drill",
+    label: "项目深挖",
+    hint: "练习场 · 不过门 · 不算掌握",
+  },
 ];
 
 function agentLabel(name: string | null | undefined) {
@@ -246,7 +250,7 @@ function formatChatError(e: unknown): string {
 const WORKFLOW_BADGE: Record<string, string> = {
   examine: "考我",
   teach: "回讲",
-  drill: "深挖",
+  drill: "练深挖",
 };
 
 function messageWorkflowBadge(m: ChatMessage): string | null {
@@ -322,7 +326,6 @@ export function ChatPage() {
     items,
     refresh,
     dayClosed,
-    closeSuggested,
     closeSummary,
     closeToday,
     interviewFocus,
@@ -330,6 +333,7 @@ export function ChatPage() {
     setBootcampStatus,
     pendingExamineClaim,
     clearPendingExamineClaim,
+    setShowCompose,
   } = useStore();
   const examineCount = notes.filter((n) => n.claim_ids.length > 0).length;
   const showBootcamp = Boolean(bootcamp?.show);
@@ -1085,7 +1089,7 @@ export function ChatPage() {
                         今天收工
                       </button>
                     ) : null}
-                    <nav className={styles.briefAltNav} aria-label="开练方式">
+                    <nav className={styles.briefAltNav} aria-label="其它方式">
                       {WORKFLOWS.map((w) => (
                         <button
                           key={w.mode}
@@ -1104,7 +1108,8 @@ export function ChatPage() {
                 <div className={styles.emptyIntro}>
                   <p className={styles.emptyLead}>今天收工了</p>
                   <p className={styles.emptyHint}>
-                    {closeSummary?.note?.trim() || "还想练随时可以继续"}
+                    {closeSummary?.note?.trim() ||
+                      "歇着也好。还想练的话，随时继续"}
                   </p>
                   <button
                     type="button"
@@ -1126,9 +1131,16 @@ export function ChatPage() {
                 <div className={styles.emptyIntro}>
                   <p className={styles.emptyLead}>今天暂时没事</p>
                   <p className={styles.emptyHint}>
-                    把笔记出成题，或先找搭子聊几句
+                    过一遍门，才算真会了。先放一点笔记？
                   </p>
-                  <div className={styles.emptyWorkflows}>
+                  <button
+                    type="button"
+                    className={styles.emptyCalibrate}
+                    onClick={() => setShowCompose(true)}
+                  >
+                    添加资料
+                  </button>
+                  <nav className={styles.emptyWorkflows} aria-label="其它方式">
                     {WORKFLOWS.map((w) => (
                       <button
                         key={w.mode}
@@ -1140,7 +1152,7 @@ export function ChatPage() {
                         {w.label}
                       </button>
                     ))}
-                  </div>
+                  </nav>
                 </div>
               )}
               {showQuietInterview && interviewFocus ? (
@@ -1153,7 +1165,7 @@ export function ChatPage() {
               {showCalibrateCta ? (
                 <button
                   type="button"
-                  className={styles.emptyCalibrate}
+                  className={styles.emptyChatLink}
                   onClick={() => setCalibrationOpen(true)}
                 >
                   先摸底一下
@@ -1162,9 +1174,7 @@ export function ChatPage() {
               {!hasDailyBrief && showCloseCta ? (
                 <button
                   type="button"
-                  className={
-                    closeSuggested ? styles.emptyCalibrate : styles.emptyChatLink
-                  }
+                  className={styles.emptyChatLink}
                   disabled={closingDay || storeBusy}
                   onClick={() => void onCloseDay()}
                 >
@@ -1350,7 +1360,7 @@ export function ChatPage() {
                               今天收工
                             </button>
                           ) : null}
-                          <nav className={styles.briefAltNav} aria-label="开练方式">
+                          <nav className={styles.briefAltNav} aria-label="其它方式">
                             {WORKFLOWS.map((w) => (
                               <button
                                 key={w.mode}
@@ -1369,7 +1379,8 @@ export function ChatPage() {
                       <>
                         <p className={styles.threadEmptyLead}>今天收工了</p>
                         <p className={styles.threadEmptyHint}>
-                          {closeSummary?.note?.trim() || "还想练随时可以继续"}
+                          {closeSummary?.note?.trim() ||
+                            "歇着也好。还想练的话，随时继续"}
                         </p>
                         <button
                           type="button"
@@ -1389,12 +1400,21 @@ export function ChatPage() {
                       </>
                     ) : showInterviewFocus ? null : (
                       <>
-                        <p className={styles.threadEmptyLead}>想练就挑一种</p>
-                        <p className={styles.threadEmptyHint}>也可以直接发消息</p>
+                        <p className={styles.threadEmptyLead}>今天暂时没事</p>
+                        <p className={styles.threadEmptyHint}>
+                          过一遍门，才算真会了。先放一点笔记，或直接发消息
+                        </p>
+                        <button
+                          type="button"
+                          className={styles.emptyCalibrate}
+                          onClick={() => setShowCompose(true)}
+                        >
+                          添加资料
+                        </button>
                         {showCalibrateCta ? (
                           <button
                             type="button"
-                            className={styles.emptyCalibrate}
+                            className={styles.emptyChatLink}
                             onClick={() => setCalibrationOpen(true)}
                           >
                             先摸底一下
@@ -1412,9 +1432,7 @@ export function ChatPage() {
                     {!hasDailyBrief && showCloseCta ? (
                       <button
                         type="button"
-                        className={
-                          closeSuggested ? styles.emptyCalibrate : styles.emptyChatLink
-                        }
+                        className={styles.emptyChatLink}
                         disabled={closingDay || storeBusy}
                         onClick={() => void onCloseDay()}
                       >
@@ -1422,7 +1440,7 @@ export function ChatPage() {
                       </button>
                     ) : null}
                     {!hasDailyBrief && !dayClosed && !showBootcamp ? (
-                      <nav className={styles.workflowTabs} aria-label="开练方式">
+                      <nav className={styles.workflowTabs} aria-label="其它方式">
                         {WORKFLOWS.map((w) => (
                           <button
                             key={w.mode}

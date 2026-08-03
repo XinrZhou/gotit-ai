@@ -133,7 +133,10 @@ export function DailyBrief({
       aria-label="今日欠账"
     >
       <header className={styles.head}>
-        <h2 className={styles.headTitle}>今天还欠这些</h2>
+        <div className={styles.headText}>
+          <h2 className={styles.headTitle}>今天还欠这些</h2>
+          <p className={styles.headSub}>点一条，过一遍门</p>
+        </div>
         {more > 0 && onViewAll ? (
           <button
             type="button"

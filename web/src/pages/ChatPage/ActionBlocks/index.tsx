@@ -17,10 +17,23 @@ const VERDICT_LABEL: Record<MasteryVerdict, string> = {
   owe_next: "欠着下次",
 };
 
+const VERDICT_SIDE: Partial<Record<MasteryVerdict, string>> = {
+  passed: "有证据了",
+  almost: "下次再碰",
+  owe_next: "下次还会碰到",
+};
+
 function isAction(v: unknown): v is ActionBlockAction {
   if (!v || typeof v !== "object") return false;
   const o = v as ActionBlockAction;
   return typeof o.id === "string" && typeof o.label === "string";
+}
+
+/** Quiet rewrite so drill never reads like mastery close. */
+function displayActionLabel(action: ActionBlockAction): string {
+  if (action.id === "start_drill") return "练深挖";
+  if (action.label.trim() === "深挖") return "练深挖";
+  return action.label;
 }
 
 function parseBlock(raw: unknown): ActionBlock | null {
@@ -41,7 +54,6 @@ function parseBlock(raw: unknown): ActionBlock | null {
       preferred_check_mode:
         o.preferred_check_mode === "probe" ||
         o.preferred_check_mode === "drill" ||
-        o.preferred_check_mode === "apply" ||
         o.preferred_check_mode === "teach_back"
           ? o.preferred_check_mode
           : null,
@@ -157,14 +169,20 @@ export function ActionBlocks({
                   className={styles.cta}
                   disabled={busy}
                   onClick={() => runAction(block, primary)}
+                  title={
+                    primary.id === "start_drill"
+                      ? "练习场 · 不过门 · 不算掌握"
+                      : undefined
+                  }
                 >
-                  {primary.label}
+                  {displayActionLabel(primary)}
                 </button>
               ) : null}
             </div>
           );
         }
         const key = `verdict-${block.gate_verdict}-${block.claim_id ?? i}`;
+        const side = VERDICT_SIDE[block.gate_verdict];
         return (
           <div key={key} className={styles.card}>
             <div className={styles.body}>
@@ -174,17 +192,23 @@ export function ActionBlocks({
                 >
                   {VERDICT_LABEL[block.gate_verdict]}
                 </span>
+                {side ? <span className={styles.verdictSide}>{side}</span> : null}
               </div>
             </div>
             {block.actions.map((action) => (
               <button
                 key={action.id}
-                type="button"
                 className={styles.cta}
+                type="button"
                 disabled={busy}
                 onClick={() => runAction(block, action)}
+                title={
+                  action.id === "start_drill"
+                    ? "练习场 · 不过门 · 不算掌握"
+                    : undefined
+                }
               >
-                {action.label}
+                {displayActionLabel(action)}
               </button>
             ))}
           </div>

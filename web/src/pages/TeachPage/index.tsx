@@ -8,8 +8,6 @@ import { useStore } from "../../store";
 import type { Claim } from "../../types";
 import styles from "./index.module.scss";
 
-const MAX_PICK = 6;
-
 function clean(raw: string): string {
   return stripHtml(raw).replace(/\s+/g, " ").trim();
 }
@@ -129,6 +127,7 @@ export function TeachPage() {
     teachDone,
     onTeachStart,
     onTeachStartClaim,
+    setShowCompose,
   } = useStore();
 
   const inSession = teachChat.length > 0 || Boolean(teachClaimId);
@@ -167,7 +166,6 @@ export function TeachPage() {
   const seen = new Set<string>();
   const rows: Claim[] = [];
   const pushClaim = (claim: Claim) => {
-    if (rows.length >= MAX_PICK) return;
     const label = clean(claim.text);
     if (!label) return;
     const norm = label.toLowerCase().slice(0, 96);
@@ -187,7 +185,10 @@ export function TeachPage() {
           </div>
           <div className={styles.pickerCopy}>
             <div className={styles.pickerTitle}>选一条回讲</div>
-            <div className={styles.pickerSub}>口说或打字 · 同一套过了 / 欠着下次</div>
+            <div className={styles.pickerSub}>
+              {rows.length > 0 ? `共 ${rows.length} 条 · ` : ""}
+              口说或打字 · 过了 / 还差点 / 欠着下次
+            </div>
           </div>
         </header>
 
@@ -223,12 +224,20 @@ export function TeachPage() {
         ) : (
           <EmptyState avatar={<PatrickAvatar />}>
             <strong>还没有可回讲的题</strong>
-            <div>先出题进计划，或用下面自由主题</div>
+            <div>先添加资料出题，或用下面自由主题练讲（自由主题不过门）</div>
+            <button
+              type="button"
+              className={styles.emptyPrimary}
+              disabled={busy}
+              onClick={() => setShowCompose(true)}
+            >
+              添加资料
+            </button>
           </EmptyState>
         )}
 
         <div className={styles.freeTopic}>
-          <div className={styles.freeLabel}>或自由主题（不写回掌握）</div>
+          <div className={styles.freeLabel}>或自由主题（练习讲，不写回掌握）</div>
           <Composer
             kind="topic"
             value={teachTopic}

@@ -13,7 +13,7 @@ export function resolveCheckMode(claim: Pick<
 
 export function verifyCtaLabel(mode: CheckMode): string {
   if (mode === "teach_back") return "回讲";
-  if (mode === "drill") return "深挖";
+  if (mode === "drill") return "练深挖";
   return "开考";
 }
 

@@ -18,13 +18,13 @@ export function InterviewFocusBrief({
 }: Props) {
   const featured = !quiet && focus.prominence === "featured";
   const label = quiet
-    ? `抠一下「${focus.project_name?.trim() || "简历项目"}」`
-    : "深挖";
+    ? `练一下「${focus.project_name?.trim() || "简历项目"}」`
+    : "练项目";
 
   return (
     <section
       className={`${styles.focus} ${featured ? styles.featured : styles.quiet} ${quiet ? styles.closed : ""}`}
-      aria-label="面试深挖建议"
+      aria-label="面试项目练习建议"
     >
       {!quiet ? <p className={styles.prompt}>{focus.prompt}</p> : null}
       <button
