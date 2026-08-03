@@ -14,7 +14,8 @@
 打开 App
   → 空聊天 / 今日简报（欠练 + 计划；有则一键开练）
   → 无料时：添加资料 → 出题（generating → ready）→「去开考」
-  → 考我 / 回讲 / 深挖（preferred_check_mode 分流，门禁同一套）
+  → 考我 / 回讲（preferred_check_mode 分流；Critic + deterministic_gate）
+     · 深挖 = 项目练习场（可写 thread；不过门，不算掌握 — 文案勿暗示「过关」）
   → 芯片：过了 / 还差点 / 欠着下次
   → 欠清或主动「今日收工」
 ```
@@ -35,9 +36,8 @@ Harness API/CLI、CAT 题参写回（后台吃即可）。
 | `daily-brief-polish/` | 若 brief 抛光已合 main |
 | `yuque-md-convert-wipe/` | 若语雀转换修复已合 main |
 
-归档命名：`archive/2026-08-01-<name>/`（或执行日日期）。更新
-`openspec/changes/README.md` Current active → 仅剩 `main-path-converge/`
-（及确未完成项）。
+归档命名：`archive/2026-08-03-<name>/`（已执行）。更新
+`openspec/changes/README.md` Current active → 仅剩 `main-path-converge/`。
 
 ## Friction audit (how to work)
 

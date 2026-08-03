@@ -11,9 +11,13 @@ adopt；再考上下文的预算常量分散，总长会叠加超标。
 1. **Gate signals** — `deterministic_gate` 在 stricter-of-two 之上，用可解释、
    有测试钉死的规则消费 `score`/`evidence`（仅降档，永不靠高分升档）。
 2. **Harness holdout surface** — REST 触发/列出 run + 人工
-   `adopt|observe|reject`；Settings「Harness」页可跑 `dev`/`gold` 并决策。
+   `adopt|observe|reject`（CLI 仍可用）。**Settings「Harness」曾试点后撤掉**
+   （错面；工程台不进学习者设置）— 以 API/CLI 为准。
 3. **ContextBudget** — `core/context_budget.py` 统一总字符预算与裁剪优先级；
    Axiom prompt 组装前 compose。
+
+> **Status (2026-08-03):** tasks 已全部勾完；应归档进
+> `archive/`（见 `main-path-converge` archive policy）。
 
 ## Out
 

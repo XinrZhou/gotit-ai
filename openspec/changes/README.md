@@ -13,18 +13,20 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
-| **`main-path-converge/`** | **Next wave: archive + friction audit + polish（明天执行）** |
-| `cat-param-writeback/` | verify/calib → claim.calibration（待归档） |
-| `form-follows-claim/` | preferred_check_mode 路由（待归档） |
-| `verify-spine-deepen/` | Gate signals + ContextBudget + Harness API（待归档） |
-| `note-ingest-next-step/` | 出题 → 去开考（待归档） |
-| `daily-brief-polish/` | Daily brief UI（待归档若已合） |
-| `yuque-md-convert-wipe/` | Yuque md convert（待归档若已合） |
+| **`main-path-converge/`** | Friction audit + polish（打开 → 过一关）；机制诱惑进 Later |
 
 ## Recently archived
 
 | Archive | Notes |
 |---------|-------|
+| `archive/2026-08-03-verify-spine-deepen/` | Gate signals + ContextBudget + Harness API/CLI |
+| `archive/2026-08-03-form-follows-claim/` | `preferred_check_mode` CTA routing |
+| `archive/2026-08-03-cat-param-writeback/` | Item-param writeback on gate / calib |
+| `archive/2026-08-03-note-ingest-next-step/` | 出题 → 去开考 |
+| `archive/2026-08-03-daily-brief-polish/` | DailyBrief UI（手测并入主路径走查） |
+| `archive/2026-08-03-yuque-md-convert-wipe/` | Yuque editor convert wipe fix |
+| `archive/2026-08-03-mcp-split-stack-honest/` | MCP package split + stack honesty |
+| `archive/2026-08-03-legacy-surface-cleanup/` | Drop chat_messages / VerifyLoop / Redis |
 | `archive/2026-07-31-day-close-ritual/` | Today close ritual + companion `close_day` |
 | `archive/2026-07-31-digest-to-claim/` | Interest → promotable claims → plan |
 | `archive/2026-07-31-chat-action-blocks/` | `metadata.action_blocks` + Chat ActionBlocks |
@@ -47,6 +49,8 @@ Also archived 2026-07-30: `chat-shell`, `chat-plan-context`, `mastery-graph`,
 
 ## Later (not opened yet)
 
+- Drill mastery honesty: keep prep-only copy **or** wire claim-close finalize
+- Full APPLY verify form (today → probe)
 - Auto prompt/skill register on harness adopt
 - Broad per-agent multi-model beyond Critic
-- Broad agent-as-tool against full MCP catalog
+- ~~Broad agent-as-tool against full MCP catalog~~ — **not near-term** (whitelist stays)

@@ -1,16 +1,17 @@
 # Tasks: main-path-converge
 
-> 明天执行：先 Task 0，再 Audit，再按优先级勾选实现。机制诱惑 → Later，不进本表。
+> Task 0 已做（2026-08-03）。下一步：Audit → 收敛实现。机制诱惑 → Later。
 
 ## 0. 归档（先做）
 
-- [ ] 确认各夹对应代码已在 `main`（对照 git log / SYSTEM）
-- [ ] 归档已 ship：`verify-spine-deepen`、`form-follows-claim`、
-      `cat-param-writeback`、`note-ingest-next-step`（及已合的
-      `daily-brief-polish` / `yuque-md-convert-wipe`）
-      → `openspec/changes/archive/2026-08-01-*`（日期按执行日可改）
-- [ ] 更新 `openspec/changes/README.md`：Current active 以本夹为主；
-      Later 保留 APPLY / harness auto-adopt 等，不新开夹
+- [x] 确认各夹对应代码已在 `main`（对照 tasks 全勾 / SYSTEM）
+- [x] 归档已 ship → `openspec/changes/archive/2026-08-03-*`：
+      `verify-spine-deepen`、`form-follows-claim`、`cat-param-writeback`、
+      `note-ingest-next-step`、`daily-brief-polish`、`yuque-md-convert-wipe`、
+      另加已合的 `mcp-split-stack-honest`、`legacy-surface-cleanup`
+      （daily-brief / yuque 仅剩手测项 → 并入本夹 Audit）
+- [x] 更新 `openspec/changes/README.md`：Current active 仅本夹；
+      Later 保留 APPLY / harness auto-adopt / drill honesty 等
 
 ## 1. 主路径走查（产出清单，先别大改）
 
