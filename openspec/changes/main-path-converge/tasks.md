@@ -57,3 +57,4 @@
 - [x] teach finalize 写 `action_blocks`；Echo 注入 failure lessons
 - [x] examine/teach 返回 `failure_hint`；ChatLog 安静展示
 - [x] PATCH preferred 去掉 apply；companion / badge「练深挖」
+- [x] `failure_hint` 写入 thread metadata（首轮）并在 ChatPage 展示
