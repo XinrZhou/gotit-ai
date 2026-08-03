@@ -13,7 +13,7 @@ proposal? If yes → fold into that change and delete the duplicate folder.
 
 | Change | Notes |
 |--------|-------|
-| **`main-path-converge/`** | Friction audit + polish（打开 → 过一关）；机制诱惑进 Later |
+| **`main-path-converge/`** | 产品故事 S1–S5：空态主动作、深挖诚实、过关可感 |
 
 ## Recently archived
 

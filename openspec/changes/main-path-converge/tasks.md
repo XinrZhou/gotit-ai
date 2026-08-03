@@ -1,64 +1,59 @@
 # Tasks: main-path-converge
 
-> Task 0 已做（2026-08-03）。下一步：Audit → 收敛实现。机制诱惑 → Later。
+> 产品故事验收见 `design.md`（S1–S8）。机制诱惑 → Later。
 
 ## 0. 归档（先做）
 
-- [x] 确认各夹对应代码已在 `main`（对照 tasks 全勾 / SYSTEM）
-- [x] 归档已 ship → `openspec/changes/archive/2026-08-03-*`：
-      `verify-spine-deepen`、`form-follows-claim`、`cat-param-writeback`、
-      `note-ingest-next-step`、`daily-brief-polish`、`yuque-md-convert-wipe`、
-      另加已合的 `mcp-split-stack-honest`、`legacy-surface-cleanup`
-      （daily-brief / yuque 仅剩手测项 → 并入本夹 Audit）
-- [x] 更新 `openspec/changes/README.md`：Current active 仅本夹；
-      Later 保留 APPLY / harness auto-adopt / drill honesty 等
+- [x] 确认各夹对应代码已在 `main`
+- [x] 归档已 ship → `archive/2026-08-03-*`
+- [x] 更新 `openspec/changes/README.md`：Current active 仅本夹
 
-## 1. 主路径走查（产出清单，先别大改）
-
-- [ ] 空库：打开 → bootcamp/空态 → 添加资料 → 出题 → 去开考 → 见门禁芯片
-- [ ] 有欠账：打开 → 今日简报 → 一键开练（含回讲/深挖分流若有）→ 芯片
-- [ ] 记摩擦表（建议写在本文件底部「Audit log」）：至少 5 条
-- [ ] 从摩擦表挑 **≤5** 条进 Task 2（其余放 Later）
-
-## 2. 收敛实现（仅审计入选的）
-
-优先级默认（审计可推翻）：
-
-- [ ] P0：任何「做完不知道下一步」的断点（文案 / 主按钮 / 关闭弹窗后落点）
-- [ ] P0：空态主 CTA 过多时收成一个主动作 + 次要安静入口
-- [ ] P1：主路径上的工程黑话（dev/gold/adopt/layer/case…）改为人话或删除暴露
-- [ ] P1：IngestOutcome / DailyBrief / SessionStart 文案语气对齐（搭子不是监工）
-- [ ] P2：重复 brief / 重复开考入口去重
-- [ ] P2：设置页对学习者噪音降一级（不删 Skills/MCP，可调标签或说明句）
-
-## 3. 文档短同步
-
-- [ ] `docs/SYSTEM.md`：补 3～6 行「Main path (learner)」指向上述闭环；
-      Not done 不膨胀
-- [ ] 若 README 功能表与主路径措辞严重漂移，各改一句（中英）
-- [ ] 本夹 `tasks.md` 勾选；准备归档本夹的条件写清（主路径摩擦表清零或只剩 Later）
-
-## 4. 门禁
-
-- [ ] 改了代码则跑相关测试 / `./scripts/gate.sh`（或 pytest + web build）
-- [ ] 提交按故事拆：`docs(openspec): archive …` 与 `fix(web): …` / `refactor(web): …` 分开
-
----
-
-## Audit log（执行时填写）
+## 1. 审计 → 入选实现项（产品故事驱动）
 
 | # | 场景 | 卡点 | 期望 | 入选？ |
 |---|------|------|------|--------|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
+| 1 | 无欠账空态 | 考我/回讲/深挖三芯片并列 | 「添加资料」为主动作 | ✓ S1 |
+| 2 | 深挖入口 | 「往下挖」像过关 | 标明练习场、不过门 | ✓ S2 |
+| 3 | 过关芯片 | 过了无旁注，欠着用语不一 | 统一 + 过了有证据感 | ✓ S3 |
+| 4 | 出题结果 | 已有「过一遍门」 | 保持并与空态语气对齐 | ✓ S4 |
+| 5 | 简报/收工 | 偏功能清单 | 人话节奏、次要入口安静 | ✓ S5 |
+| 6 | 回讲选题 | 截断 6 条；空态无落点 | 与考我对齐 | ✓ S6 |
+| 7 | 气泡/结束语 | 「深挖」像过关 | 练深挖 + 不过门 | ✓ S7 |
+| 8 | 设置/摸底 | 旁路暗示会了 | 练习场措辞 | ✓ S8 |
 
-## Later（本波次不做）
+- [x] 空库 / 有欠账路径对照设计主路径
+- [x] 摩擦表入选上表
 
-- 完整 APPLY 验证工作流
-- Harness 用户向 UI / auto-adopt prompt
-- Compass 自动打 `preferred_check_mode`（LLM）
-- 新算法：FSRS 全量、工业 CAT、更大知识图谱
-- 多模型按 agent 广绑（除已有 Critic）
+## 2. 收敛实现
+
+- [x] S1–S5（空态 / 深挖诚实 / 芯片 / 出题 / 一日节奏）
+- [x] S6：Teach 取消截断；考/回讲空态「添加资料」+ 门禁用语对齐
+- [x] S7：ActionBlocks 练深挖 + verdict 旁注；drill 结束明示不过门
+- [x] S8：摸底/简历/面试设置文案
+
+## 3. 文档短同步
+
+- [x] `design.md` 验收清单 S1–S8
+- [x] `docs/SYSTEM.md` / README 立意对齐
+- [ ] 本夹归档条件：S1–S8 手测过 + 真用一周无新主路径断点 → 再 archive
+
+## 4. 门禁
+
+- [x] `cd web && npm run build`（S1–S5）
+- [x] `cd web && npm run build`（S6–S8）
+- [ ] 提交：`fix(web): …` 与 `docs(openspec): …` 可拆
+
+## Later（下一波次）
+
+- 失败教训注入体验再加深（已有 failure_hint + teach 注入；可加更多表面）
+- 深挖接 finalize（仅当备考真需要）
+- Harness UI / auto-adopt；全量 MCP 进聊天
+- 更深多 Agent 规划；工业 FSRS/CAT
+- Settings 大改；弱点图谱抛光
+
+## Spine code (this session)
+
+- [x] ingest 不再因 project_id 建议 drill
+- [x] teach finalize 写 `action_blocks`；Echo 注入 failure lessons
+- [x] examine/teach 返回 `failure_hint`；ChatLog 安静展示
+- [x] PATCH preferred 去掉 apply；companion / badge「练深挖」

@@ -94,9 +94,9 @@ gotit 是一个**愿意天天打开的学习与面试搭子**：陪你聊、记�
 
 ## 后续演进思路（按问题，不按炫技）
 
-> **2026-08 当下默认：** 机制面已够宽；优先 **主路径收敛**（打开 → 过一关更顺、
-> 工程黑话藏后台、归档已 ship 的 OpenSpec），而不是再长高脊柱。详见
-> `openspec/changes/main-path-converge/` 与 `docs/SYSTEM.md`「Current main path」。
+> **2026-08 当下默认：** 把「有温度的较真」做成可感日课——空态主动作、深挖诚实、
+> 过关芯片可感（见 `openspec/changes/main-path-converge/design.md` 验收 S1–S5），
+> 而不是再长高脊柱或 Agent 平台。机制诱惑进 Later。
 
 演进只回答日子里还没被很好解决的问题。优先级从高到低：
 

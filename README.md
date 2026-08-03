@@ -122,10 +122,12 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 
 ## How it feels day-to-day
 
+**Pass the gate — then it's learned.** Chat is the surface; verification is the spine.
+
 1. **Talk** — open a thread, @ a companion, optionally load a skill  
 2. **Ingest** — add notes; extract claims into today's plan  
-3. **Verify** — from chat, start 考我 / 回讲 / 深挖  
-4. **Gate** — Critic rechecks; code decides pass / almost / owe-next  
+3. **Verify** — from chat, start 考我 / 回讲 (gate); 项目深挖 is practice, not mastery  
+4. **Gate** — Critic rechecks; code decides 过了 / 还差点 / 欠着下次  
 5. **Remember** — outcomes land on a trajectory so the next session is sharper  
 
 ## Roadmap

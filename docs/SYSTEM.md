@@ -9,7 +9,8 @@
 
 Daily **learning companion**: personality agents chat in threads, remember
 weaknesses, and run verify workflows. **Verified = done.** Chat owns the
-surface; verification is the spine.
+surface; verification is the spine. Warm companion, honest gate — not a
+generic tutor chat, Anki+LLM, or multi-agent demo.
 
 ## Current main path (truth)
 
@@ -22,6 +23,10 @@ surface; verification is the spine.
   → 芯片：过了 / 还差点 / 欠着下次
   → 欠清或主动「今日收工」
 ```
+
+Learner empty states: owed → brief is primary; idle →「添加资料」is primary
+(workflows / calibrate / new chat are secondary). Product-story checklist:
+`openspec/changes/main-path-converge/design.md` (S1–S5).
 
 旁路（入口不强化）：弱点图谱、Settings（Skills/MCP/计划推送/动态）、
 Apple 桥、Harness API/CLI、CAT 题参写回。当前波次默认 **收主路径摩擦**
@@ -223,8 +228,10 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 - **Now (product):** main-path friction converge — not new verticals
   (`openspec/changes/main-path-converge/`)
 - Drill ↔ mastery: either wire claim-close through `verify_finalize`, or keep
-  drill explicitly **prep-only** in all user-facing copy (code today = prep-only)
-- Full APPLY verify workflow (`preferred_check_mode=apply` → probe today)
+  drill explicitly **prep-only** in all user-facing copy (code today = prep-only;
+  ingest no longer auto-tags project claims as drill)
+- Full APPLY verify workflow (**removed from public PATCH preferred modes**;
+  legacy `apply` in DB still resolves → probe)
 - Broad per-agent multi-model binding beyond Critic (Axiom/others still share
   global `LLM_*`; Critic may use `identity.llm_config` or `CRITIC_*`)
 - Broad agent-as-tool beyond the companion **builtin whitelist** + optional user
