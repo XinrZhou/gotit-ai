@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""Run a harness case set and print a baseline verdict.
+"""Run Verify Spine replay / holdout harness (no live LLM).
 
 Usage:
-    uv run python scripts/run_harness.py [--set dev|gold|replay|holdout] [--label LABEL]
+    uv run python scripts/run_replay_harness.py [--set replay|holdout] [--label LABEL]
 
 Exit code 0 if all cases pass, 1 otherwise.
 """
@@ -16,8 +16,6 @@ import sys
 from gotit.db import session_scope
 from gotit.db.runtime import ensure_db
 from gotit.harness import SUITE_VERSION, run_harness
-from gotit.harness.cases.dev import build_dev_cases
-from gotit.harness.cases.gold import build_gold_cases
 from gotit.harness.cases.holdout import build_holdout_cases
 from gotit.harness.cases.replay import build_replay_cases
 
@@ -25,14 +23,10 @@ from gotit.harness.cases.replay import build_replay_cases
 async def main(*, case_set: str, label: str | None) -> int:
     await ensure_db()
     async with session_scope() as session:
-        if case_set == "gold":
-            cases = build_gold_cases(session)
-        elif case_set == "replay":
-            cases = build_replay_cases(session)
-        elif case_set == "holdout":
+        if case_set == "holdout":
             cases = build_holdout_cases(session)
         else:
-            cases = build_dev_cases(session)
+            cases = build_replay_cases(session)
         run = await run_harness(session, cases, case_set=case_set, label=label)
         await session.commit()
 
@@ -45,13 +39,15 @@ async def main(*, case_set: str, label: str | None) -> int:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Replay/holdout harness for Verify Spine contracts (no LLM)."
+    )
     parser.add_argument(
         "--set",
         dest="case_set",
-        choices=("dev", "gold", "replay", "holdout"),
-        default="dev",
-        help="case set to run (default: dev)",
+        choices=("replay", "holdout"),
+        default="replay",
+        help="case set to run (default: replay)",
     )
     parser.add_argument("--label", default=None)
     args = parser.parse_args()

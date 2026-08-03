@@ -226,7 +226,7 @@ async def maybe_record_failure_digest(
         row.content = content
         await session.flush()
         return _memory_view(row)
-    content: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "claim_id": key,
         "claim_text": (claim_text or "").strip()[:240],
         "verdict": verdict,
@@ -235,14 +235,14 @@ async def maybe_record_failure_digest(
         "notified": False,
     }
     if source:
-        content["source"] = source
+        payload["source"] = source
     return await add_memory(
         session,
         user_id=user_id,
         layer="working",
         kind="failure_digest",
         topic=topic,
-        content=content,
+        content=payload,
         source={"claim_id": key, "skill": "failure-digest"},
     )
 

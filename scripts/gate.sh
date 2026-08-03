@@ -16,4 +16,10 @@ uv run pytest
 echo "==> harness (dev case set)"
 uv run python scripts/run_harness.py --label gate
 
+echo "==> harness replay (Verify Spine contracts, no LLM)"
+uv run python scripts/run_replay_harness.py --set replay --label gate
+
+echo "==> harness holdout (isolated from gold, no LLM)"
+uv run python scripts/run_replay_harness.py --set holdout --label gate
+
 echo "==> gate ok"

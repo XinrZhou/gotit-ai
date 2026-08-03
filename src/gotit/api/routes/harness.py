@@ -15,10 +15,12 @@ from gotit.db import session_scope
 from gotit.harness import run_harness
 from gotit.harness.cases.dev import build_dev_cases
 from gotit.harness.cases.gold import build_gold_cases
+from gotit.harness.cases.holdout import build_holdout_cases
+from gotit.harness.cases.replay import build_replay_cases
 
 router = APIRouter()
 
-CaseSetName = Literal["dev", "gold"]
+CaseSetName = Literal["dev", "gold", "replay", "holdout"]
 DecisionName = Literal["adopt", "observe", "reject"]
 
 
@@ -30,6 +32,11 @@ class HarnessRunCreate(BaseModel):
 class HarnessDecisionIn(BaseModel):
     decision: DecisionName
     note: str | None = Field(default=None, max_length=500)
+    suite_version: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Optional pin; defaults to run summary / current SUITE_VERSION",
+    )
 
 
 class HarnessRunDetail(BaseModel):
@@ -42,6 +49,10 @@ def _build_cases(session: Any, case_set: CaseSetName) -> list[Any]:
         return build_dev_cases(session)
     if case_set == "gold":
         return build_gold_cases(session)
+    if case_set == "replay":
+        return build_replay_cases(session)
+    if case_set == "holdout":
+        return build_holdout_cases(session)
     raise ValueError(f"unknown case_set: {case_set}")
 
 
@@ -117,6 +128,7 @@ async def decide_run(run_id: UUID, body: HarnessDecisionIn) -> HarnessRun:
                 run_id,
                 decision=body.decision,
                 note=body.note,
+                suite_version=body.suite_version,
             )
         except KeyError as exc:
             raise HTTPException(

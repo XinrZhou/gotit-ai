@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
 from uuid import UUID
 
 from gotit.core.models import InterviewEventView
@@ -80,10 +80,9 @@ def upsert_interview(
     alarms = [abs(int(h)) for h in alarms_raw if int(h) != 0]
     alarm_arg = ",".join(str(h) for h in alarms) if alarms else "24,2"
     start = scheduled_at
-    if start.tzinfo is None:
-        start_s = start.isoformat() + "+00:00"
-    else:
-        start_s = start.isoformat()
+    start_s = (
+        start.isoformat() + "+00:00" if start.tzinfo is None else start.isoformat()
+    )
     args = [
         "upsert",
         "--id",

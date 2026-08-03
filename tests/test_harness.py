@@ -161,6 +161,7 @@ async def test_set_harness_decision_is_audit_only(session: AsyncSession) -> None
     assert decided.summary["decision"] == "adopt"
     assert decided.summary["decision_note"] == "looks good"
     assert decided.summary.get("decided_at")
+    assert decided.summary.get("suite_version")
 
     prompts_after = (
         await session.execute(select(func.count()).select_from(PromptVersionRow))

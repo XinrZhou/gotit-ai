@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.core.models import HarnessCaseResult, HarnessRun
 from gotit.db import ops as day_ops
+from gotit.harness.suite import SUITE_VERSION
 
 # Stable summary keys for gate.sh / CLI / REST / interview docs.
 # Cases set metrics["rollup"] to one of these; runner rolls bool ok.
@@ -139,6 +140,7 @@ async def run_harness(
         )
 
     summary = aggregate_run_summary(outcomes)
+    summary["suite_version"] = SUITE_VERSION
     n_passed = int(summary["passed"])
     n_total = int(summary["total"])
     verdict = "pass" if n_total > 0 and n_passed == n_total else "fail"
@@ -150,6 +152,7 @@ async def run_harness(
 
 __all__ = [
     "CONTRACT_ROLLUP_KEYS",
+    "SUITE_VERSION",
     "Case",
     "CaseResult",
     "CaseRunner",

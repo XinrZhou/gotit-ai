@@ -42,6 +42,7 @@ async def test_run_dev_and_adopt(
     assert decided["summary"]["decision"] == "adopt"
     assert decided["summary"]["decision_note"] == "gate signals look good"
     assert decided["summary"].get("decided_at")
+    assert decided["summary"].get("suite_version")
 
     r = await client.get("/v1/harness/runs?limit=5", headers=auth_headers)
     assert r.status_code == 200
