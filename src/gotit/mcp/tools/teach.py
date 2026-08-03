@@ -55,6 +55,7 @@ async def gotit_teach(
         *,
         verify: dict[str, object] | None = None,
         gate_verdict: str | None = None,
+        failure_hint: str | None = None,
     ) -> dict[str, object] | None:
         if tid is None:
             return None
@@ -74,6 +75,8 @@ async def gotit_teach(
                 gate_verdict=str(gate_verdict),
                 claim_id=cid,
             )
+        if failure_hint and not answer:
+            extra["failure_hint"] = failure_hint
         try:
             await persist_workflow_exchange(
                 thread_id=tid,
@@ -164,7 +167,12 @@ async def gotit_teach(
         writeback, verify, gate_verdict = await _maybe_finalize(verdict.you_taught_well)
         if isinstance(writeback, dict) and writeback.get("error"):
             return writeback
-    err = await _persist(verdict, verify=verify, gate_verdict=gate_verdict)
+    err = await _persist(
+        verdict,
+        verify=verify,
+        gate_verdict=gate_verdict,
+        failure_hint=failure_hint,
+    )
     if err:
         return err
     result: dict[str, object] = {"verdict": verdict.model_dump(mode="json")}

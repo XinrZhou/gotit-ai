@@ -1247,6 +1247,16 @@
   color: var(--muted);
 }
 
+.failureHint {
+  margin-top: 4px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
 .composer {
   border-top: 1px solid var(--line);
   padding: 10px 20px 12px;

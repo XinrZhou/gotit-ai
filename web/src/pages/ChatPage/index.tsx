@@ -274,6 +274,14 @@ function messageExamineVerdict(m: ChatMessage): {
   };
 }
 
+function messageFailureHint(m: ChatMessage): string | null {
+  if (m.role !== "agent") return null;
+  const raw = m.metadata?.failure_hint;
+  if (typeof raw !== "string") return null;
+  const tip = raw.trim();
+  return tip || null;
+}
+
 function ThinkingBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1199,6 +1207,7 @@ export function ChatPage() {
                   const thinking = !isUser ? messageThinking(m) : null;
                   const wfBadge = messageWorkflowBadge(m);
                   const examineVerdict = !isUser ? messageExamineVerdict(m) : null;
+                  const failureHint = !isUser ? messageFailureHint(m) : null;
                   const toolCalls = !isUser ? toolCallsFromMeta(m.metadata) : null;
                   const actionBlocks = !isUser
                     ? actionBlocksFromMeta(m.metadata)
@@ -1257,6 +1266,9 @@ export function ChatPage() {
                           >
                             <MessageBody text={m.text} markdown={!isUser && !isError} />
                           </div>
+                        {failureHint ? (
+                          <div className={styles.failureHint}>{failureHint}</div>
+                        ) : null}
                         {toolCalls ? (
                           <CompanionToolTrail
                             calls={toolCalls}

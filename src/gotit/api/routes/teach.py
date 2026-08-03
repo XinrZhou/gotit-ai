@@ -98,6 +98,7 @@ async def _persist_teach(
     claim_id: UUID | None = None,
     verify: dict[str, object] | None = None,
     gate_verdict: str | None = None,
+    failure_hint: str | None = None,
 ) -> None:
     if thread_id is None:
         return
@@ -117,6 +118,8 @@ async def _persist_teach(
             gate_verdict=str(gate_verdict),
             claim_id=claim_id,
         )
+    if failure_hint and not answer:
+        extra["failure_hint"] = failure_hint
     try:
         await persist_workflow_exchange(
             thread_id=thread_id,
@@ -295,6 +298,7 @@ async def teach(
         claim_id=body.claim_id,
         verify=verify,
         gate_verdict=gate_verdict,
+        failure_hint=failure_hint,
     )
     result: dict[str, object] = {"verdict": verdict.model_dump(mode="json")}
     if writeback is not None:

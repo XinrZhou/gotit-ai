@@ -237,6 +237,9 @@ async def examine(
                 gate_verdict=str(gate_verdict),
                 claim_id=session_verdict.current_claim_id,
             )
+        topic_hint = learner_failure_hint(lesson_block)
+        if topic_hint and not body.answer:
+            extra["failure_hint"] = topic_hint
         topic_seed = (body.topic or "").strip() or (
             claims[0].text if claims else None
         )
@@ -261,7 +264,6 @@ async def examine(
         }
         if verify:
             out["verify"] = verify
-        topic_hint = learner_failure_hint(lesson_block)
         if topic_hint:
             out["failure_hint"] = topic_hint
         return out
@@ -407,6 +409,9 @@ async def examine(
             gate_verdict=str(gate_verdict),
             claim_id=body.claim_id,
         )
+    single_hint = learner_failure_hint(lesson_block)
+    if single_hint and not body.answer:
+        extra_single["failure_hint"] = single_hint
     await _persist_examine(
         thread_id=body.thread_id,
         user_id=user_id,
@@ -425,7 +430,6 @@ async def examine(
     result: dict[str, object] = {"verdict": verdict_out, "writeback": writeback}
     if verify:
         result["verify"] = verify
-    single_hint = learner_failure_hint(lesson_block)
     if single_hint:
         result["failure_hint"] = single_hint
     return result
