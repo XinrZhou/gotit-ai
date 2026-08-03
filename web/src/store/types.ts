@@ -25,6 +25,8 @@ export type ChatTurn = {
   verdict?: MasteryVerdict | null;
   session_done?: boolean;
   verify?: VerifyPath | null;
+  /** Quiet “你曾在这栽过” line when re-examining / re-teaching. */
+  failure_hint?: string | null;
   error?: boolean;
 };
 

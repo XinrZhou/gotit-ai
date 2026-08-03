@@ -79,7 +79,7 @@ def route_verify_action(mode: CheckMode) -> VerifyRoute:
             mode=mode,
             workflow="drill",
             action_id="start_drill",
-            cta_label="深挖",
+            cta_label="练深挖",
             open_key="open_drill",
         )
     return VerifyRoute(
@@ -107,10 +107,14 @@ def suggest_preferred_check_mode(
     tags: list[str] | None = None,
     project_id: UUID | None = None,
 ) -> CheckMode | None:
-    """Light ingest heuristic. ``None`` → leave column null (probe default)."""
+    """Light ingest heuristic. ``None`` → leave column null (probe default).
+
+    Never suggests ``DRILL`` from ``project_id`` alone — drill is interview
+    practice (prep-only), not a mastery-close form. Use ``start_drill`` /
+    interview ramp for project deep-dive.
+    """
+    _ = project_id  # call-site compat; must not imply mastery form
     blob = f"{text or ''} {' '.join(tags or [])}".lower()
     if any(h in blob for h in _TEACH_HINTS):
         return CheckMode.TEACH_BACK
-    if project_id is not None:
-        return CheckMode.DRILL
     return None

@@ -17,7 +17,7 @@ from gotit.db import session_scope
 
 router = APIRouter()
 
-PreferredModeIn = Literal["probe", "drill", "apply", "teach_back"] | None
+PreferredModeIn = Literal["probe", "drill", "teach_back"] | None
 
 
 class AddDependsBody(BaseModel):

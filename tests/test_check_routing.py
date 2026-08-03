@@ -36,7 +36,7 @@ def test_drill_with_project() -> None:
     pid = uuid4()
     r = route_for_claim(preferred="drill", project_id=pid)
     assert r.mode == CheckMode.DRILL
-    assert r.cta_label == "深挖"
+    assert r.cta_label == "练深挖"
     assert r.open_key == "open_drill"
 
 
@@ -55,10 +55,10 @@ def test_suggest_teach_from_text() -> None:
     )
 
 
-def test_suggest_drill_from_project() -> None:
+def test_suggest_project_does_not_imply_drill() -> None:
+    """Project-linked claims still default to probe (gate path), not drill prep."""
     assert (
-        suggest_preferred_check_mode(text="缓存击穿", project_id=uuid4())
-        == CheckMode.DRILL
+        suggest_preferred_check_mode(text="缓存击穿", project_id=uuid4()) is None
     )
 
 

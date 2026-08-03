@@ -16,6 +16,7 @@ from gotit.core.failure_lessons import (
     FailureLessonCandidate,
     budget_failure_lesson_block,
     format_failure_lesson_block,
+    learner_failure_hint,
     select_failure_lessons,
 )
 from gotit.core.models import MasteryStatus, PlanItemSource
@@ -39,8 +40,27 @@ def _cand(
         claim_text=claim_text,
         follow_up=follow_up,
         topic=topic,
-        created_at=datetime.now(UTC) - timedelta(hours=hours_ago),
+    created_at=datetime.now(UTC) - timedelta(hours=hours_ago),
+  )
+
+
+def test_learner_failure_hint_from_block() -> None:
+    cid = uuid4()
+    block = format_failure_lesson_block(
+        [
+            _cand(
+                claim_id=str(cid),
+                follow_up="Q/K/V 搞混了",
+            )
+        ],
+        claim_id=cid,
     )
+    hint = learner_failure_hint(block)
+    assert hint is not None
+    assert hint.startswith("你曾在这栽过：")
+    assert "Q/K/V" in hint
+    assert learner_failure_hint(None) is None
+    assert learner_failure_hint("") is None
 
 
 def test_select_prefers_same_claim_then_neighbor_then_topic() -> None:

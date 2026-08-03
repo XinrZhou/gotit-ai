@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.deps import (
     SessionMemoryReader,
     SessionPromptReader,
@@ -13,10 +14,13 @@ from gotit.api.workflow_persist import (
     teach_agent_text,
 )
 from gotit.core.agents.echo import build_echo_agent, run_echo
+from gotit.core.failure_lessons import learner_failure_hint
 from gotit.core.models import (
     TeachVerdict,
 )
+from gotit.db import ops as day_ops
 from gotit.db import session_scope
+from gotit.db.models import ClaimRow
 from gotit.db.runtime import ensure_db
 from gotit.mcp.app import mcp
 from gotit.mcp.common import (
@@ -64,6 +68,12 @@ async def gotit_teach(
             extra["verdict"] = display
         if verify:
             extra.update(verify)
+        if verify and gate_verdict:
+            attach_verdict_blocks(
+                extra,
+                gate_verdict=str(gate_verdict),
+                claim_id=cid,
+            )
         try:
             await persist_workflow_exchange(
                 thread_id=tid,
@@ -127,13 +137,25 @@ async def gotit_teach(
         system_prompt = prompt.system_prompt if prompt else ""
         reader = SessionMemoryReader(session, user_id=user_id)
         agent = build_echo_agent(get_model(), system_prompt=system_prompt)
+        lesson_block: str | None = None
+        if cid is not None:
+            claim_row = await session.get(ClaimRow, cid)
+            if claim_row is not None and claim_row.user_id == user_id:
+                lesson_block = await day_ops.build_failure_lesson_block(
+                    session,
+                    user_id=user_id,
+                    claim_id=cid,
+                    topic=claim_row.topic or topic,
+                )
         verdict = await run_echo(
             agent,
             reader,
             topic=topic,
             history=history or [],
             answer=answer,
+            failure_lesson_block=lesson_block,
         )
+        failure_hint = learner_failure_hint(lesson_block)
 
     writeback = None
     verify = None
@@ -150,5 +172,7 @@ async def gotit_teach(
         result["writeback"] = writeback
     if verify is not None:
         result["verify"] = verify
+    if failure_hint:
+        result["failure_hint"] = failure_hint
     return result
 

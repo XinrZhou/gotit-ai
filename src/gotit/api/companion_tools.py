@@ -554,7 +554,7 @@ def build_companion_tools(
                     "ok": True,
                     "claim_id": str(cid),
                     "preferred_check_mode": route.mode.value,
-                    "hint": "可在气泡下点「深挖」。",
+                    "hint": "可在气泡下点「练深挖」（练习场，不过门）。",
                 }
                 rec.record(
                     "start_verify",
@@ -852,9 +852,9 @@ def build_companion_tools(
                 **open_payload,
                 "ok": True,
                 "hint": (
-                    "可在气泡下点「深挖」开练；尚未导入简历时会提示先导入。"
+                    "可在气泡下点「练深挖」开练（练习场，不过门）；尚未导入简历时会提示先导入。"
                     if has_resume
-                    else "请先导入简历，再点气泡下「深挖」。"
+                    else "请先导入简历，再点气泡下「练深挖」。"
                 ),
             }
             rec.record(
@@ -950,7 +950,7 @@ def build_companion_tools(
             description=(
                 "Prepare an open-drill payload (round / project / interview). "
                 "Does not create a drill session or run Sage — the learner "
-                "taps「深挖」in the bubble to start."
+                "taps「练深挖」in the bubble to start (practice; not mastery)."
             ),
         ),
     ]
@@ -969,7 +969,8 @@ COMPANION_TOOL_HINT = (
     "- 「今天收工 / 可以停了」：调 close_day；用返回的 note / 计数说一句短复盘，"
     "不要羞辱还挂着的题；收工后仍可手动开练。\n"
     "- 「快面试了 / 面试练什么」：调 get_upcoming_interview；需要开练时再调 "
-    "start_drill（可传 interview_id / round / project_id）。告知可点气泡下「深挖」，"
+    "start_drill（可传 interview_id / round / project_id）。"
+    "告知可点气泡下「练深挖」（练习场，不过门），"
     "不要假装已经开练或判过分。\n"
     "- 需要带着上次教训：get_failure_lessons。\n"
     "- 该记的短教训：add_memory（会截断）。写操作要克制。"

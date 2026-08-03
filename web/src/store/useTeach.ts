@@ -88,9 +88,14 @@ export function useTeach({ refresh, setBusy, setError, workflowThreadId }: Deps)
           const base = prependUser
             ? [...prev, { role: "user" as const, text: prependUser }]
             : prev;
+          const isFirst = base.length === 0;
           return [
             ...base,
-            { role: "examiner", text: v.next_question ?? "继续讲讲？" },
+            {
+              role: "examiner",
+              text: v.next_question ?? "继续讲讲？",
+              failure_hint: isFirst ? res.failure_hint ?? null : null,
+            },
           ];
         });
       }

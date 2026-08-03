@@ -73,6 +73,7 @@ export function useExamine({
               role: "examiner",
               text: res.verdict.follow_up,
               verify: asVerify(res.verify),
+              failure_hint: res.failure_hint ?? null,
             },
           ]);
           if (res.verdict.session_done) setExamineSessionDone(true);
@@ -116,6 +117,7 @@ export function useExamine({
               verify: asVerify(res.verify),
               verdict: res.verdict.done ? res.verdict.verdict : null,
               session_done: res.verdict.session_done ?? res.verdict.done,
+              failure_hint: res.failure_hint ?? null,
             },
           ]);
           if (res.verdict.session_done || res.verdict.done) {

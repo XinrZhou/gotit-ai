@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
+from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.auth import require_api_key
 from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
@@ -16,8 +17,10 @@ from gotit.api.stt import SttUnavailable, stt_available, transcribe_audio
 from gotit.api.verify_finalize import finalize_examine_with_gate
 from gotit.api.workflow_persist import persist_workflow_exchange, teach_agent_text
 from gotit.core.agents.echo import build_echo_agent, run_echo
+from gotit.core.failure_lessons import learner_failure_hint
 from gotit.core.models import TeachVerdict
 from gotit.core.teach_verify import teach_examine_verdict
+from gotit.db import ops as day_ops
 from gotit.db import session_scope
 from gotit.db.models import ClaimRow
 
@@ -108,6 +111,12 @@ async def _persist_teach(
         extra["verdict"] = display
     if verify:
         extra.update(verify)
+    if verify and gate_verdict:
+        attach_verdict_blocks(
+            extra,
+            gate_verdict=str(gate_verdict),
+            claim_id=claim_id,
+        )
     try:
         await persist_workflow_exchange(
             thread_id=thread_id,
@@ -232,13 +241,25 @@ async def teach(
         system_prompt = prompt.system_prompt if prompt else ""
         reader = SessionMemoryReader(session, user_id=user_id)
         agent = build_echo_agent(get_model(), system_prompt=system_prompt)
+        lesson_block: str | None = None
+        if body.claim_id is not None:
+            claim_row = await session.get(ClaimRow, body.claim_id)
+            if claim_row is not None and claim_row.user_id == user_id:
+                lesson_block = await day_ops.build_failure_lesson_block(
+                    session,
+                    user_id=user_id,
+                    claim_id=body.claim_id,
+                    topic=claim_row.topic or body.topic,
+                )
         verdict = await run_echo(
             agent,
             reader,
             topic=body.topic,
             history=body.history,
             answer=body.answer,
+            failure_lesson_block=lesson_block,
         )
+        failure_hint = learner_failure_hint(lesson_block)
 
     writeback = None
     verify = None
@@ -280,4 +301,6 @@ async def teach(
         result["writeback"] = writeback
     if verify is not None:
         result["verify"] = verify
+    if failure_hint:
+        result["failure_hint"] = failure_hint
     return result

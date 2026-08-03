@@ -48,12 +48,15 @@ def build_prompt(
     history: list[dict[str, str]],
     answer: str | None,
     memory: list[MemoryEntry],
+    failure_lesson_block: str | None = None,
 ) -> str:
     parts = [
         f"## Topic the learner is teaching back\n{topic}",
         f"## Relevant memory\n{_format_memory(memory)}",
         f"## Conversation so far\n{_format_history(history)}",
     ]
+    if failure_lesson_block and failure_lesson_block.strip():
+        parts.append(failure_lesson_block.strip())
     if answer:
         parts.append(f"## Learner's latest answer\n{answer}")
     parts.append(
@@ -62,7 +65,8 @@ def build_prompt(
         "(done=true, you_taught_well bool, gaps list, next_question null). "
         "If the learner said they don't know or asked you to explain, do NOT "
         "repeat the previous question — short scaffold or wrap with "
-        "you_taught_well=false and concrete gaps."
+        "you_taught_well=false and concrete gaps. "
+        "When prior miss lessons are present, gently probe those weak spots."
     )
     return "\n\n".join(parts)
 
@@ -74,6 +78,7 @@ async def run_echo(
     topic: str,
     history: list[dict[str, str]] | None = None,
     answer: str | None = None,
+    failure_lesson_block: str | None = None,
 ) -> TeachVerdict:
     entries = await memory.list_memory(layer="long", limit=8)
     prompt = build_prompt(
@@ -81,6 +86,7 @@ async def run_echo(
         history=list(history or []),
         answer=answer,
         memory=entries,
+        failure_lesson_block=failure_lesson_block,
     )
     result = await agent.run(prompt)
     return result.output

@@ -47,7 +47,7 @@ def drill_agent_text(
 ) -> str:
     if done:
         gap_s = f"\n缺口：{'；'.join(gaps)}" if gaps else ""
-        return f"深挖结束（深度 {depth_reached}）{gap_s}"
+        return f"这一轮练习结束（深度 {depth_reached}）{gap_s} · 不过门，不算掌握"
     return (follow_up or "说说你做了什么？").strip()
 
 

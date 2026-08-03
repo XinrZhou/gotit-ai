@@ -86,6 +86,9 @@ export function ChatLog({
               <div className={`${styles.bubble} ${isError ? styles.bubbleError : ""}`}>
                 {m.text}
               </div>
+              {isExaminer && m.failure_hint ? (
+                <div className={styles.failureHint}>{m.failure_hint}</div>
+              ) : null}
               {showVerdict ? (
                 <VerifyVerdictChip
                   verdict={m.verdict!}

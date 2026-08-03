@@ -83,7 +83,7 @@ export type ProjectProgress = {
 export type MasteryVerdict = "passed" | "almost" | "owe_next";
 
 /** Preferred verify form (VISION P3). null/omit → probe. */
-export type CheckMode = "probe" | "drill" | "apply" | "teach_back";
+export type CheckMode = "probe" | "drill" | "teach_back";
 
 export type Claim = {
   id: string;
@@ -126,6 +126,8 @@ export type ChatMsg = {
   session_done?: boolean;
   /** Critic → gate path when this turn closed a claim. */
   verify?: VerifyPath | null;
+  /** Quiet “你曾在这栽过” when re-examining / re-teaching. */
+  failure_hint?: string | null;
   /** Soft failure bubble (e.g. LLM/gateway down). */
   error?: boolean;
 };
@@ -142,6 +144,8 @@ export type TopicExamineResponse = {
   verdict: TopicExamineVerdict;
   writeback: { claim: { status: string }; plan_items: unknown[] } | null;
   verify?: VerifyPath | null;
+  /** Learner-facing prior-miss tip when re-examining. */
+  failure_hint?: string | null;
 };
 
 export type TeachVerdict = {
@@ -155,6 +159,7 @@ export type TeachResponse = {
   verdict: TeachVerdict;
   writeback?: { claim: { status: string }; plan_items: unknown[] } | null;
   verify?: VerifyPath | null;
+  failure_hint?: string | null;
 };
 
 export type SageVerdict = {

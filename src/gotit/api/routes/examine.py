@@ -22,6 +22,7 @@ from gotit.core.agents.axiom import (
     run_topic_examine,
     stub_topic_examine,
 )
+from gotit.core.failure_lessons import learner_failure_hint
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 from gotit.db.models import ClaimRow
@@ -152,12 +153,13 @@ async def examine(
             session_verdict = stub_topic_examine(
                 claims=claims, answer=body.answer, history=body.history
             )
+            lesson_block = None
         else:
             async with session_scope() as session:
                 from gotit.db.ops.graph import build_budget_subgraph
                 from gotit.db.ops.memory import build_failure_lesson_block
 
-                lesson_block: str | None = None
+                lesson_block = None
                 budget_block: str | None = None
                 if claims:
                     focus = claims[0]
@@ -259,6 +261,9 @@ async def examine(
         }
         if verify:
             out["verify"] = verify
+        topic_hint = learner_failure_hint(lesson_block)
+        if topic_hint:
+            out["failure_hint"] = topic_hint
         return out
 
     # --- Single-claim mode ---
@@ -420,4 +425,7 @@ async def examine(
     result: dict[str, object] = {"verdict": verdict_out, "writeback": writeback}
     if verify:
         result["verify"] = verify
+    single_hint = learner_failure_hint(lesson_block)
+    if single_hint:
+        result["failure_hint"] = single_hint
     return result

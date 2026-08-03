@@ -110,6 +110,17 @@
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 6px;
 }
 
+.failureHint {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--faint);
+  line-height: 1.4;
+  max-width: 100%;
+}
+
 .thinkingPending {
   display: inline-flex;
   align-items: center;

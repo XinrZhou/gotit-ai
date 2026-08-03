@@ -88,6 +88,31 @@ def _line_for(
     return f"- [{candidate.verdict}] {body[:line_max]}"
 
 
+def learner_failure_hint(block: str | None, *, max_chars: int = 120) -> str | None:
+    """Quiet one-liner for the learner UI from an examiner lesson block."""
+    if not block or not block.strip():
+        return None
+    lines = [
+        ln.strip().lstrip("- ").strip()
+        for ln in block.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    # Drop the Chinese header line if present as a bare sentence.
+    lines = [ln for ln in lines if not ln.startswith("你曾在这些点栽过")]
+    if not lines:
+        return None
+    tip = lines[0]
+    # Strip leading [almost] / [owe_next] tags for a calmer learner line.
+    if tip.startswith("[") and "]" in tip:
+        tip = tip.split("]", 1)[1].strip()
+    tip = tip.strip()
+    if not tip:
+        return None
+    if len(tip) > max_chars:
+        tip = tip[: max_chars - 1] + "…"
+    return f"你曾在这栽过：{tip}"
+
+
 def format_failure_lesson_block(
     lessons: list[FailureLessonCandidate],
     *,
