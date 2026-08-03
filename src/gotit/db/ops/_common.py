@@ -36,7 +36,13 @@ def _excerpt(body: str, limit: int = EXCERPT_LEN) -> str:
     return text[: limit - 1] + "…"
 
 
-def _plan_item_view(row: PlanItemRow, *, topic: str | None = None) -> PlanItemView:
+def _plan_item_view(
+    row: PlanItemRow,
+    *,
+    topic: str | None = None,
+    due_reason_code: str | None = None,
+    due_reason_text: str | None = None,
+) -> PlanItemView:
     return PlanItemView(
         id=row.id,
         title=row.title,
@@ -48,6 +54,8 @@ def _plan_item_view(row: PlanItemRow, *, topic: str | None = None) -> PlanItemVi
         due_time=getattr(row, "due_time", None),
         project_id=row.project_id,
         topic=topic,
+        due_reason_code=due_reason_code,
+        due_reason_text=due_reason_text,
     )
 
 

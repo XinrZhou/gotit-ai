@@ -9,6 +9,9 @@ export type PlanItem = {
   due_time: string | null;
   project_id: string | null;
   topic: string | null;
+  /** Present on `/v1/today` when claim-linked. */
+  due_reason_code?: string | null;
+  due_reason_text?: string | null;
 };
 
 export type DayNote = {
@@ -39,6 +42,7 @@ export type BootcampView = {
   claim_id: string | null;
   claim_text: string | null;
   gate_verdict: MasteryVerdict | null;
+  lane?: "bootcamp";
 };
 
 /** Quiet / featured drill hint from `/v1/today` when interview ramp is on. */
@@ -54,6 +58,20 @@ export type InterviewFocusHint = {
   project_id: string | null;
   round: string | null;
   open_drill: OpenDrillPayload;
+  lane?: "interview";
+};
+
+/** Read-time mastery summary on `/v1/today` (not a second write model). */
+export type MasterySnapshot = {
+  mastered_count: number;
+  weak_count: number;
+  top_due: Claim[];
+  recent_fails: Array<{
+    claim_id?: string | null;
+    verdict?: string | null;
+    reason?: string | null;
+    source?: string | null;
+  }>;
 };
 
 export type DayPlan = {

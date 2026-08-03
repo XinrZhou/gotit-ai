@@ -14,6 +14,11 @@ from gotit.core.schedule import schedule_after_verdict
 from gotit.db.models import ClaimRow, PlanItemRow
 from gotit.db.ops._common import DEFAULT_USER_ID, _claim_view, _plan_item_view
 
+# Mastery row sources (routes/MCP must not invent new writers).
+MASTERY_SOURCE_VERIFY = "verify"
+MASTERY_SOURCE_CALIBRATION = "calibration"
+MASTERY_SOURCE_HARNESS = "harness"
+
 
 async def apply_examine_result(
     session: AsyncSession,
@@ -23,7 +28,11 @@ async def apply_examine_result(
     user_id: str = DEFAULT_USER_ID,
     as_of: date | None = None,
 ) -> dict[str, object]:
-    """Writeback claim + linked plan items after an examine attempt (stub-friendly)."""
+    """Deprecated binary stub writeback — prefer ``write_mastery_outcome``.
+
+    Kept for harness/legacy tests only. Production verify/calib paths must not
+    call this.
+    """
     today = as_of or date.today()
     claim = await session.get(ClaimRow, claim_id)
     if claim is None or claim.user_id != user_id:
@@ -55,19 +64,26 @@ async def apply_examine_result(
     }
 
 
-async def apply_examine_verdict(
+async def write_mastery_outcome(
     session: AsyncSession,
     claim_id: UUID,
     *,
     verdict: str,
+    source: str,
     user_id: str = DEFAULT_USER_ID,
     as_of: date | None = None,
     prior_failures: int = 0,
+    follow_up: str | None = None,
+    reason: str | None = None,
 ) -> dict[str, object]:
-    """Writeback for continuous verdicts: passed | almost | owe_next.
+    """Single mastery-row writer: claim status + plan + failure_digest trigger.
 
-    Scheduling is deterministic via ``gotit.core.schedule.schedule_after_verdict``
-    (never LLM):
+    ``source`` documents the caller (verify | calibration | harness). Routes and
+    MCP tools must not call this directly for verify — go through
+    ``finalize_examine_with_gate``. Calibration may call with
+    ``source=calibration`` (skips Critic/gate by design).
+
+    Scheduling via ``schedule_after_verdict`` (never LLM):
 
     - passed     → MASTERED, plan VERIFIED, ``next_review_at`` cleared
     - almost     → IN_PROGRESS, plan IN_PROGRESS, due today (``as_of``)
@@ -109,6 +125,7 @@ async def apply_examine_verdict(
         "verdict": verdict,
         "schedule_reason": sched.reason_code,
         "interval_days": sched.interval_days,
+        "source": source,
     }
     if verdict in {"almost", "owe_next"}:
         from gotit.db.ops.memory import maybe_record_failure_digest
@@ -120,10 +137,38 @@ async def apply_examine_verdict(
             claim_text=claim.text,
             topic=claim.topic,
             verdict=verdict,
+            follow_up=follow_up,
+            reason=reason,
+            source=source,
         )
         if digest is not None:
             out["failure_digest_id"] = str(digest.id)
     return out
+
+
+async def apply_examine_verdict(
+    session: AsyncSession,
+    claim_id: UUID,
+    *,
+    verdict: str,
+    user_id: str = DEFAULT_USER_ID,
+    as_of: date | None = None,
+    prior_failures: int = 0,
+    follow_up: str | None = None,
+    reason: str | None = None,
+) -> dict[str, object]:
+    """Thin alias → ``write_mastery_outcome`` (source=verify). Prefer the latter."""
+    return await write_mastery_outcome(
+        session,
+        claim_id,
+        verdict=verdict,
+        source=MASTERY_SOURCE_VERIFY,
+        user_id=user_id,
+        as_of=as_of,
+        prior_failures=prior_failures,
+        follow_up=follow_up,
+        reason=reason,
+    )
 
 
 async def list_topic_claims_today(

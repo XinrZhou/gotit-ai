@@ -9,7 +9,6 @@ from gotit.api.deps import (
     get_model,
 )
 from gotit.api.settings import get_settings
-from gotit.api.verify_finalize import finalize_examine_with_gate
 from gotit.api.workflow_persist import (
     examine_agent_text,
     persist_workflow_exchange,
@@ -369,10 +368,11 @@ async def gotit_start_verify(
     The gate is deterministic code (no LLM): stricter of examiner's and critic's
     verdicts. Recheck + gate + writeback share finalize with REST / examine.
     """
+    from gotit.api.verify_attempt import run_verify_attempt
+
     await ensure_db()
     settings = get_settings()
     user_id = _user_id()
-    from gotit.core.agents.axiom import build_axiom_agent, run_axiom
 
     async with session_scope() as session:
         tid = UUID(thread_id)
@@ -381,90 +381,16 @@ async def gotit_start_verify(
         if claim is None or claim.user_id != user_id:
             return {"error": "claim not found"}
 
-        from gotit.db.ops.graph import build_budget_subgraph
-        from gotit.db.ops.memory import build_failure_lesson_block, list_trajectory
-
-        trajectory = await list_trajectory(
-            session, user_id=user_id, topic=claim.topic, claim_id=cid
-        )
-        budget = await build_budget_subgraph(session, user_id=user_id, claim_id=cid)
-        lesson_block = await build_failure_lesson_block(
-            session,
-            user_id=user_id,
-            claim_id=cid,
-            topic=claim.topic,
-            neighbor_claim_ids=budget.confused_claim_ids,
-        )
-
-        if examine_verdict is not None:
-            ex_verdict = examine_verdict
-            ex_score: float | None = None
-            ex_evidence: str | None = None
-        elif not settings.llm_api_key:
-            ex_verdict = "passed"
-            ex_score = None
-            ex_evidence = None
-        else:
-            prompt = await SessionPromptReader(session).get_active_prompt("axiom")
-            system_prompt = prompt.system_prompt if prompt else ""
-            reader = SessionMemoryReader(session, user_id=user_id)
-            agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
-            ev = await run_axiom(
-                agent,
-                reader,
-                claim_text=claim.text,
-                answer=answer,
-                trajectory=trajectory,
-                budget_block=budget.prompt_block,
-                failure_lesson_block=lesson_block,
-            )
-            ex_verdict = ev.verdict or "almost"
-            ex_score = ev.score
-            ex_evidence = ev.evidence
-
         try:
-            finalized = await finalize_examine_with_gate(
+            return await run_verify_attempt(
                 session,
-                claim_id=cid,
-                claim_text=claim.text,
-                topic=claim.topic,
-                examine_verdict=ex_verdict,
-                examine_score=ex_score,
-                examine_evidence=ex_evidence,
-                learner_answer=answer,
+                thread_id=tid,
+                claim=claim,
                 user_id=user_id,
                 settings=settings,
-                thread_id=tid,
+                answer=answer,
+                examine_verdict=examine_verdict,
             )
         except KeyError as exc:
             return {"error": str(exc)}
-
-        gate = finalized["gate"]
-        verify_meta: dict[str, object] = {
-            "claim_id": str(cid),
-            "examine_verdict": finalized["examine_verdict"],
-            "recheck_verdict": finalized["recheck_verdict"],
-            "gate_verdict": finalized["gate_verdict"],
-            "verdict": finalized["gate_verdict"],
-        }
-        attach_verdict_blocks(
-            verify_meta,
-            gate_verdict=str(finalized["gate_verdict"]),
-            claim_id=cid,
-        )
-        await day_ops.add_message(
-            session,
-            thread_id=tid,
-            role="agent",
-            agent_name="gate",
-            text=f"验证完成：{gate['reason']}",
-            metadata=verify_meta,
-        )
-        return {
-            "examine_verdict": finalized["examine_verdict"],
-            "recheck_verdict": finalized["recheck_verdict"],
-            "gate": gate,
-            "writeback": finalized["writeback"],
-            "mastery_graph": finalized["mastery_graph"],
-        }
 

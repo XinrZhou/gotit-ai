@@ -32,7 +32,10 @@ from gotit.core.models import (
 )
 from gotit.db.models import CalibrationSessionRow, ClaimRow
 from gotit.db.ops._common import DEFAULT_USER_ID
-from gotit.db.ops.claim import apply_examine_verdict
+from gotit.db.ops.claim import (
+    MASTERY_SOURCE_CALIBRATION,
+    write_mastery_outcome,
+)
 from gotit.db.ops.day import fill_today_from_queue, list_due_claims
 from gotit.db.ops.graph import record_fail_event, seed_confused_for_calibration
 
@@ -407,14 +410,48 @@ async def answer_calibration(
     # Reload claim params after writeback for trace (selection already used prior).
     claim = await session.get(ClaimRow, claim_id) or claim
 
+    from gotit.db.ops.memory import append_trajectory
+
     confused_seeded = 0
     if outcome == "correct":
-        await apply_examine_verdict(
-            session, claim_id, verdict="passed", user_id=user_id, as_of=today
+        await write_mastery_outcome(
+            session,
+            claim_id,
+            verdict="passed",
+            source=MASTERY_SOURCE_CALIBRATION,
+            user_id=user_id,
+            as_of=today,
+        )
+        await append_trajectory(
+            session,
+            user_id=user_id,
+            claim_id=claim_id,
+            topic=claim.topic,
+            verdict="passed",
+            gate_verdict="passed",
+            reason="calibration",
+            source_kind=MASTERY_SOURCE_CALIBRATION,
         )
     else:
-        await apply_examine_verdict(
-            session, claim_id, verdict="almost", user_id=user_id, as_of=today
+        await write_mastery_outcome(
+            session,
+            claim_id,
+            verdict="almost",
+            source=MASTERY_SOURCE_CALIBRATION,
+            user_id=user_id,
+            as_of=today,
+            follow_up="摸底未过，建议再练",
+            reason="calibration",
+        )
+        await append_trajectory(
+            session,
+            user_id=user_id,
+            claim_id=claim_id,
+            topic=claim.topic,
+            verdict="almost",
+            gate_verdict="almost",
+            reason="calibration",
+            source_kind=MASTERY_SOURCE_CALIBRATION,
         )
         await record_fail_event(
             session,

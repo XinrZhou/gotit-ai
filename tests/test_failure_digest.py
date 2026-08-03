@@ -104,6 +104,47 @@ async def test_passed_does_not_write_failure_digest(session: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
+async def test_failure_digest_upsert_fills_follow_up(session: AsyncSession) -> None:
+    claim_id = await _seed_claim(session, text="Need tip")
+    first = await memory_ops.maybe_record_failure_digest(
+        session,
+        user_id="local",
+        claim_id=claim_id,
+        claim_text="Need tip",
+        verdict="almost",
+    )
+    assert first is not None
+    assert first.content.get("follow_up") is None
+
+    filled = await memory_ops.maybe_record_failure_digest(
+        session,
+        user_id="local",
+        claim_id=claim_id,
+        claim_text="Need tip",
+        verdict="almost",
+        follow_up="记得对比 softmax 与 argmax",
+        reason="gate: almost",
+    )
+    assert filled is not None
+    assert filled.content["follow_up"] == "记得对比 softmax 与 argmax"
+    assert filled.content["reason"] == "gate: almost"
+    assert filled.content.get("notified") is False
+
+    again = await memory_ops.maybe_record_failure_digest(
+        session,
+        user_id="local",
+        claim_id=claim_id,
+        claim_text="Need tip",
+        verdict="almost",
+        follow_up="另一句",
+    )
+    assert again is None
+    pending = await memory_ops.list_pending_failure_digests(session, user_id="local")
+    assert len(pending) == 1
+    assert pending[0].content["follow_up"] == "记得对比 softmax 与 argmax"
+
+
+@pytest.mark.asyncio
 async def test_almost_and_owe_next_digests_coexist(session: AsyncSession) -> None:
     claim_id = await _seed_claim(session, text="Partial then fail")
     wb_almost = await claim_ops.apply_examine_verdict(

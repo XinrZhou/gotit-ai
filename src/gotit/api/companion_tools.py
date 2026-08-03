@@ -5,6 +5,7 @@ Thin wrappers over ``db.ops`` (same surface REST/MCP use). Lives in ``api/`` so
 are recorded for message ``metadata.tool_calls`` (explainable / replayable).
 
 ``start_examine`` / ``start_verify`` / ``start_drill`` prepare open-* payloads
+(no Critic/gate; do not soft-write claim mastery — plan row may be PLANNED only).
 for the Web CTA — they do **not** run Critic, the mastery gate, or Sage.
 """
 
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gotit.api.action_blocks import owed_blocks_from_claims
 from gotit.core.check_routing import route_for_claim
-from gotit.core.models import DrillRound, MasteryStatus, PlanItemSource, PlanItemStatus
+from gotit.core.models import DrillRound, PlanItemSource, PlanItemStatus
 from gotit.db import ops as day_ops
 from gotit.db.models import ClaimRow, DayNoteRow, InterviewEventRow, LearningDayRow
 
@@ -247,6 +248,8 @@ def build_companion_tools(
                     "status": (it.status.value if hasattr(it.status, "value") else str(it.status)),
                     "due_time": it.due_time,
                     "claim_id": str(it.claim_id) if it.claim_id else None,
+                    "due_reason_code": it.due_reason_code,
+                    "due_reason_text": it.due_reason_text,
                 }
                 for it in view.plan.items[:8]
             ]
@@ -261,6 +264,14 @@ def build_companion_tools(
                 "day_closed": view.day_closed,
                 "close_suggested": view.close_suggested,
             }
+            if view.mastery_snapshot is not None:
+                snap = view.mastery_snapshot
+                out["mastery_snapshot"] = {
+                    "mastered_count": snap.mastered_count,
+                    "weak_count": snap.weak_count,
+                    "top_due": [_claim_brief(c) for c in snap.top_due],
+                    "recent_fails": list(snap.recent_fails),
+                }
             if view.close_summary is not None:
                 out["close_summary"] = view.close_summary.model_dump(mode="json")
             if view.interview_focus is not None:
@@ -445,33 +456,17 @@ def build_companion_tools(
                     title=claim_row.text[:500],
                     user_id=user_id,
                     source=PlanItemSource.QUEUE,
-                    status=PlanItemStatus.IN_PROGRESS,
+                    status=PlanItemStatus.PLANNED,
                     claim_id=cid,
                     due_at=day,
                 )
                 plan_item_id = str(item.id)
                 plan_changed = True
             else:
-                if existing.status != PlanItemStatus.IN_PROGRESS:
-                    await day_ops.update_plan_item(
-                        session,
-                        existing.id,
-                        status=PlanItemStatus.IN_PROGRESS,
-                        user_id=user_id,
-                    )
-                    plan_changed = True
-                else:
-                    plan_changed = False
+                plan_changed = False
                 plan_item_id = str(existing.id)
 
-            # Soft signal only — does not set mastery / bypass gate.
-            if claim_row.status in (
-                MasteryStatus.QUEUED.value,
-                MasteryStatus.NOT_YET.value,
-            ):
-                claim_row.status = MasteryStatus.IN_PROGRESS.value
-                await session.flush()
-
+            # Prepare only — do not soft-write claim mastery / IN_PROGRESS.
             open_payload = {
                 "action": "open_examine",
                 "claim_id": str(cid),
@@ -565,7 +560,7 @@ def build_companion_tools(
                 )
                 return out
 
-            # Soft-prepare plan for probe / teach (same as start_examine).
+            # Soft-prepare plan for probe / teach (plan row only; no mastery write).
             plan = await day_ops.get_plan(session, day, user_id=user_id)
             existing = next((i for i in plan.items if i.claim_id == cid), None)
             if existing is None:
@@ -575,31 +570,15 @@ def build_companion_tools(
                     title=claim_row.text[:500],
                     user_id=user_id,
                     source=PlanItemSource.QUEUE,
-                    status=PlanItemStatus.IN_PROGRESS,
+                    status=PlanItemStatus.PLANNED,
                     claim_id=cid,
                     due_at=day,
                 )
                 plan_item_id = str(item.id)
                 plan_changed = True
             else:
-                if existing.status != PlanItemStatus.IN_PROGRESS:
-                    await day_ops.update_plan_item(
-                        session,
-                        existing.id,
-                        status=PlanItemStatus.IN_PROGRESS,
-                        user_id=user_id,
-                    )
-                    plan_changed = True
-                else:
-                    plan_changed = False
+                plan_changed = False
                 plan_item_id = str(existing.id)
-
-            if claim_row.status in (
-                MasteryStatus.QUEUED.value,
-                MasteryStatus.NOT_YET.value,
-            ):
-                claim_row.status = MasteryStatus.IN_PROGRESS.value
-                await session.flush()
 
             if route.open_key == "open_teach":
                 open_payload = {

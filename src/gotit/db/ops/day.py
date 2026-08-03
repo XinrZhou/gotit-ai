@@ -14,6 +14,7 @@ from gotit.core.models import (
     Claim,
     DayCloseSummary,
     DayPlanView,
+    MasterySnapshot,
     MasteryStatus,
     PlanItemSource,
     PlanItemStatus,
@@ -220,13 +221,13 @@ async def _sort_due_claims(
         due_sort_key,
     )
     from gotit.db.ops.graph import (
-        fail_counts_by_claim,
         list_confused_edges,
         list_depends_edges,
         mastered_claim_ids,
     )
+    from gotit.db.ops.memory import prior_failure_counts_by_claim
 
-    fail_counts = await fail_counts_by_claim(
+    fail_counts = await prior_failure_counts_by_claim(
         session, user_id=user_id, claim_ids=[c.id for c in due]
     )
     edge_rows = await list_confused_edges(session, user_id=user_id, min_weight=1)
@@ -275,11 +276,11 @@ async def _due_claim_views(
         unmet_depends_prereq_ids,
     )
     from gotit.db.ops.graph import (
-        fail_counts_by_claim,
         list_confused_edges,
         list_depends_edges,
         mastered_claim_ids,
     )
+    from gotit.db.ops.memory import prior_failure_counts_by_claim
 
     if not due:
         return []
@@ -288,7 +289,7 @@ async def _due_claim_views(
         (r.source_claim_id, r.target_claim_id, int(r.weight)) for r in edge_rows
     ]
     weights = confuse_weights_from_edges([c.id for c in due], edges)
-    fail_counts = await fail_counts_by_claim(
+    fail_counts = await prior_failure_counts_by_claim(
         session, user_id=user_id, claim_ids=[c.id for c in due]
     )
     depends_rows = await list_depends_edges(session, user_id=user_id)
@@ -410,6 +411,7 @@ async def get_today(
     due_claims = await _due_claim_views(
         session, due_rows, as_of=target, user_id=user_id
     )
+    plan = _attach_plan_due_reasons(plan, due_claims)
     day_row = await ensure_day(session, target, user_id=user_id)
     summary = _close_summary_from_row(day_row)
     as_of = now if now is not None else datetime.now(UTC)
@@ -419,6 +421,9 @@ async def get_today(
     from gotit.db.ops.bootcamp import resolve_bootcamp
 
     bootcamp = await resolve_bootcamp(session, user_id=user_id)
+    snapshot = await _mastery_snapshot(
+        session, user_id=user_id, due_claims=due_claims
+    )
     return TodayView(
         date=target,
         plan=plan,
@@ -429,6 +434,85 @@ async def get_today(
         close_summary=summary,
         interview_focus=interview_focus,
         bootcamp=bootcamp,
+        mastery_snapshot=snapshot,
+    )
+
+
+def _attach_plan_due_reasons(
+    plan: DayPlanView, due_claims: list[Claim]
+) -> DayPlanView:
+    """Copy due explain onto claim-linked plan rows; else「今日计划」."""
+    by_id = {c.id: c for c in due_claims}
+    items: list[PlanItemView] = []
+    for it in plan.items:
+        if it.claim_id is None:
+            items.append(it)
+            continue
+        due = by_id.get(it.claim_id)
+        if due is not None and due.due_reason_code:
+            items.append(
+                it.model_copy(
+                    update={
+                        "due_reason_code": due.due_reason_code,
+                        "due_reason_text": due.due_reason_text,
+                    }
+                )
+            )
+        else:
+            items.append(
+                it.model_copy(
+                    update={
+                        "due_reason_code": "plan_open",
+                        "due_reason_text": "今日计划",
+                    }
+                )
+            )
+    return plan.model_copy(update={"items": items})
+
+
+async def _mastery_snapshot(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    due_claims: list[Claim],
+) -> MasterySnapshot:
+    from sqlalchemy import func
+
+    from gotit.db.ops.memory import list_trajectory
+
+    mastered_count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(ClaimRow)
+                .where(
+                    ClaimRow.user_id == user_id,
+                    ClaimRow.status == MasteryStatus.MASTERED.value,
+                )
+            )
+        ).scalar_one()
+    )
+    traj = await list_trajectory(session, user_id=user_id, limit=30)
+    recent_fails: list[dict[str, object]] = []
+    for e in traj:
+        gate = e.content.get("gate_verdict") or e.content.get("verdict")
+        if gate not in {"almost", "owe_next"}:
+            continue
+        recent_fails.append(
+            {
+                "claim_id": e.content.get("claim_id") or e.source.get("claim_id"),
+                "verdict": gate,
+                "reason": e.content.get("reason"),
+                "source": e.content.get("source"),
+            }
+        )
+        if len(recent_fails) >= 5:
+            break
+    return MasterySnapshot(
+        mastered_count=mastered_count,
+        weak_count=len(due_claims),
+        top_due=due_claims[:5],
+        recent_fails=recent_fails,
     )
 
 

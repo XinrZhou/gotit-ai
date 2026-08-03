@@ -33,6 +33,7 @@ Learner empty states: owed → brief is primary; idle →「添加资料」is pr
 旁路（入口不强化）：弱点图谱、顶栏动态、Settings（我/提醒/高级）、
 Apple 桥（日计划↔提醒事项；面试↔日历）、Harness API/CLI、CAT 题参写回。当前波次：
 - UX / 主路径摩擦：`openspec/changes/main-path-converge/`（作者自管）
+- 状态边界收紧：`openspec/changes/state-boundary-tighten/`
 - 弱点图谱加深：`openspec/changes/mastery-graph-deepen/`
 - 设置 IA + 动态删除：`openspec/changes/settings-ia-shell-activity/`
 - 面试 → Apple 日历：`openspec/changes/apple-interview-calendar/`
@@ -111,6 +112,43 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
 | sage | 桑迪 | Project drill / interview |
 | critic | 凯伦 | Independent recheck |
 
+## State boundaries (state-boundary-tighten)
+
+Mastery **row** write: `db.ops.write_mastery_outcome` only. Verify orchestration:
+`finalize_examine_with_gate` (Critic + gate + trajectory + graph). Calibration
+skips Critic/gate but still uses the writer (`source=calibration`) + light
+trajectory. Companion `start_*` is **prepare only** (open-* CTA; may add a
+PLANNED plan row) — does **not** set claim `IN_PROGRESS`. Thread verify REST +
+MCP share `api.verify_attempt.run_verify_attempt`.
+
+Practice kinds (not one ORM): `examine` | `teach` | `drill` | `calibration` ×
+phases `prepare` | `closed`. Drill remains prep-only (no mastery). Chat is an
+entry, not the mastery source of truth.
+
+Memory write model:
+
+| Fact | Authority | memory_entries role |
+|------|-----------|---------------------|
+| mastery / next_review | ClaimRow | — |
+| structured fail / confuse | fail_events / graph_edges | trajectory = audit |
+| failure_digest | derived cache | push + lesson tip (upsert fill follow_up) |
+| bootcamp / prefs / note / event / shell | memory OK | product / user |
+
+`prior_failures` / due fail severity: trajectory `owe_next` counts only (same
+helper). `/v1/today` adds `mastery_snapshot` + plan-item `due_reason_*`;
+interview_focus / bootcamp carry `lane`.
+
+Active change: `openspec/changes/state-boundary-tighten/`.
+
+Five-question check (after this tighten):
+
+1. Why practice today? — due_reason on due + plan items; lanes for interview/bootcamp.
+2. Practice lifecycle? — prepare (companion open-*) vs closed (finalize / calib writer).
+3. Multiple gate writers? — verify → finalize only; calib explicit source; no routes/mcp
+   direct `apply_examine_verdict`.
+4. Memory dump? — digest is cache; claim/graph authoritative for mastery/fail structure.
+5. New learning mode? — prepare CTA + finalize/writer; do not fork mastery write.
+
 ## Shipped capabilities
 
 - **Chat threads** + @mention routing + **A2A handoff** (`ChatTurn.handoff_to`, ball custody `stage=chat`)
@@ -185,7 +223,9 @@ Messages: companion uses `threads`/`messages` only (plan-item `chat_messages` re
   + Shared finalize (`api/verify_finalize.py`) for **thread verify, `/v1/examine`,
     `/v1/teach` (claim-bound), and MCP `gotit_examine` / `gotit_teach` /
     `gotit_start_verify`** claim-close — same Critic + gate + trajectory path
-    (REST↔MCP parity)
+    (REST↔MCP parity). Mastery row via `write_mastery_outcome`; thread verify
+    REST/MCP share `run_verify_attempt`. Calibration answers use the same writer
+    with `source=calibration` (no Critic/gate).
   + **Gate signals** (deterministic): after stricter-of-two, `score < 0.4` or
     provided empty/short `evidence` (<8 chars) downgrades `passed` → `almost`
     (`GateResult.signals`; never upgrades). `None` = not provided (stubs OK).

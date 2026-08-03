@@ -99,10 +99,10 @@ async def test_start_examine_puts_claim_on_plan(session: AsyncSession) -> None:
 
     plan = await day_ops.get_plan(session, day, user_id="local")
     assert any(
-        i.claim_id == claim.id and i.status == PlanItemStatus.IN_PROGRESS for i in plan.items
+        i.claim_id == claim.id and i.status == PlanItemStatus.PLANNED for i in plan.items
     )
     await session.refresh(claim)
-    assert claim.status == MasteryStatus.IN_PROGRESS.value
+    assert claim.status == MasteryStatus.QUEUED.value
 
     trail = recorder.as_metadata()
     assert trail[-1]["name"] == "start_examine" and trail[-1]["ok"] is True

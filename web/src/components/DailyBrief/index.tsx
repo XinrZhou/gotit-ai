@@ -23,6 +23,8 @@ type PlanRow = {
   claim_id: string | null;
   topic: string | null;
   project_id?: string | null;
+  due_reason_code?: string | null;
+  due_reason_text?: string | null;
 };
 
 function claimFromPlan(item: PlanRow, dueClaims: Claim[]): Claim | null {
@@ -37,11 +39,15 @@ function claimFromPlan(item: PlanRow, dueClaims: Claim[]): Claim | null {
     source_note_id: null,
     next_review_at: null,
     project_id: item.project_id ?? null,
+    due_reason_code: item.due_reason_code ?? "plan_open",
+    due_reason_text: item.due_reason_text ?? "今日计划",
   };
 }
 
-/** Plan-open rows: never invent schedule reasons; fall back to「今日计划」. */
-function planOpenReason(claim: Claim): string {
+/** Plan-open rows: prefer server reason on the plan item. */
+function planOpenReason(item: PlanRow, claim: Claim): string {
+  const fromPlan = item.due_reason_text?.trim();
+  if (fromPlan) return fromPlan;
   return dueReasonLine(claim) || "今日计划";
 }
 
@@ -100,7 +106,7 @@ export function DailyBrief({
     push(
       `plan-${item.id}`,
       cleanTitle(item.title),
-      planOpenReason(claim),
+      planOpenReason(item, claim),
       claim.failure_hint?.trim() || null,
       claimVerifyCta(claim),
       () => onExamineClaim(claim),

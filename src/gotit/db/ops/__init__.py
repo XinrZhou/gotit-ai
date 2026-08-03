@@ -27,11 +27,15 @@ from gotit.db.ops.calibration import (
     start_calibration,
 )
 from gotit.db.ops.claim import (
+    MASTERY_SOURCE_CALIBRATION,
+    MASTERY_SOURCE_HARNESS,
+    MASTERY_SOURCE_VERIFY,
     apply_examine_result,
     apply_examine_verdict,
     list_project_claims,
     list_topic_claims_today,
     set_claim_preferred_check_mode,
+    write_mastery_outcome,
 )
 from gotit.db.ops.connectors import (
     delete_connector,
@@ -123,6 +127,7 @@ from gotit.db.ops.memory import (
     list_trajectory,
     mark_failure_digest_notified,
     maybe_record_failure_digest,
+    prior_failure_counts_by_claim,
 )
 from gotit.db.ops.note import (
     _strip_html,
@@ -248,6 +253,10 @@ __all__ = [
     # claim / examine
     "apply_examine_result",
     "apply_examine_verdict",
+    "write_mastery_outcome",
+    "MASTERY_SOURCE_VERIFY",
+    "MASTERY_SOURCE_CALIBRATION",
+    "MASTERY_SOURCE_HARNESS",
     "list_topic_claims_today",
     "list_project_claims",
     "set_claim_preferred_check_mode",
@@ -306,6 +315,7 @@ __all__ = [
     "append_trajectory",
     "list_trajectory",
     "count_prior_failures",
+    "prior_failure_counts_by_claim",
     "maybe_record_failure_digest",
     "list_pending_failure_digests",
     "mark_failure_digest_notified",

@@ -113,12 +113,18 @@ async def finalize_examine_with_gate(
             prior_failures=prior_failures,
         )
 
-    writeback = await day_ops.apply_examine_verdict(
+    from gotit.db.ops.claim import MASTERY_SOURCE_VERIFY, write_mastery_outcome
+
+    gate_reason = gate.reason
+    writeback = await write_mastery_outcome(
         session,
         claim_id,
         verdict=gate.verdict,
+        source=MASTERY_SOURCE_VERIFY,
         user_id=user_id,
         prior_failures=prior_failures,
+        follow_up=gate_reason,
+        reason=gate_reason,
     )
 
     item_calibration = await day_ops.apply_item_calibration_update(
@@ -137,7 +143,8 @@ async def finalize_examine_with_gate(
         verdict=examine_verdict,
         gate_verdict=gate.verdict,
         score=examine_score,
-        reason=gate.reason,
+        reason=gate_reason,
+        source_kind=MASTERY_SOURCE_VERIFY,
     )
     mastery = await record_verify_mastery_writeback(
         session,

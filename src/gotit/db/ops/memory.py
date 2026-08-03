@@ -85,26 +85,29 @@ async def append_trajectory(
     gate_verdict: str | None = None,
     score: float | None = None,
     reason: str | None = None,
+    source_kind: str | None = None,
 ) -> MemoryEntry:
-    """Record one verify-loop outcome as a trajectory entry for the claim/topic.
+    """Record one verify/calib outcome as a trajectory entry (audit line).
 
-    The next time the same topic/claim is examined, the examiner can read this to
-    recall the learner's prior failure mode — turning verification from a
-    one-shot event into a learning trajectory.
+    Not the mastery authority — ClaimRow is. ``source_kind`` is verify |
+    calibration when known.
     """
+    content: dict[str, Any] = {
+        "claim_id": str(claim_id),
+        "verdict": verdict,
+        "gate_verdict": gate_verdict,
+        "score": score,
+        "reason": reason,
+    }
+    if source_kind:
+        content["source"] = source_kind
     return await add_memory(
         session,
         user_id=user_id,
         layer="long",
         kind="trajectory",
         topic=topic,
-        content={
-            "claim_id": str(claim_id),
-            "verdict": verdict,
-            "gate_verdict": gate_verdict,
-            "score": score,
-            "reason": reason,
-        },
+        content=content,
         source={"claim_id": str(claim_id)},
     )
 
@@ -133,7 +136,10 @@ async def list_trajectory(
 
 
 def count_prior_failures(trajectory: list[MemoryEntry], *, claim_id: UUID) -> int:
-    """How many prior `owe_next` outcomes this claim has (for SR interval weighting)."""
+    """How many prior `owe_next` gate outcomes this claim has (SR weighting).
+
+    Single source for schedule + due-sort fail severity (not fail_events).
+    """
     key = str(claim_id)
     return sum(
         1
@@ -141,6 +147,36 @@ def count_prior_failures(trajectory: list[MemoryEntry], *, claim_id: UUID) -> in
         if e.source.get("claim_id") == key
         and (e.content.get("gate_verdict") or e.content.get("verdict")) == "owe_next"
     )
+
+
+async def prior_failure_counts_by_claim(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    claim_ids: list[UUID],
+    limit: int = 200,
+) -> dict[UUID, int]:
+    """Map claim_id → owe_next count from trajectory (same rule as schedule)."""
+    if not claim_ids:
+        return {}
+    wanted = {str(cid) for cid in claim_ids}
+    entries = await list_memory(
+        session, user_id=user_id, kind="trajectory", limit=limit
+    )
+    out: dict[UUID, int] = {cid: 0 for cid in claim_ids}
+    for e in entries:
+        raw = e.source.get("claim_id") or e.content.get("claim_id")
+        if not isinstance(raw, str) or raw not in wanted:
+            continue
+        gate = e.content.get("gate_verdict") or e.content.get("verdict")
+        if gate != "owe_next":
+            continue
+        try:
+            cid = UUID(raw)
+        except ValueError:
+            continue
+        out[cid] = out.get(cid, 0) + 1
+    return out
 
 
 async def maybe_record_failure_digest(
@@ -152,30 +188,61 @@ async def maybe_record_failure_digest(
     verdict: str,
     topic: str | None = None,
     follow_up: str | None = None,
+    reason: str | None = None,
+    source: str | None = None,
 ) -> MemoryEntry | None:
-    """Queue a WeChat failure digest once per (claim_id, verdict). Returns None if dup."""
+    """Derived cache: pending push + re-practice tip (not mastery authority).
+
+    One row per (claim_id, verdict). If a row exists, fill empty follow_up/reason
+    without resetting ``notified``. Returns None when nothing new was written.
+    """
     if verdict not in {"almost", "owe_next"}:
         return None
     existing = await list_memory(
         session, user_id=user_id, kind="failure_digest", limit=100
     )
     key = str(claim_id)
+    tip = (follow_up or "").strip()[:240] or None
+    why = (reason or "").strip()[:240] or None
     for e in existing:
-        if e.content.get("claim_id") == key and e.content.get("verdict") == verdict:
+        if e.content.get("claim_id") != key or e.content.get("verdict") != verdict:
+            continue
+        row = await session.get(MemoryEntryRow, e.id)
+        if row is None:
             return None
+        content = dict(row.content or {})
+        updated = False
+        if tip and not content.get("follow_up"):
+            content["follow_up"] = tip
+            updated = True
+        if why and not content.get("reason"):
+            content["reason"] = why
+            updated = True
+        if source and not content.get("source"):
+            content["source"] = source
+            updated = True
+        if not updated:
+            return None
+        row.content = content
+        await session.flush()
+        return _memory_view(row)
+    content: dict[str, Any] = {
+        "claim_id": key,
+        "claim_text": (claim_text or "").strip()[:240],
+        "verdict": verdict,
+        "follow_up": tip,
+        "reason": why,
+        "notified": False,
+    }
+    if source:
+        content["source"] = source
     return await add_memory(
         session,
         user_id=user_id,
         layer="working",
         kind="failure_digest",
         topic=topic,
-        content={
-            "claim_id": key,
-            "claim_text": (claim_text or "").strip()[:240],
-            "verdict": verdict,
-            "follow_up": (follow_up or "").strip()[:240] or None,
-            "notified": False,
-        },
+        content=content,
         source={"claim_id": key, "skill": "failure-digest"},
     )
 

@@ -85,6 +85,9 @@ class PlanItemView(BaseModel):
     due_time: str | None = None  # HH:MM local wall clock for Reminders
     project_id: UUID | None = None
     topic: str | None = None
+    # Assembled on today when claim-linked (why this plan row is here).
+    due_reason_code: str | None = None
+    due_reason_text: str | None = None
 
 
 class DayNoteView(BaseModel):
@@ -128,6 +131,7 @@ class InterviewFocusHint(BaseModel):
     project_id: UUID | None = None
     round: str | None = None
     open_drill: dict[str, Any] = Field(default_factory=dict)
+    lane: Literal["interview"] = "interview"
 
 
 class BootcampView(BaseModel):
@@ -141,6 +145,16 @@ class BootcampView(BaseModel):
     claim_id: UUID | None = None
     claim_text: str | None = None
     gate_verdict: Literal["passed", "almost", "owe_next"] | None = None
+    lane: Literal["bootcamp"] = "bootcamp"
+
+
+class MasterySnapshot(BaseModel):
+    """Read-time 「我现在怎样」 — not a second write model."""
+
+    mastered_count: int = 0
+    weak_count: int = 0
+    top_due: list[Claim] = Field(default_factory=list)
+    recent_fails: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class TodayView(BaseModel):
@@ -153,6 +167,7 @@ class TodayView(BaseModel):
     close_summary: DayCloseSummary | None = None
     interview_focus: InterviewFocusHint | None = None
     bootcamp: BootcampView | None = None
+    mastery_snapshot: MasterySnapshot | None = None
 
 
 # --- Agent rewrite: verdicts, memory, prompts, harness ---

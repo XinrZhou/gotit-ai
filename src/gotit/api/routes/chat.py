@@ -15,14 +15,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from gotit.api.action_blocks import attach_verdict_blocks
 from gotit.api.auth import require_api_key
 from gotit.api.chat_orchestrator import post_message_chain
-from gotit.api.deps import SessionMemoryReader, SessionPromptReader, get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
-from gotit.api.verify_finalize import finalize_examine_with_gate
-from gotit.core.agents.axiom import build_axiom_agent, run_axiom
 from gotit.core.models import AgentReply, Message, Thread
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
@@ -204,6 +200,8 @@ async def start_verify(
     examiner's and the critic's verdicts. Recheck is done by Critic, a different
     agent from Axiom — no agent reviews its own judgment.
     """
+    from gotit.api.verify_attempt import run_verify_attempt
+
     user_id = _user_id(settings)
     async with session_scope() as session:
         thread = await day_ops.get_thread(session, thread_id)
@@ -213,92 +211,15 @@ async def start_verify(
         if claim is None or claim.user_id != user_id:
             raise HTTPException(status_code=404, detail="claim not found")
 
-        # --- examine (axiom) ---
-        from gotit.db.ops.graph import build_budget_subgraph
-        from gotit.db.ops.memory import build_failure_lesson_block, list_trajectory
-
-        trajectory = await list_trajectory(
-            session, user_id=user_id, topic=claim.topic, claim_id=body.claim_id
-        )
-        budget = await build_budget_subgraph(
-            session, user_id=user_id, claim_id=body.claim_id
-        )
-        lesson_block = await build_failure_lesson_block(
-            session,
-            user_id=user_id,
-            claim_id=body.claim_id,
-            topic=claim.topic,
-            neighbor_claim_ids=budget.confused_claim_ids,
-        )
-
-        if body.examine_verdict is not None:
-            examine_verdict = body.examine_verdict
-            examine_score: float | None = None
-            examine_evidence: str | None = None
-        elif not settings.llm_api_key:
-            examine_verdict = "passed"
-            examine_score = None
-            examine_evidence = None
-        else:
-            prompt = await SessionPromptReader(session).get_active_prompt("axiom")
-            system_prompt = prompt.system_prompt if prompt else ""
-            reader = SessionMemoryReader(session, user_id=user_id)
-            agent = build_axiom_agent(get_model(), system_prompt=system_prompt)
-            ev = await run_axiom(
-                agent,
-                reader,
-                claim_text=claim.text,
-                answer=body.answer,
-                trajectory=trajectory,
-                budget_block=budget.prompt_block,
-                failure_lesson_block=lesson_block,
-            )
-            examine_verdict = ev.verdict or "almost"
-            examine_score = ev.score
-            examine_evidence = ev.evidence
-
         try:
-            finalized = await finalize_examine_with_gate(
+            return await run_verify_attempt(
                 session,
-                claim_id=body.claim_id,
-                claim_text=claim.text,
-                topic=claim.topic,
-                examine_verdict=examine_verdict,
-                examine_score=examine_score,
-                examine_evidence=examine_evidence,
-                learner_answer=body.answer,
+                thread_id=thread_id,
+                claim=claim,
                 user_id=user_id,
                 settings=settings,
-                thread_id=thread_id,
+                answer=body.answer,
+                examine_verdict=body.examine_verdict,
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-        gate = finalized["gate"]
-        verify_meta: dict[str, object] = {
-            "claim_id": str(body.claim_id),
-            "examine_verdict": finalized["examine_verdict"],
-            "recheck_verdict": finalized["recheck_verdict"],
-            "gate_verdict": finalized["gate_verdict"],
-            "verdict": finalized["gate_verdict"],
-        }
-        attach_verdict_blocks(
-            verify_meta,
-            gate_verdict=str(finalized["gate_verdict"]),
-            claim_id=body.claim_id,
-        )
-        await day_ops.add_message(
-            session,
-            thread_id=thread_id,
-            role="agent",
-            agent_name="gate",
-            text=f"验证完成：{gate['reason']}",
-            metadata=verify_meta,
-        )
-        return {
-            "examine_verdict": finalized["examine_verdict"],
-            "recheck_verdict": finalized["recheck_verdict"],
-            "gate": gate,
-            "writeback": finalized["writeback"],
-            "mastery_graph": finalized["mastery_graph"],
-        }

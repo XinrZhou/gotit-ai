@@ -9,6 +9,7 @@ import type {
   DrillMaterial,
   DrillSession,
   InterviewFocusHint,
+  MasterySnapshot,
   Project,
   ResumeRecord,
 } from "../types";
@@ -23,6 +24,7 @@ type TodaySnap = {
   close_summary?: DayCloseSummary | null;
   interview_focus?: InterviewFocusHint | null;
   bootcamp?: BootcampView | null;
+  mastery_snapshot?: MasterySnapshot | null;
 };
 
 /** Shared day snapshot: plan/notes/due claims/projects/resume/drill + refresh. */
