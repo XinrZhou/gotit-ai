@@ -6,13 +6,17 @@
 2. Then this file for operating rules.
 3. Product principles: [`docs/VISION.md`](docs/VISION.md).
 
-gotit-ai is a **daily learning companion**: personality agents talk in threads,
-remember across sessions, and run verify workflows. **Verified = done.** The
-companion owns chat; verification is the core loop (mastery criterion = pass the gate).
+gotit-ai is a **personal single-user** system for long-term technical growth.
+Daily learning companion: agents talk in threads, remember weaknesses, run
+verify workflows. **Verified = done.** Chat owns the surface; verification is
+the core loop (mastery criterion = pass the gate). Not multi-tenant SaaS —
+see `docs/PRODUCT.md`.
 
 ## Stack & commands
 
-See `docs/SYSTEM.md`. Common:
+See `docs/SYSTEM.md` (including **Runtime processes**: `gotit-api` /
+`gotit-mcp` / Web; **no** in-process worker; OpenClaw owns digest cron).
+Common:
 
 ```bash
 uv sync --all-extras

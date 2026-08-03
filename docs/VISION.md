@@ -2,12 +2,13 @@
 
 **Got it? Prove it.** — with a companion that remembers you.
 
-gotit-ai is a **daily learning companion**: a small crew of personality-bearing
-agents that talk with you in threads, remember your weaknesses across sessions,
-and pull you into a verification workflow when it's time to prove you actually
-got it. Verification remains the **core loop** — mastery is a criterion
-(pass the gate), not model praise — but the companion owns the conversational
-surface; it is not a headless pipeline.
+gotit-ai is a **daily learning companion** — a **personal single-user** system
+for long-term technical growth: a small crew of personality-bearing agents that
+talk with you in threads, remember your weaknesses across sessions, and pull
+you into a verification workflow when it's time to prove you actually got it.
+Verification remains the **core loop** — mastery is a criterion (pass the gate),
+not model praise — but the companion owns the conversational surface; it is not
+a headless pipeline, note dump, or multi-tenant product.
 
 ## Principles
 

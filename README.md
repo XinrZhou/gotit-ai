@@ -26,7 +26,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 > *"I don't need another second brain that stores more."*
 > *"I need a small crew that talks with me daily — and asks: got it, for real?"*
 
-**gotit-ai** is a **daily learning companion**: personality-bearing agents chat with you in threads, remember weak spots across sessions, and run a verify workflow when it's time to prove it. Pass only when evidence says so — the mastery gate is **deterministic code**, never an LLM shrug.
+**gotit-ai** is a **personal single-user** system for long-term **technical growth**: a daily learning companion whose agents chat in threads, remember weak spots, and run a verify workflow when it's time to prove it. Pass only when evidence says so — the mastery gate is **deterministic code**, never an LLM shrug. Not multi-tenant SaaS, not another note dump.
 
 ## What It Does
 
@@ -39,7 +39,7 @@ That gap is **false fluency** — looking like you got it, without being able to
 | **Cold-start calibration** | Few high-info probes to seed schedule + confuse graph; empty chat CTA when nothing owed yet |
 | **First-pass bootcamp** | Empty library: note → claim → examine/calibration → see the gate |
 | **Verify loop** | Examine → Critic → **deterministic gate** → trajectory / spaced review (due rank + confuse / `depends_on`) / mastery-graph; chat `action_blocks` for one-tap 开考 |
-| **Notes → claims** | Ingest into testable claims + plan; digest「有用」can promote to examinable claims |
+| **Notes → claims** | `POST /v1/notes/{id}/ingest` (Compass / stub) → claims + plan; digest「有用」can promote to examinable claims |
 | **Teach-back** | Text or voice transcription; same finalize path as examine |
 | **Resume drill** | Project / resume-driven mock interview (Sage) |
 | **Settings** | 我 / 提醒 / 高级 — profile + interview reminders, digest prefs, Skills+MCP; top-bar「动态」for OpenClaw activity |
@@ -52,14 +52,15 @@ Crew (UI nicknames): **章鱼哥** (examiner) · **海绵宝宝** (curator) · *
 
 ```
 React web (ChatPage = main surface)
-        │  REST
+        │  REST only
         ▼
-gotit-ai (Python / uv)
-  core/     identity · messaging · agents · verify-loop · skills
-  db/ops/   shared domain ops (REST + MCP)
-  api/      FastAPI routes + A2A chat orchestrator
-  mcp/      OpenClaw tools (thin → same db.ops)
-  Postgres
+gotit-api (FastAPI)  ←→  Postgres / SQLite
+        │                    ▲
+        │  shared db.ops     │
+gotit-mcp (stdio) ───────────┘   ← OpenClaw / host agents
+
+No in-process worker. Digests / reminders cron live on OpenClaw
+(Gateway + skills/*); gotit stores prefs and exposes sync hooks.
 ```
 
 **Design rule:** the companion owns chat. **Verification is the core loop** (mastery criterion = pass the gate), not a headless pipeline. OpenClaw is an optional distribution channel. Deployed as a **personal / single-user** app (`GOTIT_USER_ID` + API key) — not multi-tenant SaaS.
@@ -127,7 +128,7 @@ Interview schedule → Mac Calendar: `docs/openclaw-apple-interview.md`,
 **Pass the gate — then it's learned.** Chat is the surface; verification is the core loop.
 
 1. **Talk** — open a thread, @ a companion, optionally load a skill  
-2. **Ingest** — add notes; extract claims into today's plan  
+2. **Ingest** — add notes;「出题」→ note ingest (Compass) → claims + today's plan  
 3. **Verify** — from chat, start 考我 / 回讲 (gate); 项目深挖 is practice, not mastery  
 4. **Gate** — Critic rechecks; code decides 过了 / 还差点 / 欠着下次  
 5. **Remember** — outcomes land on a trajectory so the next session is sharper  
@@ -146,7 +147,7 @@ Interview schedule → Mac Calendar: `docs/openclaw-apple-interview.md`,
 | OpenClaw→gotit shell writeback + Settings「提醒」+ top-bar「动态」 | Done |
 | Apple plan bridge (Reminders/Notes → gotit plan_items) | Done (P1d) |
 | Interview schedule → Apple Calendar auto-sync | Done |
-| Mastery graph (fail events, confused_with, fullscreen from chat top bar) | Done |
+| Mastery graph (fail events, confused_with, in-column from chat top bar) | Done |
 | Persist workflow turns into thread history | Done |
 | Interview schedule + due reminders | Done (P3d) |
 | Interview countdown ramp (tier + optional nudge) | Done (P4) |

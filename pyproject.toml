@@ -1,7 +1,7 @@
 [project]
 name = "gotit-ai"
 version = "0.1.0"
-description = "Multi-agent learning checkbench — Got it? Prove it."
+description = "Personal single-user tech-growth companion — Got it? Prove it."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
