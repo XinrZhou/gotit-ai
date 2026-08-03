@@ -5,8 +5,9 @@
 gotit-ai is a **daily learning companion**: a small crew of personality-bearing
 agents that talk with you in threads, remember your weaknesses across sessions,
 and pull you into a verification workflow when it's time to prove you actually
-got it. Verification is still the spine — but the companion owns the
-conversational surface; it is not a headless pipeline.
+got it. Verification remains the **core loop** — mastery is a criterion
+(pass the gate), not model praise — but the companion owns the conversational
+surface; it is not a headless pipeline.
 
 ## Principles
 

@@ -3,14 +3,15 @@
 > **Read this first** when starting a new agent session. Keep it short.
 > Update this file when architecture, stack, or shipped features change —
 > then mirror user-facing bits into `README.md` / `README.zh-CN.md`.
-> Last reviewed: 2026-08-03 (doc honesty + main-path snapshot).
+> Last reviewed: 2026-08-03 (core-loop / mastery-criterion wording).
 
 ## Product (one line)
 
 Daily **learning companion**: personality agents chat in threads, remember
 weaknesses, and run verify workflows. **Verified = done.** Chat owns the
-surface; verification is the spine. Warm companion, honest gate — not a
-generic tutor chat, Anki+LLM, or multi-agent demo.
+surface; verification is the **core loop** (mastery criterion = pass the gate).
+Warm companion, honest gate — not a generic tutor chat, Anki+LLM, or
+multi-agent demo.
 
 ## Current main path (truth)
 
@@ -30,7 +31,7 @@ Learner empty states: owed → brief is primary; idle →「添加资料」is pr
 
 旁路（入口不强化）：弱点图谱、Settings（Skills/MCP/计划推送/动态）、
 Apple 桥、Harness API/CLI、CAT 题参写回。当前波次默认 **收主路径摩擦**
-（活跃 OpenSpec 仅 `openspec/changes/main-path-converge/`），不默认加新脊柱机制。
+（活跃 OpenSpec 仅 `openspec/changes/main-path-converge/`），不默认拉长验证主链路。
 
 ## Deploy posture
 

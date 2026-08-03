@@ -62,7 +62,7 @@ gotit-ai (Python / uv)
   Postgres
 ```
 
-**Design rule:** the companion owns chat. **Verification is the spine**, not a headless pipeline. OpenClaw is an optional distribution channel. Deployed as a **personal / single-user** app (`GOTIT_USER_ID` + API key) — not multi-tenant SaaS.
+**Design rule:** the companion owns chat. **Verification is the core loop** (mastery criterion = pass the gate), not a headless pipeline. OpenClaw is an optional distribution channel. Deployed as a **personal / single-user** app (`GOTIT_USER_ID` + API key) — not multi-tenant SaaS.
 
 ## Stack
 
@@ -122,7 +122,7 @@ Apple Reminders/Notes → gotit plan: `docs/openclaw-apple-plan.md`,
 
 ## How it feels day-to-day
 
-**Pass the gate — then it's learned.** Chat is the surface; verification is the spine.
+**Pass the gate — then it's learned.** Chat is the surface; verification is the core loop.
 
 1. **Talk** — open a thread, @ a companion, optionally load a skill  
 2. **Ingest** — add notes; extract claims into today's plan  

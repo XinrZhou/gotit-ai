@@ -8,7 +8,7 @@
 
 gotit-ai is a **daily learning companion**: personality agents talk in threads,
 remember across sessions, and run verify workflows. **Verified = done.** The
-companion owns chat; verification is the spine.
+companion owns chat; verification is the core loop (mastery criterion = pass the gate).
 
 ## Stack & commands
 

@@ -51,7 +51,7 @@
 - 更深多 Agent 规划；工业 FSRS/CAT
 - Settings 大改；弱点图谱抛光
 
-## Spine code (this session)
+## Core-loop code (this session)
 
 - [x] ingest 不再因 project_id 建议 drill
 - [x] teach finalize 写 `action_blocks`；Echo 注入 failure lessons

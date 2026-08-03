@@ -5,7 +5,8 @@ context: |
   gotit-ai is a daily learning companion: personality-bearing agents talk with
   you in threads, remember across sessions, and run a verify-loop workflow
   (false fluency → examine → recheck → deterministic gate). Verification is
-  the spine; the companion owns the chat surface.
+  the core loop (mastery criterion = pass the gate); the companion owns the
+  chat surface.
   Stack: Python 3.12 + uv + FastAPI + MCP; React web via npm; Postgres
   (or SQLite). Personal / single-user (GOTIT_USER_ID + API key).
   OpenClaw is an optional distribution channel (gotit exposes MCP tools).
