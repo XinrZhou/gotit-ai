@@ -168,18 +168,23 @@ def update_item_calibration(
     data = dict(raw or {})
     d_int, a, key = normalize_calibration_meta(data, topic=topic)
     d_f = _parse_difficulty_float(data.get("difficulty", d_int))
-    try:
-        n = max(0, int(data.get("n_attempts", 0) or 0))
-    except (TypeError, ValueError):
-        n = 0
-    try:
-        n_passed = max(0, int(data.get("n_passed", 0) or 0))
-    except (TypeError, ValueError):
-        n_passed = 0
-    try:
-        n_failed = max(0, int(data.get("n_failed", 0) or 0))
-    except (TypeError, ValueError):
-        n_failed = 0
+
+    def _counter(name: str) -> int:
+        raw_v: object = data.get(name, 0) or 0
+        if isinstance(raw_v, bool):
+            return 0
+        if isinstance(raw_v, (int, float)):
+            return max(0, int(raw_v))
+        if isinstance(raw_v, str):
+            try:
+                return max(0, int(raw_v))
+            except ValueError:
+                return 0
+        return 0
+
+    n = _counter("n_attempts")
+    n_passed = _counter("n_passed")
+    n_failed = _counter("n_failed")
 
     y = 1.0 if outcome == "correct" else 0.0
     shrink = math.sqrt(n + 1)

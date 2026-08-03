@@ -365,7 +365,7 @@ async def promote_interest(
     raw_plans = ingested.get("plan_items")
     plan_payloads: list[Any] = raw_plans if isinstance(raw_plans, list) else []
     plan_ids = [
-        UUID(str(p["id"] if isinstance(p, dict) else getattr(p, "id")))
+        UUID(str(p["id"] if isinstance(p, dict) else p.id))
         for p in plan_payloads
     ]
     claim_ids = [c.id for c in persisted]
