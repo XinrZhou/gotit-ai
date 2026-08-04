@@ -3,7 +3,7 @@
 > 角色视角：Staff AI Application Engineer / Principal Engineer / AI Agent 系统架构师  
 > 范围：基于仓库代码与 `docs/SYSTEM.md` 的事实盘点  
 > 不含：产品市场价值、PMF、商业化、未来改造方案  
-> 日期：2026-08-03
+> 日期：2026-08-03（同日 Runtime V2 Phase 0–3 已落地；见文末补充）
 
 ---
 
@@ -110,6 +110,7 @@ examine(axiom) → recheck(critic) → deterministic_gate(code)
 ┌─────────────────────────────────────────────────────────────┐
 │  gotit.core（framework-free）                                 │
 │  agents/* · loop.gate · schedule · context_budget · graph   │
+│  learner_state · agent_run（薄 Verify 信封）                  │
 │  pydantic-ai → OpenAI-compatible LLM                        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -122,13 +123,13 @@ examine(axiom) → recheck(critic) → deterministic_gate(code)
 |------|------|----------|
 | LLM 调用 | **A** | `core/agents/llm.py` `build_model` / `resolve_llm_binding`；各 agent `Agent(...).run`；无 key stub |
 | Prompt 管理 | **A** | `prompts/*.md` + `prompts/__init__.py`；`PromptVersionRow`；`compose_system_prompt`；Skills 注入 |
-| Agent Workflow | **A**（固定） | `VerifyWorkflow` + `finalize_examine_with_gate`；聊天 A2A `MAX_A2A_TURNS` |
+| Agent Workflow | **A**（固定） | `VerifyWorkflow` + `finalize_examine_with_gate`（含 WriteIntent 信封）；聊天 A2A `MAX_A2A_TURNS` |
 | Planning | **B** | 有日计划 `plan_items`、companion 工具查计划/欠练、计划问答硬规则；**无** LLM 自主多步任务规划器 / ReAct planner |
 | Tool Calling | **A**（白名单） | `companion_tools.py`：`get_today` / `list_due_claims` / `start_*` / `add_memory` / `close_day` …；可选用户 MCP connectors；非挂载全量 gotit MCP |
-| Memory | **B** | `memory_entries` 分层 + trajectory / failure_digest；掌握在 Claim；聊天注入 `list_memory(layer=long, limit=10)`；非完整记忆系统 |
-| RAG | **C** | 无 embedding/向量检索；再练上下文 = graph + failure lessons 预算拼接（`context_budget.py`） |
-| Context Management | **A**（域内） | 线程 history≤20；memory≤10；`ContextBudget` 总长/块上限；计划骨架硬约束 |
-| Evaluation | **A**（离线 harness） | `harness` API/CLI、`dev`/`gold` cases、人工 adopt\|observe\|reject；gate/routing 等确定性指标；**非**线上自动评测闭环改 prompt |
+| Memory | **B+** | Claim / 图权威 + `LearnerStateSnapshot`（派生）；`memory_entries` 分层；聊天仍手搓注入，**未**吃 Snapshot |
+| RAG | **C** | 无 embedding/向量检索；verify 上下文 = `EvidencePack`（graph + lessons 预算编译） |
+| Context Management | **A**（verify 域） | `EvidencePack` + `pack_hash`；线程 history≤20；聊天 memory≤10；计划骨架硬约束 |
+| Evaluation | **A**（离线 + CI） | `dev`/`gold` + **replay** + **holdout** 进 `gate.sh`；adopt 钉 `suite_version`；**非**线上自动改 prompt |
 
 状态约定：
 
@@ -207,21 +208,24 @@ examine(axiom) → recheck(critic) → deterministic_gate(code)
 1. **掌握终审与 LLM 解耦**：`deterministic_gate` + 单一 `write_mastery_outcome`，职责清晰。
 2. **双表面同域**：REST ↔ MCP 共用 `db.ops`，符合 Agent/应用双入口工程纪律。
 3. **`core` 框架隔离**：领域可测；gate / schedule / check_routing / context_budget 有确定性逻辑与 harness。
-4. **Verify 闭环完整度高**：双 Agent 评判 → 门 → 写回 → 再练注入（graph + lessons）链路已落地。
-5. **上下文有预算意识**：再练不塞整本笔记，符合「省着给」的工程约束。
+4. **Verify 闭环完整度高**：双 Agent 评判 → WriteIntent → 门 → 写回 → 再练注入（graph + lessons）链路已落地。
+5. **上下文有预算意识**：verify 走 `EvidencePack`；再练不塞整本笔记。
 6. **角色边界清楚**：五身份 + identity/prompt 分离；聊天不误注 examine rubric。
 7. **单用户部署假设一致**：auth / 数据模型与「个人系统」一致，复杂度可控。
+8. **契约可回归**：Replay + Holdout 进 `gate.sh`；adopt 钉 `suite_version`。
+9. **薄 Run 信封**：`run_id` / 幂等 commit，掌握写可审计（非大一统 Runtime）。
 
 ## 当前不足（事实缺口，非建议）
 
-1. **无 RAG / 语义检索**；相关上下文靠图邻接与手工预算，不是检索增强。
+1. **无 RAG / 语义检索**；相关上下文靠图邻接与 EvidencePack 预算，不是检索增强。
 2. **Planning 停留在日计划与 CTA**，无通用多步 Agent planner。
-3. **Tool 面刻意收窄**：白名单 prepare-only；Drill 明确不过门。
-4. **Memory 表语义混杂**（审计 / 缓存 / prefs），长期「用户状态」分散在 Claim / graph / memory。
+3. **Tool 面刻意收窄**：白名单 prepare-only；Drill 明确不过门；无 ToolSpec 副作用分级产品（Phase 4）。
+4. **Memory 表语义混杂**（审计 / 缓存 / prefs）；Snapshot 已派生，但聊天未消费。
 5. **无完整用户能力模型**（画像 / 跨 claim 技能表示）。
-6. **Eval 在离线 harness + 人工决策**；adopt 不自动改 prompt（产品铁律，也是自动化缺口）。
+6. **Eval 在离线 harness + 人工决策**；有 CI 契约回归，但无「成效 → 策略」闭环；adopt 不自动改 prompt。
 7. **多模型绑定范围窄**：主要 Critic 可独立；其他 agent 共享全局 `LLM_*`。
 8. **遗留路径仍在**：如 legacy ingest stub（SYSTEM「Not done」）。
+9. **聊天与 verify 双编排**：聊天未统一进 Run 信封（有意为之）。
 
 ## 需要进一步验证的问题
 
@@ -234,13 +238,13 @@ examine(axiom) → recheck(critic) → deterministic_gate(code)
 5. CAT 固定 θ=3 的 item 参数写回，对个人难度校准是否足够。
 6. OpenClaw 侧 digest / promote / Apple bridge 与应用内状态的一致性（跨进程）。
 7. Drill「prep-only」与学习者心智模型是否冲突（产品文案 vs 实际写回边界）。
-8. Harness gold 对真实模型漂移的覆盖是否够（SYSTEM 亦标 holdout UI / 专用 holdout set 未齐）。
+8. Replay/Holdout 对真实模型漂移的覆盖是否够（holdout 产品 UI 仍明确不做）。
 
 ---
 
 # 总括
 
-这是一个验证闭环已落到代码、分层清晰的 **AI Native 个人成长运行时**；Agent 能力集中在 **结构化角色流水线 + 约束工具聊天**，长期状态权威在 **Claim/排程/失败图**，而非聊天记录或通用 Memory 库。
+这是一个验证闭环已落到代码、分层清晰的 **AI Native 个人成长运行时**；Agent 能力集中在 **结构化角色流水线 + 约束工具聊天**，长期状态权威在 **Claim/排程/失败图**，而非聊天记录或通用 Memory 库。其上叠了 **薄 Verify Runtime 工程层**（Snapshot / Pack / 信封 / Replay），聊天壳与掌握真相仍刻意分离。
 
 ---
 
@@ -252,12 +256,17 @@ examine(axiom) → recheck(critic) → deterministic_gate(code)
 | 聊天 runtime | `src/gotit/core/agents/runtime.py` |
 | 聊天编排 / A2A | `src/gotit/api/chat_orchestrator.py` |
 | Companion tools | `src/gotit/api/companion_tools.py` |
-| Verify finalize | `src/gotit/api/verify_finalize.py` |
+| Verify finalize（信封） | `src/gotit/api/verify_finalize.py` |
+| Run 信封类型 | `src/gotit/core/agent_run.py` |
 | Gate / BallCustody | `src/gotit/core/loop.py` |
 | 排程 | `src/gotit/core/schedule.py` |
-| Context budget | `src/gotit/core/context_budget.py` |
+| Context budget / EvidencePack | `src/gotit/core/context_budget.py` |
+| LearnerStateSnapshot | `src/gotit/core/learner_state.py`、`db/ops/learner_state.py` |
+| Evidence 装载 | `src/gotit/db/ops/evidence.py` |
 | 掌握写回 | `src/gotit/db/ops/claim.py` → `write_mastery_outcome` |
 | Memory ops | `src/gotit/db/ops/memory.py` |
+| Harness replay/holdout | `src/gotit/harness/cases/`、`scripts/gate.sh` |
 | ORM | `src/gotit/db/models.py` |
 | Prompt 加载 | `src/gotit/prompts/__init__.py` + `prompts/*.md` |
 | 系统快照 | `docs/SYSTEM.md` |
+| 面试收敛 | `docs/ai-engineering-story.md` |

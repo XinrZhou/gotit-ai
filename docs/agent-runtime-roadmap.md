@@ -1,89 +1,85 @@
-# Agent Runtime Roadmap
+# Agent Runtime 路线图
 
-> From **Verification-centric AI Agent Application** (today) toward  
-> **Personal Mastery Agent Runtime** (engineering target).  
-> Tracked change: `openspec/changes/agent-runtime-v2/`.  
-> Companion review: `docs/implementation-review.md`.  
-> Last updated: 2026-08-03.
+> 从今日的 **以验证为中心的 AI Agent Application**，走向工程目标  
+> **Personal Mastery Agent Runtime**。  
+> 变更跟踪：`openspec/changes/agent-runtime-v2/`。  
+> 配套评审：`docs/implementation-review.md`。  
+> 面试包装：`docs/ai-engineering-story.md`。  
+> 最近更新：2026-08-03。
 
-Status legend:
+状态图例：
 
-| Label | Meaning |
-|-------|---------|
-| **已实现** | In `src/` / CI today; safe to claim in interviews as shipped |
-| **实施中** | Spec accepted; implementation in progress or next |
-| **未来规划** | In-scope for this roadmap, not started |
-| **明确不做** | Rejected for this trajectory (see review / ADRs) |
+| 标签 | 含义 |
+|------|------|
+| **已实现** | 已在 `src/` / CI；面试可宣称已上线 |
+| **实施中** | 规格已接受；正在实现或即将开做 |
+| **未来规划** | 在本路线图范围内，尚未开工 |
+| **明确不做** | 本条轨迹拒绝（见评审 / ADR） |
 
 ---
 
-## Current state — 已实现
+## 当前状态 — 已实现
 
-**Verification-centric AI Agent Application**
+**以验证为中心的 AI Agent Application**（产品形态）+ **薄 Verify Runtime 信封**（工程层，Phase 0–3）
 
 ```text
-Chat / MCP surfaces
-  → role agents (examine / teach / drill / chat tools)
+Chat / MCP 表面
+  → 角色 Agent（examine / teach / drill / chat 工具）
   → Critic + deterministic_gate
-  → write_mastery_outcome (+ trajectory / fail graph)
+  → write_mastery_outcome（+ trajectory / 失败图）
 ```
 
-Already true in code (non-exhaustive; see `docs/SYSTEM.md`):
+代码里已成立（非穷尽；见 `docs/SYSTEM.md`）：
 
-- Fixed Verify Spine; gate is code (VISION P7)
-- Single mastery row writer; prepare ≠ finalize (`state-boundary-tighten`)
-- REST ↔ MCP share domain ops
-- `ContextBudget` / `compose_examine_context` for examine (not yet EvidencePack)
-- Offline harness `dev`/`gold` + human adopt\|observe\|reject (audit)
-- Companion tool whitelist (prepare-only open_* CTAs)
-- Drill does not pass the gate
+- 固定 Verify Spine；Gate 是代码（VISION P7）
+- 单一掌握行写口；prepare ≠ finalize（`state-boundary-tighten`）
+- REST ↔ MCP 共享领域 ops
+- verify 路径：`LearnerStateSnapshot` + `EvidencePack`（预算 / `pack_hash`）
+- 薄 Verify Run 信封：`AgentRun` / `WriteIntent` / `CommitReceipt`；`run_id` + 幂等键
+- 离线 harness：`dev` / `gold` + **replay** + **holdout**；adopt 钉 `suite_version`（仅审计）
+- Companion 工具白名单（prepare-only 的 open_* CTA）
+- Drill **不过门**
 
-**Not true yet (do not overclaim):**
+**尚未成立（勿过度宣称）：**
 
-- No `LearnerStateSnapshot` type/builder in `src/`
-- No `EvidencePack` / `pack_hash`
-- No verify `AgentRun` / `WriteIntent` envelope / mastery `run_id` contract
-- Chat and verify are still **two** orchestration paths
+- 聊天与 verify 仍是 **两条** 编排路径
+- 聊天 **尚未** 消费 LearnerStateSnapshot / EvidencePack
+- 无 ToolSpec 注册表 / 可观测 Trace API（Phase 4，可选）
+- 无「学习者成效 → Agent 策略」闭环
 
-**Phase 1 now true:**
-
-- Replay suite (`case_set=replay`) + holdout suite (`case_set=holdout`)
-- `scripts/run_replay_harness.py`; both wired in `scripts/gate.sh`
-- Harness summary / adopt carries `suite_version`
+当前 `SUITE_VERSION`：`2026.08.03.agent-runtime-v2.phase3`
 
 ---
 
-## Target state — 未来目标（工程）
+## 目标状态 — 未来目标（工程）
 
-**Personal Mastery Agent Runtime**
+**Personal Mastery Agent Runtime**（在已有脊柱上的工程表面）
 
 ```text
-Verify surfaces
-  → LearnerStateSnapshot (derived) + EvidencePack
-  → thin Run envelope: propose → evaluate → commit
-  → Replay + Holdout guardrails
-  → (later) ToolSpec policy + read-only traces
+Verify 表面
+  → LearnerStateSnapshot（派生）+ EvidencePack
+  → 薄 Run 信封：propose → evaluate → commit
+  → Replay + Holdout 护栏
+  → （可选）ToolSpec 策略 + 只读 Trace
 ```
 
-Chat remains a first-class **product** surface; it is **not** required to share
-the full RunLifecycle for the target to be interview-credible. Mastery truth
-stays on claims/graph/schedule.
+聊天仍是一等 **产品** 表面；面试可信 **不要求** 聊天共享完整 RunLifecycle。掌握真相仍在 claims / 图 / 排程。
 
 ---
 
-## Evolution phases
+## 演进阶段
 
-### Phase 0 — Spec / ADR
+### Phase 0 — 规格 / ADR
 
 | | |
 |--|--|
-| **Status** | **已实现**（文档） |
-| **目标** | Freeze Out, success criteria, ADRs before code |
-| **技术价值** | Prevents scope bleed into UX / mega-Runtime |
-| **面试价值** | Shows judgment: Runtime as envelope, not buzzword rewrite |
-| **明确不做** | Business code; redesigning gate; claiming Runtime shipped |
+| **状态** | **已实现**（文档） |
+| **目标** | 写代码前冻结 Out、成功标准、ADR |
+| **技术价值** | 防止范围渗入 UX / 大一统 Runtime |
+| **面试价值** | 展示判断力：Runtime = 信封，不是口号式重写 |
+| **明确不做** | 业务代码；重设计 Gate；宣称 Runtime 已上线 |
 
-Delivered:
+已交付：
 
 - `openspec/changes/agent-runtime-v2/{proposal,design,tasks}.md`
 - `docs/adr/0003-learner-state-is-derived.md`
@@ -91,34 +87,29 @@ Delivered:
 
 ---
 
-### Phase 1 — Replay + Holdout Evaluation
+### Phase 1 — Replay + Holdout 评测
 
 | | |
 |--|--|
-| **Status** | **Completed** (2026-08-03) |
-| **目标** | Lock verify/gate/writeback contracts without live LLM; isolate holdout |
-| **技术价值** | Regression net before Pack/envelope moves; VISION P5 teeth |
-| **面试价值** | “How do you know a prompt/budget change didn’t regress?” |
-| **明确不做** | Holdout product UI; auto-adopt; retuning gate thresholds to make cases pass |
+| **状态** | **已实现**（2026-08-03） |
+| **目标** | 无真实 LLM 下锁住 verify / gate / 写回契约；holdout 隔离 |
+| **技术价值** | Pack / 信封改动前的回归网；VISION P5 长牙 |
+| **面试价值** | 「如何知道改 prompt / 预算没有回退？」 |
+| **明确不做** | Holdout 产品 UI；auto-adopt；为过 case 改 Gate 阈值 |
 
-**Actual implementation:**
+**实际落地：**
 
-- Replay: 9 cases in `harness/cases/replay.py` (pass write, critic-stricter
-  commit path, empty evidence, prepare-only, stub pollution, context trim,
-  double-finalize status stability, entry parity incl. teach map, low score)
-- Holdout: 5 cases in `harness/cases/holdout.py` (disjoint gate pairs, score/
-  evidence finalize, stricter recheck write, teach mapping, isolation guard)
-- Runner: `scripts/run_replay_harness.py`; also `--set` on `run_harness.py`
-- CI: `gate.sh` runs replay + holdout after dev harness
-- Version pin: `gotit.harness.SUITE_VERSION`; adopt always records it
+- Replay：`harness/cases/replay.py`（经 Phase 2–3 扩至 **12** 条，含 Pack / 信封用例）
+- Holdout：5 条，`harness/cases/holdout.py`（与 gold 门对互不重叠）
+- 入口：`scripts/run_replay_harness.py`；`run_harness.py --set replay|holdout`
+- CI：`gate.sh` 在 dev harness 后跑 replay + holdout（失败非零退出）
+- 版本钉：`gotit.harness.SUITE_VERSION`；adopt 始终记录
 
-**Vs plan:**
+**相对计划的诚实差异（Phase 1 当时）：**
 
-- Critic downgrade uses fixed recheck → shared gate+write path (stub Critic
-  cannot diverge by design)
-- Idempotency = status stability under repeat finalize; WriteIntent keys wait
-  for Phase 3
-- No EvidencePack yet (Phase 2)
+- Critic「降级」用例：注入固定 recheck 进同一 gate+写路径（stub Critic 本就会回声 examine）
+- 幂等：Phase 1 锁「重复 finalize 状态稳定」；WriteIntent 幂等键在 Phase 3
+- EvidencePack 当时未做（Phase 2）
 
 ---
 
@@ -126,66 +117,82 @@ Delivered:
 
 | | |
 |--|--|
-| **Status** | **实施中**（next code phase; after Phase 1 Completed） |
-| **目标** | Derived learner projection + budgeted context compiler on **verify** path |
-| **技术价值** | Memory taxonomy without second truth; kill duplicated examine context assembly |
-| **面试价值** | Memory Architecture + Context Engineering with code anchors |
-| **明确不做** | Authoritative learner table; forcing chat to consume Pack; generic RAG |
+| **状态** | **已实现**（2026-08-03） |
+| **目标** | 派生学习者投影 + 预算化上下文编译器，挂在 **verify** 路径 |
+| **技术价值** | Memory 分类学且不造第二真相；消灭手搓 examine 上下文拼接 |
+| **面试价值** | Memory Architecture + Context Engineering，有代码锚点 |
+| **明确不做** | Learner 权威表；强迫聊天吃 Pack；通用 RAG |
 
-Builds on existing `context_budget.py` and claim/graph/digest readers — extend,
-do not replace authority.
+**实际落地：**
+
+- Snapshot：`core/learner_state.py` + `db.ops.build_learner_state`
+- Pack：`compile_evidence_pack` / `EvidencePack.pack_hash`（`context_budget.py`）
+- 装载：`db.ops.build_evidence_pack_for_claim` — verify_attempt、examine、teach（REST + MCP）
+- 测试：`test_learner_state`、pack hash/trim 单测 + `replay-pack-hash-stable`
+- 聊天编排器 **未改**
+
+**相对计划：** 异步 builder 留在 `db.ops`（core 保持无框架）；聊天迁 Pack 延后。
 
 ---
 
-### Phase 3 — Verify Run Envelope
+### Phase 3 — Verify Run 信封
 
 | | |
 |--|--|
-| **Status** | **未来规划**（optional Week-1 stretch） |
-| **目标** | Thin wrap of `finalize_examine_with_gate`: WriteIntent / `run_id` / idempotent commit |
-| **技术价值** | Explicit propose→evaluate→commit; auditable mastery writes |
-| **面试价值** | “Production agent = state machine with commit boundary” |
-| **明确不做** | Unified chat+verify+ingest Runtime; parallel second finalize service |
+| **状态** | **已实现**（2026-08-03） |
+| **目标** | 薄包一层 finalize：WriteIntent / `run_id` / 幂等 commit |
+| **技术价值** | 显式 propose → evaluate → commit；掌握写可审计 |
+| **面试价值** | 「生产 Agent = 带 commit 边界的状态机」 |
+| **明确不做** | 统一 chat+verify Runtime；并行第二条 finalize；新权威表 |
 
-Week-1 may ship without Phase 3; interview minimum remains Spine + Snapshot +
-Pack + Replay once Phases 1–2 land.
+**覆盖范围（实际）：**
+
+- `AgentRun` / `WriteIntent` / `CommitReceipt`（`core/agent_run.py`）
+- `finalize_examine_with_gate` 信封；trajectory 带 `run_id` + 幂等键
+- Replay：`replay-envelope-gate`、`replay-rejected-intent`；同 run 幂等 commit
+
+**未覆盖：**
+
+- 聊天编排器统一
+- 持久 AgentRun 表 / Trace API（Phase 4）
+- 被拒 Intent 的产品化 abort UX（提交守卫已够）
 
 ---
 
-### Phase 4 — Tool Policy + Trace
+### Phase 4 — 工具策略 + Trace
 
 | | |
 |--|--|
-| **Status** | **未来规划**（after Week-1 DoD） |
-| **目标** | `ToolSpec` side-effect classes; read-only run traces; short SYSTEM sync |
-| **技术价值** | Policy-as-code for tools; debug model vs tool vs gate |
-| **面试价值** | Tool governance + observability without monitoring-product theater |
-| **明确不做** | Full MCP-in-chat; fancy ops dashboards; changing prepare≠finalize |
+| **状态** | **未来规划**（可选；面试非必须） |
+| **目标** | `ToolSpec` 副作用分级；只读 run Trace；短同步 SYSTEM |
+| **技术价值** | 工具策略即代码；区分模型 / 工具 / Gate 故障 |
+| **面试价值** | 工具治理 + 可观测，不做监控产品戏 |
+| **明确不做** | 全量 MCP 进聊天；花哨运维看板；改动 prepare ≠ finalize |
 
 ---
 
-## Cross-cutting: 明确不做（整条路线）
+## 横切：整条路线明确不做
 
-| Item | Why |
-|------|-----|
-| Mega unified Runtime day one | ADR-0004; cost/risk |
-| Multi-Agent collaboration platform | Dilutes Verified=done |
-| Generic RAG / second brain | Mastery ≠ retrieval |
-| LearnerState authoritative table | ADR-0003 |
+| 项 | 原因 |
+|----|------|
+| 第一天大一统 Runtime | ADR-0004；成本 / 风险 |
+| Multi-Agent 协作平台 | 稀释 Verified = done |
+| 通用 RAG / 第二大脑 | 掌握 ≠ 检索 |
+| LearnerState 权威表 | ADR-0003 |
 | LLM-as-gate / auto-adopt | VISION P7 / P5 |
-| Drill过门 | Product iron law |
-| Web main-path work inside this change | Other OpenSpecs own UX |
-| Gate/schedule formula retune | Frozen for this change |
+| Drill 过门 | 产品铁律 |
+| 本变更内做 Web 主路径 | 其它 OpenSpec 管 UX |
+| 改 Gate / 排程公式 | 本变更冻结 |
 
 ---
 
-## Suggested reading order
+## 建议阅读顺序
 
-1. `docs/SYSTEM.md` — what ships for learners today  
-2. This roadmap — where eng is going  
-3. `docs/implementation-review.md` — why the plan was narrowed  
-4. `openspec/changes/agent-runtime-v2/` — executable tasks  
-5. ADR-0003 / ADR-0004 — non-negotiable decisions  
+1. `docs/SYSTEM.md` — 学习者今日已上线什么  
+2. `docs/ai-engineering-story.md` — 面试收敛稿  
+3. 本路线图 — 工程走到哪  
+4. `docs/implementation-review.md` — 为何收窄计划  
+5. `openspec/changes/agent-runtime-v2/` — 可勾选任务  
+6. ADR-0003 / ADR-0004 — 不可谈判决策  
 
-When a Phase merges, update: `tasks.md` checkboxes → this file status labels →
-`docs/SYSTEM.md` only if onboarding/architecture story drifts.
+某 Phase 合并后：更新 `tasks.md` 勾选 → 本文件状态标签 → 若 onboarding / 架构叙事漂移则改 `docs/SYSTEM.md`。

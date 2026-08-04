@@ -1,208 +1,217 @@
-# Architecture Review — AI Engineering Depth
+# 架构评审 — AI Engineering 深度
 
-> Role lens: AI Application Engineer interviewer · Principal AI Engineer · Agent system architecture reviewer.
->
-> Scope: judge how gotit becomes a competitive **AI Agent Application** — not a chatbot.
->
-> Product north star: long-term technical growth companion
-> (`user state → learn assist → ability assess → long-term memory → continuous feedback`).
->
-> Date: 2026-08-03. Based on `docs/SYSTEM.md`, `docs/PRODUCT.md`, `docs/VISION.md`, and shipped verify/memory/harness design — not a line-by-line code audit.
-
----
-
-## Verdict (one screen)
-
-**Classification:** Agent Application with an **LLM Workflow spine** — not a Chatbot Wrapper; not an open Multi-Agent System.
-
-**Competitive edge:** not “agents that call tools in chat,” but a **auditable mastery state machine** — LLM produces evidence; code owns truth.
-
-**Hardest AI Eng floor already shipped:** LLM cannot unilaterally pass mastery or pollute writeback paths.
-
-**Largest AI Eng gap:** Reliability harness proves *we don’t corrupt state*; we still lack a closed loop that proves *teaching got better* (learner outcomes → agent policy).
+> 视角：AI Application Engineer 面试官 · Principal AI Engineer · Agent 系统架构评审。  
+> 范围：判断 gotit 如何成为有竞争力的 **AI Agent Application** —— 不是聊天机器人。  
+> 产品北星：长期技术成长陪伴  
+> （`用户状态 → 学习协助 → 能力评估 → 长期记忆 → 持续反馈`）。  
+> 日期：2026-08-03。依据 `docs/SYSTEM.md`、`PRODUCT.md`、`VISION.md` 与已上线  
+> verify / memory / harness 设计 —— 非逐行代码审计。  
+> **现状补充：** Agent Runtime V2 **Phase 0–3 已落地**（Replay/Holdout、Snapshot、  
+> EvidencePack、薄 Verify 信封）。详见 `agent-runtime-roadmap.md`、  
+> `ai-engineering-story.md`。
 
 ---
 
-## 1. Agent Architecture
+## 结论（一屏）
 
-### Taxonomy
+**归类：** 带 **LLM Workflow 脊柱** 的 Agent Application —— 不是 Chatbot Wrapper；不是开放 Multi-Agent System。
 
-| Label | Fit |
-|-------|-----|
-| Chatbot Wrapper | No |
-| LLM Workflow | Yes — core spine |
-| Agent Application | Yes — product form |
-| Multi-Agent System | Partial — role cast, not open collaboration platform |
+**竞争优势：** 不是「聊天里能调工具的 Agent」，而是 **可审计的掌握状态机** —— LLM 出证，代码持真相。
 
-**Why:** Multiple named agents, A2A handoff, and a companion tool whitelist sit on top of a **product-defined Verify Workflow**. Autonomy is intentionally short; state transitions are the real “agent.”
+**已上线的最硬 AI Eng 地板：** LLM 不能单方面过掌握门，也不能污染写回路径。
 
-Correct interview phrasing:
+**最大 AI Eng 缺口：** 可靠性 harness 证明「我们不污染状态」；仍缺证明「教得更好了」的闭环（学习者成效 → Agent 策略）。
 
-> Role-specialized agents inside a fixed verify spine.
+---
 
-Incorrect:
+## 1. Agent 架构
 
-> We built a multi-agent system because we have five personas.
+### 分类
 
-### Dimension scorecard
+| 标签 | 贴合度 |
+|------|--------|
+| Chatbot Wrapper | 否 |
+| LLM Workflow | 是 — 核心脊柱 |
+| Agent Application | 是 — 产品形态 |
+| Multi-Agent System | 部分 — 角色分工，非开放协作平台 |
 
-| Dimension | Reality | Depth |
-|-----------|---------|-------|
-| **Planning** | Decomposition lives mostly in product logic: owed queue, plan items, `check_routing`, CAT, spaced review. Companion does not invent multi-step learning plans. | Plans *what to practice*; almost no agent self-planning |
-| **Execution** | Companion tools are largely **prepare-only** (open examine / teach / drill). Mastery close runs through finalize. | Semi-autonomous: can act, cannot alone close mastery |
-| **Tool Calling** | Real: builtin whitelist → `db.ops`; MCP for OpenClaw hosts; full MCP catalog is **not** auto-mounted into chat | Controlled capability, not open tool soup |
-| **State Management** | Strong: claim / mastery / ball custody / day_closed / owed / prepare vs closed | Primary source of “agent feel” |
-| **Reflection** | Critic recheck + `deterministic_gate` (stricter-of-two; score/evidence can only downgrade). Not a free ReAct self-critique loop | Cross-role review + code final judge |
+**原因：** 多名 Agent、A2A 交接、companion 工具白名单，都坐在 **产品定义的 Verify Workflow** 上。自主度刻意短；状态迁移才是真正的「Agent」。
 
-### Architecture diagram (conceptual)
+正确面试表述：
+
+> 固定 verify 脊柱上的角色分工 Agent。
+
+错误表述：
+
+> 我们有五个角色，所以做了 Multi-Agent 系统。
+
+### 维度记分卡
+
+| 维度 | 现实 | 深度 |
+|------|------|------|
+| **Planning** | 分解主要在产品逻辑：欠练队列、计划项、`check_routing`、CAT、间隔复习。Companion 不发明多步学习计划。 | 规划「练什么」；几乎无 Agent 自规划 |
+| **Execution** | Companion 工具多为 **prepare-only**（开考 / 回讲 / 深挖）。掌握闭环走 finalize。 | 半自主：能行动，不能单独关掌握 |
+| **Tool Calling** | 真：内置白名单 → `db.ops`；MCP 给 OpenClaw；全量 MCP **不**自动挂进聊天 | 受控能力，不是开放工具汤 |
+| **State Management** | 强：claim / 掌握 / ball custody / day_closed / owed / prepare vs closed | 「Agent 感」的主来源 |
+| **Reflection** | Critic 复核 + `deterministic_gate`（双人取严；分数/证据只能降级）。不是自由 ReAct 自省环 | 跨角色复核 + 代码终审 |
+
+### 架构图（概念）
 
 ```text
-Learner surface (Chat / workflows / MCP host)
+学习者表面（Chat / 工作流 / MCP host）
         │
         ▼
-Companion agents (identity + tools + handoff)
-        │  prepare / narrate / examine / teach
+Companion Agents（身份 + 工具 + 交接）
+        │  prepare / 叙述 / examine / teach
         ▼
-Verify spine: Axiom → Critic → deterministic_gate
+Verify 脊柱：EvidencePack → Axiom → Critic → WriteIntent
+        │              → deterministic_gate
+        ▼
+单一掌握写路径（write_mastery_outcome）+ run_id 审计
         │
         ▼
-Single mastery write path (write_mastery_outcome)
-        │
-        ▼
-Long-lived learner state (claims, schedule, fail graph, digests)
+跨日学习者状态（claims、排程、失败图、digest）
+        ▲
+Replay / Holdout（gate.sh）锁契约
 ```
 
 ---
 
-## 2. Memory Architecture
+## 2. Memory 架构
 
-**Not** conversation-history-only.  
-**Is** claim-centric long-term learner state; chat is an entry, not the source of truth.
+**不是** 仅靠对话历史。  
+**是** 以 claim 为中心的长期学习者状态；聊天是入口，不是真相源。
 
-| Capability | Present? | Shape |
-|------------|----------|-------|
-| User Profile | Light | resume / prefs / bootcamp / interview — not a thick psychographic |
-| Skill State | Yes (core) | claim mastery, `preferred_check_mode`, due / `next_review_at` |
-| Knowledge State | Yes | notes → claims; authority on claim rows, not chat summaries |
-| Historical Experience | Yes | fail_events, trajectory, failure_digest, confuse edges |
-| Growth Tracking | Yes (explainable) | spaced review, mastery graph, CAT item params, Brief `due_reason_*` |
+| 能力 | 有无 | 形态 |
+|------|------|------|
+| 用户画像 | 轻 | resume / prefs / bootcamp / interview — 非厚心理画像 |
+| 技能状态 | 有（核心） | claim 掌握、`preferred_check_mode`、due / `next_review_at` |
+| 知识状态 | 有 | notes → claims；权威在 claim 行，不在聊天摘要 |
+| 历史经验 | 有 | fail_events、trajectory、failure_digest、confuse 边 |
+| 成长跟踪 | 有（可解释） | 间隔复习、掌握图、CAT 题参、Brief `due_reason_*` |
+| 派生投影 | 有（Phase 2） | `LearnerStateSnapshot`；verify 侧 `EvidencePack` |
 
-### Design ideas that matter
+### 值得讲的设计
 
-1. **Authority split** — mastery / structured fail live on claim / graph; `memory_entries` must not become the mastery oracle.
-2. **Context on a budget** — re-practice injects failure lessons + graph neighbors with hard trim (VISION P4).
-3. **Fail is useful** — misses are first-class state for schedule and re-injection, not disposable logs.
+1. **权威分离** — 掌握 / 结构化失败在 claim / 图；`memory_entries` 不得成为掌握神谕。  
+2. **上下文有预算** — 再练注入失败教训 + 图邻接并硬 trim（VISION P4）；verify 走 EvidencePack。  
+3. **失败有用** — 失误是一等状态，服务排程与再注入，不是一次性日志。
 
-### Honest boundary
+### 诚实边界
 
-This is a **Mastery Graph + Schedule State**, not a full user mental model or open knowledge graph. For a personal growth agent, that is the right cut — not “unfinished RAG.”
-
----
-
-## 3. LLM Reliability
-
-Strongest AI Engineering cut in the project: clearer than most Agent demos.
-
-### Responsibility split
-
-| Concern | Owner |
-|---------|-------|
-| Understand / generate / explain / converse / Critic opinion | LLM |
-| Mastery band / schedule / writeback / CTA routing / item-param update | Code |
-| Authoritative persistence | `write_mastery_outcome` / shared finalize paths |
-
-### Anti-pollution mechanisms (engineering, not prompt theater)
-
-- **Gate is deterministic code, never an LLM** (VISION P7).
-- Critic cannot unilaterally pass; low score / empty evidence **downgrade only**.
-- Companion tools: **prepare ≠ mastery write**; stub without `LLM_API_KEY` does not fake writes.
-- Harness contracts include `no_spurious_write` / `gate_consistent` (and related rollups).
-- REST ↔ MCP share `db.ops` + the same finalize path — reduces dual-path drift.
-
-**Judgment:** LLM owns generation; code owns truth.  
-Remaining risk is **upstream generative validity** (does the probe actually test the claim?) — not uncontrolled state mutation. That is the next layer, not an unfinished floor.
+这是 **Mastery Graph + Schedule State**，不是完整用户心智模型或开放知识图谱。对个人成长 Agent，这是正确切口 —— 不是「没做完的 RAG」。
 
 ---
 
-## 4. Evaluation System
+## 3. LLM 可靠性
 
-| Kind | Status |
-|------|--------|
-| Rule-based | Yes — gate, schedule, routing, gate signals, CAT params |
-| LLM judge | Yes — Critic as **advisor**, not final court |
-| User feedback | Yes — mastery chips / Done bar / harness `adopt\|observe\|reject` |
-| Quality metrics | Partial — harness rollups offline; weak online learner-outcome loop |
+项目里最硬的 AI Engineering 切口：比多数 Agent Demo 更清晰。
 
-### What this already buys
+### 责任切分
 
-“Will the system corrupt mastery?” becomes a **regression contract** — rare maturity for Agent Applications.
+| 关切 | 归属 |
+|------|------|
+| 理解 / 生成 / 讲解 / 对话 / Critic 意见 | LLM |
+| 掌握档 / 排程 / 写回 / CTA 路由 / 题参更新 | Code |
+| 权威持久化 | `write_mastery_outcome` / 共享 finalize |
+| 提案装信封 | WriteIntent（无写权直至 Gate 接受） |
 
-### What absence costs
+### 防腐机制（工程，不是 prompt 戏）
 
-1. **Safe ≠ effective** — gate consistency does not prove the learner was taught.
-2. Adopt remains audit-only — evolution has discipline, not yet evidence-driven auto-strengthen.
-3. Hard interview question unanswered: *How do you know Axiom got better last month?*
+- **Gate 是确定性代码，永不交给 LLM**（VISION P7）。  
+- Critic 不能单方面过关；低分 / 空证据 **只能降级**。  
+- Companion 工具：**prepare ≠ 掌握写**；无 `LLM_API_KEY` 的 stub 不假写。  
+- Harness 契约含 `no_spurious_write` / `gate_consistent` 等；**replay + holdout 进 CI**。  
+- REST ↔ MCP 共享 `db.ops` + 同一 finalize —— 降低双路径漂移。
+
+**判断：** LLM 管生成；代码管真相。  
+剩余风险是 **上游生成效度**（探针是否真测该 claim）—— 不是失控状态突变。那是下一层，不是未完工的地板。
 
 ---
 
-## 5. Design-thought comparison with clowder-ai
+## 4. 评测体系
 
-Reference: [clowder-ai](https://github.com/zts212653/clowder-ai).  
-**No feature checklist. No code compare.** Design ideology only.
+| 类型 | 状态 |
+|------|------|
+| 规则型 | 有 — gate、排程、路由、gate 信号、CAT 参数 |
+| LLM 评判 | 有 — Critic 是 **顾问**，不是终审庭 |
+| 用户反馈 | 有 — 掌握芯片 / Done 条 / harness `adopt\|observe\|reject` |
+| 质量指标 | 部分 — harness 离线 rollup；线上学习者成效环弱 |
+| 契约回归 | **有（Phase 1）** — Replay + Holdout + `suite_version` |
+
+### 已买到什么
+
+「系统会不会污染掌握？」变成 **可回归契约** —— Agent Application 少见成熟度。
+
+### 缺席的代价
+
+1. **安全 ≠ 有效** — gate 一致不证明学习者被教会。  
+2. Adopt 仍仅审计 — 演进有纪律，尚无证据驱动的自动加强。  
+3. 硬面试题未答：*你怎么知道上月 Axiom 变强了？*
+
+---
+
+## 5. 与 clowder-ai 的设计思想对照
+
+参考：[clowder-ai](https://github.com/zts212653/clowder-ai)。  
+**不做功能清单。不做代码对比。** 只比设计意识形态。
 
 | | Clowder | Gotit |
 |---|---------|-------|
-| North star | Platform that turns isolated models into a **collaborating team** | Verify loop that turns “feels fluent” into **schedulable mastery state** |
-| Floor slogan | Models set the ceiling; platform sets the floor | Verified = done; gate is code |
-| Memory | Institutional evidence / lessons / decisions for co-creation | Claim / fail / schedule authority for growth |
+| 北星 | 把孤立模型变成 **协作团队** 的平台 | 把「感觉流利」变成 **可排程掌握态** 的 verify 环 |
+| 地板口号 | 模型定天花板；平台定地板 | Verified = done；Gate 是代码 |
+| 记忆 | 共创用的机构证据 / 教训 / 决策 | 成长用的 claim / 失败 / 排程权威 |
 
-### Worth borrowing
+### 值得借鉴
 
-1. **Three-layer split** — model reasons; platform owns memory, discipline, identity.
-2. **Stable persona serves stable judgment** — character is a rubric anchor, not cosplay.
-3. **Evidence as institutional memory** — fail→lesson→recheck is the same family as shared lessons/decision logs.
-4. **Eval-before-adopt** — prompt/skill change needs holdout evidence (VISION P5); push further toward explicit contracts.
-5. **Hard rails in code** — iron laws enforced by system, not model obedience.
+1. **三层切分** — 模型推理；平台持记忆、纪律、身份。  
+2. **稳定人格服务稳定判断** — 角色是 rubric 锚，不是 cosplay。  
+3. **证据即机构记忆** — fail→lesson→再考 与共享教训 / 决策日志同族。  
+4. **Adopt 前先评测** — prompt/skill 改动要有 holdout 证据（VISION P5）；已向显式契约推进。  
+5. **硬轨在代码** — 铁律由系统执行，不靠模型听话。
 
-### Do not copy
+### 不要照抄
 
-1. **Open multi-agent collab platform** — gotit’s domain is mastery, not “idea → product” team OS; copying dilutes Verified=done.
-2. **Raising agent planning autonomy as the default** — conflicts with the product stance of not lengthening agent autonomy for its own sake.
-3. **Self-evolution as the hero story** — grow the learner’s state first; agent self-improvement is secondary.
-4. **“Dumb system + smart agent” open knowledge search as mastery authority** — gotit needs code-held truth for pass/fail.
-5. **CVO / co-creation team metaphor** — the learner needs an honest examiner + steady companion, not a software cat crew.
-
----
-
-## 6. Final evaluation
-
-### Most valuable technical story (one line)
-
-**Through an “LLM evidence → Critic recheck → deterministic gate → single mastery writeback” verify spine, gotit turns a stateless generator into a cross-day, pollution-resistant learner mastery state machine — chat is the shell; mastery is the truth.**
-
-### Largest technical shortfall (AI Engineering, not feature laundry)
-
-**Missing learner-outcome → agent-policy measurement loop.**
-
-Offline harness can prove *we don’t corrupt state*, but cannot continuously answer *did teaching improve* — probe validity, check-mode routing quality, and whether lesson injection raises re-pass rates are not yet online evidence that drives policy/prompt evolution.
-
-That is the gap between:
-
-- a highly disciplined verify-workflow product, and
-- a growth Agent Application that can **prove it is getting stronger**.
+1. **开放 Multi-Agent 协作平台** — gotit 域是掌握，不是「想法→产品」团队 OS；照抄稀释 Verified = done。  
+2. **默认拉高 Agent 规划自主度** — 与「不为自主而自主」的产品立场冲突。  
+3. **把自我进化当英雄故事** — 先长学习者状态；Agent 自改进是次要。  
+4. **「笨系统 + 聪明 Agent」开放检索当掌握权威** — gotit 需要代码持有过关真相。  
+5. **CVO / 共创团队隐喻** — 学习者需要诚实考官 + 稳定陪伴，不是软件猫班底。
 
 ---
 
-## Competitive path (keep the iron laws)
+## 6. 终评
 
-Do not weaken:
+### 最有价值的技术故事（一句）
 
-- Gate stays in code.
-- Mastery stays in authoritative state.
-- Agents stay bounded (prepare vs finalize).
+**经「LLM 出证 → Critic 复核 → 确定性 Gate → 单一掌握写回」的 verify 脊柱，gotit 把无状态生成器变成跨日、抗污染的学习者掌握状态机 —— 聊天是壳，掌握是真相；Replay/Holdout 与薄信封把这一地板做成可 CI 回归的工程。**
 
-Next cut:
+### 最大技术短板（AI Engineering，不是功能洗衣单）
 
-> Extend harness from **anti-corruption** to **anti-ineffectiveness** — bind retention / re-pass / due-clearance signals back into routing, injection budget, and examiner/critic policy.
+**缺学习者成效 → Agent 策略的度量闭环。**
 
-That is the AI-native story that separates gotit from chatbots and from general multi-agent platforms.
+离线 harness 能证明 *我们不污染状态*，但不能持续回答 *教得是否更好* —— 探针效度、check-mode 路由质量、教训注入是否提高再过率，尚未成为驱动策略 / prompt 演进的线上证据。
+
+那是：
+
+- 高度自律的 verify-workflow 产品，与  
+- 能 **证明自己在变强** 的成长 Agent Application  
+
+之间的鸿沟。
+
+---
+
+## 竞争路径（守住铁律）
+
+不可削弱：
+
+- Gate 留在代码。  
+- 掌握留在权威状态。  
+- Agent 边界清晰（prepare vs finalize）。
+
+下一刀：
+
+> 把 harness 从 **防腐** 扩到 **防无效** —— 把留存 / 再过 / 清欠信号绑回路由、注入预算与考官 / Critic 策略。
+
+这才是把 gotit 从聊天机器人和通用 Multi-Agent 平台里拉开的 AI Native 故事。  
+（Phase 4 的 ToolSpec / Trace 是打磨，不是这条主论点。）

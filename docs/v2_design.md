@@ -4,7 +4,14 @@
 > **非目标：** 普通业务功能、产品增长、页面功能堆砌。  
 > **北星：** 证明 AI Native Engineering 能力——不是功能更多。  
 > 锚定：`docs/SYSTEM.md`（现状）、`docs/PRODUCT.md` / `docs/VISION.md`（硬约束）。  
-> 起草：2026-08-03。
+> 起草：2026-08-03。  
+>  
+> **状态（2026-08-03）：** 本文是早期 **设计草图**。执行权威已收窄为  
+> `openspec/changes/agent-runtime-v2/` + ADR-0003/0004。  
+> **Phase 0–3 已落地**（Replay/Holdout、Snapshot、EvidencePack、薄 Verify 信封）；  
+> **未做** 文中部分大一统 Runtime / 全 LLM 入口吃 Pack / 产品 Trace。  
+> 以代码与 `docs/implementation-review.md`、`docs/agent-runtime-roadmap.md`、  
+> `docs/ai-engineering-story.md` 为准；本文勿当「已全部实现」清单。
 
 ---
 
