@@ -1,13 +1,19 @@
-"""Unified examine-context budget (framework-free; VISION P4).
+"""Unified examine-context budget + EvidencePack compiler (VISION P4).
 
 Graph block (depends / confuse / fail) and failure-lesson block each have
-per-block caps; ``compose_examine_context`` enforces a combined ``total_max``
-so the two never silently stack past the examiner budget.
+per-block caps; ``compose_examine_context`` / ``compile_evidence_pack`` enforce
+a combined ``total_max`` so the two never silently stack past the examiner
+budget.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
+from typing import Literal
+from uuid import UUID
+
+EvidenceRecipe = Literal["probe", "teach_back", "chat_light"]
 
 
 @dataclass(frozen=True)
@@ -29,6 +35,35 @@ class ContextBlocks:
     budget_block: str | None
     failure_lesson_block: str | None
     trim_signals: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EvidenceBlock:
+    """One budgeted context chunk (post-trim text)."""
+
+    kind: str  # claim | confuse | lesson | plan | source | history
+    text: str
+    priority: int
+    chars: int
+
+
+@dataclass(frozen=True)
+class EvidencePack:
+    """Compiled, hashable context for one verify LLM call.
+
+    ``budget_block`` / ``failure_lesson_block`` mirror ``ContextBlocks`` for
+    existing axiom/echo call sites.
+    """
+
+    recipe: EvidenceRecipe
+    claim_id: UUID | None
+    blocks: tuple[EvidenceBlock, ...]
+    budget: ContextBudget
+    trim_signals: tuple[str, ...]
+    pack_hash: str
+    budget_block: str | None
+    failure_lesson_block: str | None
+    snapshot_fingerprint: str | None = None
 
 
 def _clip(text: str, max_chars: int) -> str:
@@ -105,3 +140,91 @@ def compose_examine_context(
         failure_lesson_block=lesson,
         trim_signals=signals,
     )
+
+
+def evidence_pack_hash(
+    *,
+    recipe: str,
+    claim_id: UUID | None,
+    budget_block: str | None,
+    failure_lesson_block: str | None,
+    trim_signals: list[str] | tuple[str, ...],
+    snapshot_fingerprint: str | None = None,
+) -> str:
+    """Deterministic pack id for replay / audit (not cryptographic secrecy)."""
+    parts = [
+        recipe,
+        str(claim_id) if claim_id else "",
+        budget_block or "",
+        failure_lesson_block or "",
+        "|".join(trim_signals),
+        snapshot_fingerprint or "",
+    ]
+    raw = "\n".join(parts)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+
+def compile_evidence_pack(
+    *,
+    recipe: EvidenceRecipe,
+    claim_id: UUID | None,
+    graph_block: str | None,
+    lesson_block: str | None,
+    budget: ContextBudget = DEFAULT_CONTEXT_BUDGET,
+    snapshot_fingerprint: str | None = None,
+    claim_text: str | None = None,
+) -> EvidencePack:
+    """Compile graph + lesson (+ optional claim) into a hashable EvidencePack.
+
+    Trim policy delegates to ``compose_examine_context`` (lessons before graph).
+    """
+    # teach_back: still budget lessons; graph optional (may be None).
+    composed = compose_examine_context(graph_block, lesson_block, budget=budget)
+    blocks: list[EvidenceBlock] = []
+    if claim_text and claim_text.strip():
+        text = claim_text.strip()
+        blocks.append(
+            EvidenceBlock(kind="claim", text=text, priority=0, chars=len(text))
+        )
+    if composed.budget_block:
+        blocks.append(
+            EvidenceBlock(
+                kind="confuse",
+                text=composed.budget_block,
+                priority=1,
+                chars=len(composed.budget_block),
+            )
+        )
+    if composed.failure_lesson_block:
+        blocks.append(
+            EvidenceBlock(
+                kind="lesson",
+                text=composed.failure_lesson_block,
+                priority=2,
+                chars=len(composed.failure_lesson_block),
+            )
+        )
+    signals = tuple(composed.trim_signals)
+    digest = evidence_pack_hash(
+        recipe=recipe,
+        claim_id=claim_id,
+        budget_block=composed.budget_block,
+        failure_lesson_block=composed.failure_lesson_block,
+        trim_signals=signals,
+        snapshot_fingerprint=snapshot_fingerprint,
+    )
+    return EvidencePack(
+        recipe=recipe,
+        claim_id=claim_id,
+        blocks=tuple(blocks),
+        budget=budget,
+        trim_signals=signals,
+        pack_hash=digest,
+        budget_block=composed.budget_block,
+        failure_lesson_block=composed.failure_lesson_block,
+        snapshot_fingerprint=snapshot_fingerprint,
+    )
+
+
+# Back-compat alias used in design docs / OpenSpec wording.
+build_evidence_pack = compile_evidence_pack

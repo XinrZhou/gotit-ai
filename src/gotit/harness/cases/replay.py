@@ -273,11 +273,22 @@ def _case_context_trim_keeps_graph() -> Case:
     """6. Context trim: over budget → lessons shrink/drop; graph preferred."""
 
     async def runner() -> CaseResult:
+        from gotit.core.context_budget import compile_evidence_pack
+
         graph = "G" * 500
         lesson = "L" * 500
         blocks = compose_examine_context(
             graph,
             lesson,
+            budget=ContextBudget(
+                graph_max_chars=600, lesson_max_chars=600, total_max_chars=900
+            ),
+        )
+        pack = compile_evidence_pack(
+            recipe="probe",
+            claim_id=None,
+            graph_block=graph,
+            lesson_block=lesson,
             budget=ContextBudget(
                 graph_max_chars=600, lesson_max_chars=600, total_max_chars=900
             ),
@@ -295,6 +306,8 @@ def _case_context_trim_keeps_graph() -> Case:
                 or "lesson_trimmed_for_total" in blocks.trim_signals
                 or (lesson_text is not None and len(lesson_text) < 500)
             )
+            and bool(pack.pack_hash)
+            and pack.trim_signals == tuple(blocks.trim_signals)
         )
         return CaseResult(
             passed=ok,
@@ -303,8 +316,9 @@ def _case_context_trim_keeps_graph() -> Case:
                 "graph_chars": len(graph_text),
                 "lesson_chars": len(lesson_text) if lesson_text else 0,
                 "total": total,
+                "pack_hash": pack.pack_hash,
             },
-            trace=[{"signals": list(blocks.trim_signals)}],
+            trace=[{"signals": list(blocks.trim_signals), "pack_hash": pack.pack_hash}],
         )
 
     return Case(
@@ -315,18 +329,63 @@ def _case_context_trim_keeps_graph() -> Case:
     )
 
 
-def _case_idempotent_status(session: AsyncSession) -> Case:
-    """7. Double commit with same passed gate → status stays mastered (no corruption).
-
-    Phase 3 may add idempotency keys; today we lock status stability under
-    repeated ``write_mastery_outcome`` / finalize.
-    """
+def _case_pack_hash_stable(session: AsyncSession) -> Case:
+    """EvidencePack hash stable for identical claim context (Phase 2)."""
 
     async def runner() -> CaseResult:
+        from gotit.db.ops.evidence import build_evidence_pack_for_claim
+
+        claim_id = await seed_claim(
+            session, user_id=_USER, text="Replay: pack hash stability."
+        )
+        p1 = await build_evidence_pack_for_claim(
+            session,
+            claim_id=claim_id,
+            user_id=_USER,
+            topic="replay",
+            recipe="probe",
+            claim_text="Replay: pack hash stability.",
+        )
+        p2 = await build_evidence_pack_for_claim(
+            session,
+            claim_id=claim_id,
+            user_id=_USER,
+            topic="replay",
+            recipe="probe",
+            claim_text="Replay: pack hash stability.",
+        )
+        ok = p1.pack_hash == p2.pack_hash and bool(p1.pack_hash)
+        return CaseResult(
+            passed=ok,
+            metrics={
+                "pack_hash": p1.pack_hash,
+                "trim": list(p1.trim_signals),
+                "fingerprint": p1.snapshot_fingerprint,
+            },
+            trace=[{"claim_id": str(claim_id), "hash": p1.pack_hash}],
+        )
+
+    return Case(
+        case_id="replay-pack-hash-stable",
+        case_type="replay_pack",
+        layer="system",
+        runner=runner,
+    )
+
+
+def _case_idempotent_status(session: AsyncSession) -> Case:
+    """7. Same run_id commit twice → second is idempotent (no double mastery write)."""
+
+    async def runner() -> CaseResult:
+        from uuid import uuid4
+
+        from gotit.db.ops.memory import list_trajectory
+
         claim_id = await seed_claim(
             session, user_id=_USER, text="Replay: idempotent status."
         )
         settings = stub_settings()
+        run_id = uuid4()
         kwargs: dict[str, Any] = {
             "claim_id": claim_id,
             "claim_text": "Replay: idempotent status.",
@@ -336,16 +395,30 @@ def _case_idempotent_status(session: AsyncSession) -> Case:
             "examine_evidence": "stable evidence for pass gate",
             "user_id": _USER,
             "settings": settings,
+            "run_id": run_id,
         }
         out1 = await finalize_examine_with_gate(session, **kwargs)
         status1 = await claim_status(session, claim_id)
+        traj1 = await list_trajectory(
+            session, user_id=_USER, claim_id=claim_id, limit=20
+        )
         out2 = await finalize_examine_with_gate(session, **kwargs)
         status2 = await claim_status(session, claim_id)
+        traj2 = await list_trajectory(
+            session, user_id=_USER, claim_id=claim_id, limit=20
+        )
+        r1 = out1.get("commit_receipt") or {}
+        r2 = out2.get("commit_receipt") or {}
         ok = (
             out1["gate_verdict"] == "passed"
             and out2["gate_verdict"] == "passed"
             and status1 == MasteryStatus.MASTERED.value
             and status2 == MasteryStatus.MASTERED.value
+            and out1.get("run_id") == str(run_id)
+            and bool(r1.get("written"))
+            and r2.get("idempotent") is True
+            and r2.get("written") is False
+            and len(traj2) == len(traj1)  # no second trajectory row
         )
         return CaseResult(
             passed=ok,
@@ -353,14 +426,138 @@ def _case_idempotent_status(session: AsyncSession) -> Case:
                 "rollup": "no_spurious_write",
                 "status1": status1,
                 "status2": status2,
+                "traj_n": len(traj2),
+                "idempotent": r2.get("idempotent"),
             },
-            trace=[{"claim_id": str(claim_id)}],
+            trace=[{"claim_id": str(claim_id), "run_id": str(run_id)}],
         )
 
     return Case(
         case_id="replay-idempotent-commit",
         case_type="replay_idempotent",
         layer="system",
+        runner=runner,
+    )
+
+
+def _case_envelope_intent_through_gate(session: AsyncSession) -> Case:
+    """WriteIntent proposals must go through gate; run_id on receipt + trajectory."""
+
+    async def runner() -> CaseResult:
+        from gotit.db.ops.memory import list_trajectory
+
+        claim_id = await seed_claim(
+            session, user_id=_USER, text="Replay: envelope gate path."
+        )
+        settings = stub_settings()
+        out = await finalize_examine_with_gate(
+            session,
+            claim_id=claim_id,
+            claim_text="Replay: envelope gate path.",
+            topic="replay",
+            examine_verdict="passed",
+            examine_score=0.2,
+            examine_evidence="enough evidence characters here",
+            user_id=_USER,
+            settings=settings,
+        )
+        intent = out.get("write_intent") or {}
+        receipt = out.get("commit_receipt") or {}
+        traj = await list_trajectory(
+            session, user_id=_USER, claim_id=claim_id, limit=5
+        )
+        status = await claim_status(session, claim_id)
+        # LLM proposed passed+score; gate must downgrade → almost, not mastered.
+        gate_dump = intent.get("gate") or {}
+        ok = (
+            intent.get("examine_verdict") == "passed"
+            and intent.get("status") == "accepted"
+            and gate_dump.get("verdict") == "almost"
+            and out["gate_verdict"] == "almost"
+            and status != MasteryStatus.MASTERED.value
+            and bool(out.get("run_id"))
+            and str(receipt.get("run_id")) == str(out.get("run_id"))
+            and receipt.get("written") is True
+            and bool(traj)
+            and traj[0].content.get("run_id") == out.get("run_id")
+        )
+        return CaseResult(
+            passed=ok,
+            metrics={
+                "rollup": "gate_consistent",
+                "gate": out["gate_verdict"],
+                "run_id": out.get("run_id"),
+            },
+            trace=[{"claim_id": str(claim_id), "intent": intent.get("status")}],
+        )
+
+    return Case(
+        case_id="replay-envelope-gate",
+        case_type="replay_envelope",
+        layer="system",
+        runner=runner,
+    )
+
+
+def _case_rejected_intent_no_write(session: AsyncSession) -> Case:
+    """Rejected WriteIntent must not call mastery write."""
+
+    async def runner() -> CaseResult:
+        from gotit.core.agent_run import (
+            evaluate_write_intent,
+            intent_may_commit,
+            new_agent_run,
+            propose_write_intent,
+            reject_write_intent,
+        )
+        from gotit.db.ops.claim import write_mastery_outcome
+
+        claim_id = await seed_claim(
+            session, user_id=_USER, text="Replay: rejected intent."
+        )
+        before = await claim_status(session, claim_id)
+        run = new_agent_run(user_id=_USER, claim_id=claim_id, kind="verify")
+        intent = propose_write_intent(
+            run,
+            claim_id=claim_id,
+            examine_verdict="passed",
+            recheck_verdict="passed",
+            examine_score=0.9,
+            examine_evidence="enough evidence characters here",
+        )
+        intent = evaluate_write_intent(intent)
+        rejected = reject_write_intent(intent, reason="test_reject")
+        may = intent_may_commit(rejected)
+        # Simulate commit guard used by finalize — must not write.
+        if may:
+            await write_mastery_outcome(
+                session,
+                claim_id,
+                verdict="passed",
+                source="harness",
+                user_id=_USER,
+            )
+        after = await claim_status(session, claim_id)
+        ok = (
+            may is False
+            and rejected.status == "rejected"
+            and before == after
+            and after != MasteryStatus.MASTERED.value
+        )
+        return CaseResult(
+            passed=ok,
+            metrics={
+                "rollup": "no_spurious_write",
+                "may_commit": may,
+                "status": after,
+            },
+            trace=[{"claim_id": str(claim_id), "reason": rejected.reject_reason}],
+        )
+
+    return Case(
+        case_id="replay-rejected-intent",
+        case_type="replay_envelope",
+        layer="loop",
         runner=runner,
     )
 
@@ -520,7 +717,10 @@ def build_replay_cases(session: AsyncSession) -> list[Case]:
         _case_prepare_only_no_mastery(session),
         _case_stub_llm_no_pollution(session),
         _case_context_trim_keeps_graph(),
+        _case_pack_hash_stable(session),
         _case_idempotent_status(session),
+        _case_envelope_intent_through_gate(session),
+        _case_rejected_intent_no_write(session),
         _case_entry_parity(session),
         _case_low_score_blocks_pass(session),
     ]

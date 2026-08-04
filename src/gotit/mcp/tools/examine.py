@@ -117,28 +117,21 @@ async def gotit_examine(
             )
         else:
             async with session_scope() as session:
-                from gotit.db.ops.graph import build_budget_subgraph
-                from gotit.db.ops.memory import build_failure_lesson_block
-
                 lesson_block: str | None = None
                 budget_block: str | None = None
                 if claims:
                     focus = claims[0]
-                    budget = await build_budget_subgraph(
-                        session, user_id=user_id, claim_id=focus.id
-                    )
-                    budget_block = budget.prompt_block
-                    neighbor_ids = list(budget.confused_claim_ids)
-                    for c in claims[1:]:
-                        if c.id not in neighbor_ids:
-                            neighbor_ids.append(c.id)
-                    lesson_block = await build_failure_lesson_block(
+                    pack = await day_ops.build_evidence_pack_for_claim(
                         session,
-                        user_id=user_id,
                         claim_id=focus.id,
+                        user_id=user_id,
                         topic=topic or focus.topic,
-                        neighbor_claim_ids=neighbor_ids,
+                        recipe="probe",
+                        claim_text=focus.text,
+                        neighbor_claim_ids=[c.id for c in claims[1:]],
                     )
+                    budget_block = pack.budget_block
+                    lesson_block = pack.failure_lesson_block
                 prompt = await SessionPromptReader(session).get_active_prompt("axiom")
                 system_prompt = prompt.system_prompt if prompt else ""
                 reader = SessionMemoryReader(session, user_id=user_id)
@@ -272,18 +265,13 @@ async def gotit_examine(
         claim = await session.get(ClaimRow, UUID(claim_id))
         if claim is None or claim.user_id != user_id:
             return {"error": f"claim not found: {claim_id}"}
-        from gotit.db.ops.graph import build_budget_subgraph
-        from gotit.db.ops.memory import build_failure_lesson_block
-
-        budget = await build_budget_subgraph(
-            session, user_id=user_id, claim_id=UUID(claim_id)
-        )
-        lesson_block = await build_failure_lesson_block(
+        pack = await day_ops.build_evidence_pack_for_claim(
             session,
-            user_id=user_id,
             claim_id=UUID(claim_id),
+            user_id=user_id,
             topic=claim.topic,
-            neighbor_claim_ids=budget.confused_claim_ids,
+            recipe="probe",
+            claim_text=claim.text,
         )
         prompt = await SessionPromptReader(session).get_active_prompt("axiom")
         system_prompt = prompt.system_prompt if prompt else ""
@@ -295,8 +283,8 @@ async def gotit_examine(
             claim_text=claim.text,
             history=history or [],
             answer=answer,
-            budget_block=budget.prompt_block,
-            failure_lesson_block=lesson_block,
+            budget_block=pack.budget_block,
+            failure_lesson_block=pack.failure_lesson_block,
         )
 
     writeback = None

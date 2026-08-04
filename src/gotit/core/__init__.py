@@ -1,5 +1,6 @@
 """Domain types and verify-loop primitives (framework-free)."""
 
+from gotit.core.learner_state import LearnerStateSnapshot, assemble_learner_state
 from gotit.core.loop import VerifyWorkflow, deterministic_gate
 from gotit.core.models import (
     CheckMode,
@@ -22,6 +23,7 @@ __all__ = [
     "CheckResult",
     "DayNoteView",
     "DayPlanView",
+    "LearnerStateSnapshot",
     "LoopState",
     "MasterySnapshot",
     "MasteryStatus",
@@ -30,5 +32,6 @@ __all__ = [
     "PlanItemView",
     "TodayView",
     "VerifyWorkflow",
+    "assemble_learner_state",
     "deterministic_gate",
 ]

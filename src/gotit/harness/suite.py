@@ -7,6 +7,6 @@ adopt decisions. Audit-only — does not auto-apply prompts.
 from __future__ import annotations
 
 # Stamp on harness run summary + human adopt|observe|reject.
-SUITE_VERSION = "2026.08.03.agent-runtime-v2.phase1"
+SUITE_VERSION = "2026.08.03.agent-runtime-v2.phase3"
 
 __all__ = ["SUITE_VERSION"]

@@ -86,11 +86,14 @@ async def append_trajectory(
     score: float | None = None,
     reason: str | None = None,
     source_kind: str | None = None,
+    run_id: UUID | str | None = None,
+    idempotency_key: str | None = None,
 ) -> MemoryEntry:
     """Record one verify/calib outcome as a trajectory entry (audit line).
 
     Not the mastery authority — ClaimRow is. ``source_kind`` is verify |
-    calibration when known.
+    calibration when known. ``run_id`` / ``idempotency_key`` are optional
+    Phase-3 envelope audit fields (no schema migration).
     """
     content: dict[str, Any] = {
         "claim_id": str(claim_id),
@@ -101,6 +104,10 @@ async def append_trajectory(
     }
     if source_kind:
         content["source"] = source_kind
+    if run_id is not None:
+        content["run_id"] = str(run_id)
+    if idempotency_key:
+        content["idempotency_key"] = idempotency_key
     return await add_memory(
         session,
         user_id=user_id,
@@ -146,6 +153,17 @@ def count_prior_failures(trajectory: list[MemoryEntry], *, claim_id: UUID) -> in
         for e in trajectory
         if e.source.get("claim_id") == key
         and (e.content.get("gate_verdict") or e.content.get("verdict")) == "owe_next"
+    )
+
+
+def trajectory_has_idempotency_key(
+    trajectory: list[MemoryEntry],
+    *,
+    idempotency_key: str,
+) -> bool:
+    """True if an audit trajectory row already carries this commit key."""
+    return any(
+        e.content.get("idempotency_key") == idempotency_key for e in trajectory
     )
 
 

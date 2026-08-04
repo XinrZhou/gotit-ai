@@ -23,21 +23,21 @@
 
 ## Phase 2 — LearnerStateSnapshot + EvidencePack
 
-- [ ] `core/learner_state.py`: `LearnerStateSnapshot` + `build_learner_state`
-- [ ] Unit tests: mastery/owed/fingerprint change without LLM
-- [ ] Extend `context_budget` → `EvidencePack` + `build_evidence_pack` + `pack_hash`
-- [ ] Migrate verify callers only: `verify_attempt`, examine/teach routes, MCP
+- [x] `core/learner_state.py`: `LearnerStateSnapshot` + `build_learner_state`
+- [x] Unit tests: mastery/owed/fingerprint change without LLM
+- [x] Extend `context_budget` → `EvidencePack` + `build_evidence_pack` + `pack_hash`
+- [x] Migrate verify callers only: `verify_attempt`, examine/teach routes, MCP
       examine/teach — no hand-rolled graph/lesson join
-- [ ] Replay asserts `pack_hash_stable` / trim-class signals where applicable
-- [ ] Chat orchestrator **unchanged** behavior
+- [x] Replay asserts `pack_hash_stable` / trim-class signals where applicable
+- [x] Chat orchestrator **unchanged** behavior
 
 ## Phase 3 — Verify Run envelope (optional Week-1 stretch)
 
-- [ ] `core/agent_run.py`: `AgentRun` / `WriteIntent` / `CommitReceipt` types
-- [ ] Wrap `finalize_examine_with_gate`: propose → evaluate → commit
-- [ ] Persist `run_id` on mastery-related audit; idempotent commit key
-- [ ] Replay asserts WriteIntent ↔ GateResult ↔ DB effect
-- [ ] Do **not** unify `chat_orchestrator`
+- [x] `core/agent_run.py`: `AgentRun` / `WriteIntent` / `CommitReceipt` types
+- [x] Wrap `finalize_examine_with_gate`: propose → evaluate → commit
+- [x] Persist `run_id` on mastery-related audit; idempotent commit key
+- [x] Replay asserts WriteIntent ↔ GateResult ↔ DB effect
+- [x] Do **not** unify `chat_orchestrator`
 
 ## Phase 4 — Tool / Obs (after Week-1; same change folder OK)
 
@@ -48,9 +48,11 @@
 
 ## Docs / gate (ongoing)
 
-- [ ] Phase 1–2 complete → SYSTEM excerpt only if behavior/onboarding story drifts
-- [ ] Archive this change when Phases 1–2 (and optional 3) accepted — before
-      mega-commit; prefer split commits per Implementation Review
+- [x] Phase 1–3 complete → `docs/SYSTEM.md` 已同步 Runtime V2 / Snapshot / Pack / 信封
+- [x] 收敛文档中文化并纠偏：`ai-engineering-story` / roadmap / implementation-review /
+      architecture_review / project_analysis；`v2_design` 标明草图地位
+- [ ] Archive this change when Phases 1–3 accepted — before mega-commit;
+      prefer split commits per Implementation Review
 
 ## Out / never in this change
 

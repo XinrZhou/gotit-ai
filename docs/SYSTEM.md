@@ -33,6 +33,9 @@ Learner empty states: owed → brief is primary; idle →「添加资料」is pr
 旁路（入口不强化）：弱点图谱、顶栏动态、Settings（我/提醒/高级）、
 Apple 桥（日计划↔提醒事项；面试↔日历）、Harness API/CLI、CAT 题参写回。当前波次：
 - UX / 主路径摩擦：`openspec/changes/main-path-converge/`（作者自管）
+- Agent Runtime V2（eng）：`openspec/changes/agent-runtime-v2/` —
+  Phase 0–3 done（Replay/Holdout + Snapshot/Pack + Verify Run envelope）；
+  Phase 4 ToolSpec/Trace optional
 - 状态边界收紧：`openspec/changes/state-boundary-tighten/`
 - 弱点图谱加深：`openspec/changes/mastery-graph-deepen/`
 - 设置 IA + 动态删除：`openspec/changes/settings-ia-shell-activity/`
@@ -137,6 +140,19 @@ Memory write model:
 `prior_failures` / due fail severity / Brief「曾挂过」: trajectory `owe_next`
 counts only. Graph / obs node sizing uses `fail_event_count` (= `fail_events`
 rows for almost|owe_next); meta keeps alias `fail_count` for older UI.
+
+**LearnerStateSnapshot** (derived read model, ADR-0003):
+`db.ops.build_learner_state` — owed / weak clusters / confusions / failure
+lessons / light prefs + `context_fingerprint`. Not a mastery write table.
+
+**EvidencePack** (verify context): `db.ops.build_evidence_pack_for_claim` →
+budgeted graph+lesson blocks + `pack_hash`. Examine/teach/thread-verify LLM
+entry points use Pack; chat orchestrator still assembles separately.
+
+**Verify Run envelope** (ADR-0004): `finalize_examine_with_gate` creates
+`AgentRun` → `WriteIntent` (LLM proposals) → `deterministic_gate` → commit via
+`write_mastery_outcome`. Returns `run_id` / `commit_receipt`; trajectory stores
+`run_id` + `idempotency_key`. No new authoritative run table.
 `/v1/today` adds `mastery_snapshot` + plan-item `due_reason_*`;
 interview_focus / bootcamp carry `lane`.
 
@@ -350,7 +366,8 @@ Five-question check (after this tighten):
 - Rich profile / full KG store beyond mastery confuse + light `depends_on`
 - User-facing harness holdout UI (API/CLI only; Settings tab was wrong surface)
 - Auto prompt/skill register on harness `adopt` (decision is audit-only today)
-- Dedicated LLM holdout case set beyond `dev`/`gold` matrices
+- Chat consuming LearnerStateSnapshot / EvidencePack (verify path only today)
+- ToolSpec registry / read-only run Trace API (Phase 4)
 - Compass LLM auto-tag of `preferred_check_mode` (ingest heuristics only)
 - Item-param update using per-learner θ (v1 uses fixed θ=3 surprise reference)
 

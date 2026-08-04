@@ -34,22 +34,19 @@ async def run_verify_attempt(
 
     Returns examine/recheck/gate/writeback/mastery_graph (same shape as before).
     """
-    from gotit.db.ops.graph import build_budget_subgraph
-    from gotit.db.ops.memory import build_failure_lesson_block, list_trajectory
+    from gotit.db.ops.memory import list_trajectory
 
     claim_id = claim.id
     trajectory = await list_trajectory(
         session, user_id=user_id, topic=claim.topic, claim_id=claim_id
     )
-    budget = await build_budget_subgraph(
-        session, user_id=user_id, claim_id=claim_id
-    )
-    lesson_block = await build_failure_lesson_block(
+    pack = await day_ops.build_evidence_pack_for_claim(
         session,
-        user_id=user_id,
         claim_id=claim_id,
+        user_id=user_id,
         topic=claim.topic,
-        neighbor_claim_ids=budget.confused_claim_ids,
+        recipe="probe",
+        claim_text=claim.text,
     )
 
     if examine_verdict is not None:
@@ -71,8 +68,8 @@ async def run_verify_attempt(
             claim_text=claim.text,
             answer=answer,
             trajectory=trajectory,
-            budget_block=budget.prompt_block,
-            failure_lesson_block=lesson_block,
+            budget_block=pack.budget_block,
+            failure_lesson_block=pack.failure_lesson_block,
         )
         ex_verdict = ev.verdict or "almost"
         ex_score = ev.score
@@ -100,6 +97,8 @@ async def run_verify_attempt(
             "recheck_verdict": finalized["recheck_verdict"],
             "gate_verdict": finalized["gate_verdict"],
             "verdict": finalized["gate_verdict"],
+            "pack_hash": pack.pack_hash,
+            "trim_signals": list(pack.trim_signals),
         }
         attach_verdict_blocks(
             verify_meta,
@@ -121,4 +120,10 @@ async def run_verify_attempt(
         "gate": gate,
         "writeback": finalized["writeback"],
         "mastery_graph": finalized["mastery_graph"],
+        "evidence_pack": {
+            "pack_hash": pack.pack_hash,
+            "trim_signals": list(pack.trim_signals),
+            "recipe": pack.recipe,
+            "snapshot_fingerprint": pack.snapshot_fingerprint,
+        },
     }

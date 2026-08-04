@@ -150,12 +150,15 @@ async def gotit_teach(
         if cid is not None:
             claim_row = await session.get(ClaimRow, cid)
             if claim_row is not None and claim_row.user_id == user_id:
-                lesson_block = await day_ops.build_failure_lesson_block(
+                pack = await day_ops.build_evidence_pack_for_claim(
                     session,
-                    user_id=user_id,
                     claim_id=cid,
+                    user_id=user_id,
                     topic=claim_row.topic or topic,
+                    recipe="teach_back",
+                    claim_text=claim_row.text,
                 )
+                lesson_block = pack.failure_lesson_block
         verdict = await run_echo(
             agent,
             reader,

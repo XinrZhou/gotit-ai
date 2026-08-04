@@ -70,6 +70,7 @@ from gotit.db.ops.drill import (
     list_drill_sessions,
     upsert_drill_material,
 )
+from gotit.db.ops.evidence import build_evidence_pack_for_claim
 from gotit.db.ops.graph import (
     add_depends_on,
     build_budget_subgraph,
@@ -113,6 +114,7 @@ from gotit.db.ops.interview import (
     update_interview_status,
     upsert_interview,
 )
+from gotit.db.ops.learner_state import build_learner_state
 from gotit.db.ops.memory import (
     _memory_view,
     add_memory,
@@ -127,6 +129,7 @@ from gotit.db.ops.memory import (
     mark_failure_digest_notified,
     maybe_record_failure_digest,
     prior_failure_counts_by_claim,
+    trajectory_has_idempotency_key,
 )
 from gotit.db.ops.note import (
     _strip_html,
@@ -313,11 +316,14 @@ __all__ = [
     "append_trajectory",
     "list_trajectory",
     "count_prior_failures",
+    "trajectory_has_idempotency_key",
     "prior_failure_counts_by_claim",
     "maybe_record_failure_digest",
     "list_pending_failure_digests",
     "mark_failure_digest_notified",
     "build_failure_lesson_block",
+    "build_evidence_pack_for_claim",
+    "build_learner_state",
     "failure_hints_by_claim",
     "failure_writeback_and_lessons",
     # shell / obs (OpenClaw bridge)

@@ -65,3 +65,48 @@ def test_empty_inputs() -> None:
     assert blocks.budget_block is None
     assert blocks.failure_lesson_block is None
     assert blocks.trim_signals == []
+
+
+def test_compile_evidence_pack_hash_stable() -> None:
+    from uuid import uuid4
+
+    from gotit.core.context_budget import compile_evidence_pack
+
+    cid = uuid4()
+    p1 = compile_evidence_pack(
+        recipe="probe",
+        claim_id=cid,
+        graph_block="## graph\n- a",
+        lesson_block="## lessons\n- tip",
+        snapshot_fingerprint="abcd1234efgh5678",
+        claim_text="claim text",
+    )
+    p2 = compile_evidence_pack(
+        recipe="probe",
+        claim_id=cid,
+        graph_block="## graph\n- a",
+        lesson_block="## lessons\n- tip",
+        snapshot_fingerprint="abcd1234efgh5678",
+        claim_text="claim text",
+    )
+    assert p1.pack_hash == p2.pack_hash
+    assert p1.budget_block == p2.budget_block
+    assert any(b.kind == "claim" for b in p1.blocks)
+
+
+def test_compile_evidence_pack_trim_signals() -> None:
+    from gotit.core.context_budget import ContextBudget, compile_evidence_pack
+
+    pack = compile_evidence_pack(
+        recipe="probe",
+        claim_id=None,
+        graph_block="G" * 800,
+        lesson_block="## Prior miss lessons\n" + ("L" * 200),
+        budget=ContextBudget(
+            graph_max_chars=800, lesson_max_chars=400, total_max_chars=820
+        ),
+    )
+    assert "lesson_dropped_for_total" in pack.trim_signals
+    assert pack.failure_lesson_block is None
+    assert pack.pack_hash
+
