@@ -377,6 +377,63 @@ def build_companion_tools(
             )
             return {"ok": False, "error": str(exc)}
 
+    async def get_ability_state(topic: str | None = None) -> dict[str, object]:
+        """Read-only Ability State Projection (per-topic). Does not write mastery."""
+        args: dict[str, Any] = {"day": day.isoformat(), "topic": topic}
+        try:
+            proj = await day_ops.build_ability_state(
+                session, user_id=user_id, as_of=day, topic=topic
+            )
+            out = proj.model_dump(mode="json")
+            rec.record(
+                "get_ability_state",
+                args=args,
+                ok=True,
+                summary=f"能力态 {len(proj.abilities)} 个 topic",
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "get_ability_state",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
+    async def get_next_action() -> dict[str, object]:
+        """State-driven next workflow step. Read-only — does not start verify."""
+        args: dict[str, Any] = {"day": day.isoformat()}
+        try:
+            action = await day_ops.build_next_action(
+                session, user_id=user_id, as_of=day
+            )
+            if action is None:
+                out: dict[str, object] = {"action": None, "reason_code": "idle"}
+                rec.record(
+                    "get_next_action",
+                    args=args,
+                    ok=True,
+                    summary="下一步：空闲",
+                )
+                return out
+            out = action.model_dump(mode="json")
+            rec.record(
+                "get_next_action",
+                args=args,
+                ok=True,
+                summary=f"下一步：{action.action}（{action.reason_code}）",
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            rec.record(
+                "get_next_action",
+                args=args,
+                ok=False,
+                summary=f"{type(exc).__name__}: {exc}",
+            )
+            return {"ok": False, "error": str(exc)}
+
     async def start_examine(
         claim_id: str | None = None,
         note_id: str | None = None,
@@ -880,6 +937,24 @@ def build_companion_tools(
             ),
         ),
         Tool(
+            get_ability_state,
+            name="get_ability_state",
+            description=(
+                "Read Ability State Projection by topic (mastered / pending / "
+                "weak points / recent trend). Read-only — does not write mastery. "
+                "Use for「我某方面怎么样 / 哪些能力还弱」."
+            ),
+        ),
+        Tool(
+            get_next_action,
+            name="get_next_action",
+            description=(
+                "Decide the learner's next step from owed / ability / interview "
+                "state (examine|review|teach|drill|calibrate). Read-only — does "
+                "not start a verify run. Use for「我接下来该练什么」."
+            ),
+        ),
+        Tool(
             start_examine,
             name="start_examine",
             description=(
@@ -936,11 +1011,14 @@ def build_companion_tools(
 
 
 COMPANION_TOOL_HINT = (
-    "【办事工具】你可以调用：get_today、list_due_claims、start_examine、"
+    "【办事工具】你可以调用：get_today、list_due_claims、get_ability_state、"
+    "get_next_action、start_examine、"
     "start_verify、get_failure_lessons、add_memory、get_upcoming_interview、"
     "start_drill、close_day。\n"
     "- 问「今天欠什么 / 今日计划 / 还欠几道」时：先调 get_today 或 list_due_claims，"
     "用真实结果回答，不要编造。\n"
+    "- 问「某能力怎么样 / 哪块还弱」：调 get_ability_state（只读投影，不是第二套权威）。\n"
+    "- 问「接下来练什么 / 该开考还是摸底」：调 get_next_action（状态驱动，不是固定剧本）。\n"
     "- 「帮我开练 / 练这条」：优先调 start_verify（按 claim 偏好分流开考/回讲/深挖）。\n"
     "- 「帮我开考 / 考我这条」：调 start_examine（可传 claim_id / note_id；"
     "都不传则挑第一条欠账）；告知对方已备好开考，可点气泡下「开考」。"

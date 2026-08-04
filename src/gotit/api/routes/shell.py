@@ -14,6 +14,7 @@ from gotit.api.auth import require_api_key
 from gotit.api.deps import get_model
 from gotit.api.routes._common import _user_id
 from gotit.api.settings import Settings, get_settings
+from gotit.core.ability_projection import AbilityStateProjection
 from gotit.core.cron_suggest import normalize_cron, suggest_cron_from_text
 from gotit.core.models import (
     DigestCronSuggestRequest,
@@ -25,6 +26,7 @@ from gotit.core.models import (
     MemoryEntry,
     ProfileView,
 )
+from gotit.core.next_action import NextAction
 from gotit.db import ops as day_ops
 from gotit.db import session_scope
 
@@ -392,6 +394,35 @@ async def obs_profile(
 ) -> ProfileView:
     async with session_scope() as session:
         return await day_ops.build_profile_v0(session, user_id=_user_id(settings))
+
+
+@router.get(
+    "/v1/obs/abilities",
+    response_model=AbilityStateProjection,
+    dependencies=[Depends(require_api_key)],
+)
+async def obs_abilities(
+    settings: Annotated[Settings, Depends(get_settings)],
+    topic: Annotated[str | None, Query(description="Optional topic filter")] = None,
+) -> AbilityStateProjection:
+    """Read-only Ability State Projection (claims + trajectory; no mastery write)."""
+    async with session_scope() as session:
+        return await day_ops.build_ability_state(
+            session, user_id=_user_id(settings), topic=topic
+        )
+
+
+@router.get(
+    "/v1/obs/next-action",
+    response_model=NextAction | None,
+    dependencies=[Depends(require_api_key)],
+)
+async def obs_next_action(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NextAction | None:
+    """State-driven next workflow step (pure decision; does not start a run)."""
+    async with session_scope() as session:
+        return await day_ops.build_next_action(session, user_id=_user_id(settings))
 
 
 @router.get(

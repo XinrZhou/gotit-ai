@@ -117,4 +117,5 @@ Examine `almost`/`owe_next` queues `failure_digest` memory (deduped per claim+ve
 Shell writeback / obs (bridge):
 
 - `gotit_record_shell_event` / `gotit_record_interest`
-- `gotit_list_shell_activity` / `gotit_obs_profile` / `gotit_obs_graph`
+- `gotit_list_shell_activity` / `gotit_obs_profile` / `gotit_obs_abilities` /
+  `gotit_obs_next_action` / `gotit_obs_graph`

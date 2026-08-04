@@ -161,6 +161,26 @@ async def gotit_obs_profile() -> dict[str, object]:
     return view.model_dump(mode="json")
 
 @mcp.tool()
+async def gotit_obs_abilities(topic: str | None = None) -> dict[str, object]:
+    """Ability State Projection: per-topic mastery rollup (read-only; no write)."""
+    await ensure_db()
+    async with session_scope() as session:
+        view = await day_ops.build_ability_state(
+            session, user_id=_user_id(), topic=topic
+        )
+    return view.model_dump(mode="json")
+
+@mcp.tool()
+async def gotit_obs_next_action() -> dict[str, object]:
+    """State-driven next step (examine|review|teach|drill|calibrate); read-only."""
+    await ensure_db()
+    async with session_scope() as session:
+        action = await day_ops.build_next_action(session, user_id=_user_id())
+    if action is None:
+        return {"action": None, "reason_code": "idle"}
+    return action.model_dump(mode="json")
+
+@mcp.tool()
 async def gotit_obs_graph() -> dict[str, object]:
     """Graph v0: claim–topic–project edges; confuse + depends; interest→topic."""
     await ensure_db()

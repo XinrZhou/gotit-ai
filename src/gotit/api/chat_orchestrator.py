@@ -150,6 +150,14 @@ async def post_message_chain(
         plan,
         include_list=plan_markdown_list is None,
     )
+    # Read-only growth state for Stateful Companion (never writes mastery).
+    learner_state_brief: str | None = None
+    try:
+        learner_state_brief = await day_ops.build_companion_state_brief(
+            session, user_id=user_id, as_of=today
+        )
+    except Exception:  # noqa: BLE001 — chat must not fail if projection errs
+        learner_state_brief = None
 
     agent_messages: list[Message] = []
     current_user_text: str = text
@@ -203,6 +211,7 @@ async def post_message_chain(
                         today_plan_brief=today_plan_brief,
                         plan_markdown_list=plan_markdown_list,
                         tool_hint=COMPANION_TOOL_HINT,
+                        learner_state_brief=learner_state_brief,
                     )
                 except Exception as exc:
                     # Keep the user turn; surface failure as an in-thread agent reply

@@ -36,6 +36,7 @@ Apple 桥（日计划↔提醒事项；面试↔日历）、Harness API/CLI、CA
 - Agent Runtime V2（eng）：`openspec/changes/agent-runtime-v2/` —
   Phase 0–3 done（Replay/Holdout + Snapshot/Pack + Verify Run envelope）；
   Phase 4 ToolSpec/Trace optional
+- Ability 状态投影：`openspec/changes/ability-state-projection/`
 - 状态边界收紧：`openspec/changes/state-boundary-tighten/`
 - 弱点图谱加深：`openspec/changes/mastery-graph-deepen/`
 - 设置 IA + 动态删除：`openspec/changes/settings-ia-shell-activity/`
@@ -145,6 +146,27 @@ rows for almost|owe_next); meta keeps alias `fail_count` for older UI.
 `db.ops.build_learner_state` — owed / weak clusters / confusions / failure
 lessons / light prefs + `context_fingerprint`. Not a mastery write table.
 
+**AbilityStateProjection** (derived per-topic ability lens):
+`core/ability_projection.py` + `db.ops.build_ability_state` — topic →
+verified/mastered counts, weak_points, pending_review, recent_trend from
+claims + trajectory (+ optional failure_digest hints). Read-only; **no**
+Ability table. Surfaces: `GET /v1/obs/abilities`, MCP `gotit_obs_abilities`,
+companion `get_ability_state`. Claim mastery remains SoT.
+
+**next_action** (state-driven workflow routing, not a Workflow Engine):
+`core/next_action.next_action(state)` — pure function over owed due + ability
+rollup + interview hint → `examine|review|teach|drill|calibrate`. Reuses
+`route_for_claim` for form-follows-claim launch keys. Builder:
+`db.ops.build_next_action`. Surfaces: `GET /v1/obs/next-action`, MCP
+`gotit_obs_next_action`, companion `get_next_action`. Does **not** start a
+verify run or write mastery.
+
+**Chat companion state context** (Stateful AI Companion):
+`db.ops.build_companion_state_brief` → budgeted Ability + next_action + growth
+goal text; `chat_orchestrator` injects into `run_chat` /
+`build_chat_prompt` as「学习者成长状态」+ hard read-only guardrail. Chat
+never writes mastery; Verification Loop remains the only close path.
+
 **EvidencePack** (verify context): `db.ops.build_evidence_pack_for_claim` →
 budgeted graph+lesson blocks + `pack_hash`. Examine/teach/thread-verify LLM
 entry points use Pack; chat orchestrator still assembles separately.
@@ -159,7 +181,9 @@ interview_focus / bootcamp carry `lane`.
 REST/MCP claim-close entries share `api.verify_finalize.finalize_claim_by_id`
 (load claim → `finalize_examine_with_gate`). No `apply_examine_result` stub.
 
-Active change: `openspec/changes/state-boundary-tighten/`.
+Active change: `openspec/changes/ability-state-projection/`
+(P0 Ability projection + next_action + chat state context).
+Also: `openspec/changes/state-boundary-tighten/`.
 
 Five-question check (after this tighten):
 

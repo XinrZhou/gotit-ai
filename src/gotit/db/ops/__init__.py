@@ -114,7 +114,10 @@ from gotit.db.ops.interview import (
     update_interview_status,
     upsert_interview,
 )
+from gotit.db.ops.ability_projection import build_ability_state
+from gotit.db.ops.companion_state import build_companion_state_brief
 from gotit.db.ops.learner_state import build_learner_state
+from gotit.db.ops.next_action import build_next_action
 from gotit.db.ops.memory import (
     _memory_view,
     add_memory,
@@ -324,6 +327,9 @@ __all__ = [
     "build_failure_lesson_block",
     "build_evidence_pack_for_claim",
     "build_learner_state",
+    "build_ability_state",
+    "build_next_action",
+    "build_companion_state_brief",
     "failure_hints_by_claim",
     "failure_writeback_and_lessons",
     # shell / obs (OpenClaw bridge)

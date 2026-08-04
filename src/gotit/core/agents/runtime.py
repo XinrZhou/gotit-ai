@@ -23,6 +23,7 @@ from pydantic_ai import Agent, PromptedOutput
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from gotit.core.agents.deps import MemoryReader, MessageReader
+from gotit.core.companion_state_context import companion_state_guardrail
 from gotit.core.identity.loader import compose_system_prompt
 from gotit.core.models import (
     AgentIdentity,
@@ -233,6 +234,7 @@ def build_chat_prompt(
     today_plan_brief: str | None = None,
     plan_markdown_list: str | None = None,
     tool_hint: str | None = None,
+    learner_state_brief: str | None = None,
 ) -> str:
     if plan_markdown_list:
         # Brief should not re-list items (orchestrator passes include_list=False).
@@ -243,6 +245,14 @@ def build_chat_prompt(
         plan_block = today_plan_brief or format_today_plan_brief(None)
 
     tool_block = f"{tool_hint.strip()}\n\n" if tool_hint and tool_hint.strip() else ""
+
+    if learner_state_brief and learner_state_brief.strip():
+        state_block = (
+            f"## 学习者成长状态\n{learner_state_brief.strip()}\n\n"
+            f"{companion_state_guardrail()}\n\n"
+        )
+    else:
+        state_block = ""
 
     if plan_markdown_list:
         example_open = _DEFAULT_PLAN_OPENERS.get(display_name, "今天这些——")
@@ -267,6 +277,7 @@ def build_chat_prompt(
         )
     return (
         f"{tool_block}"
+        f"{state_block}"
         f"## 关于这位学习者的记忆\n{_format_memory(memory)}\n\n"
         f"## 今日计划\n{plan_block}\n\n"
         f"## 之前的对话\n{_format_history(history)}\n\n"
@@ -357,6 +368,7 @@ async def run_chat(
     today_plan_brief: str | None = None,
     plan_markdown_list: str | None = None,
     tool_hint: str | None = None,
+    learner_state_brief: str | None = None,
 ) -> ChatTurn:
     # Chat uses personality only — examine/curate rubrics are English-first and
     # make agents introduce themselves as Compass/Axiom instead of 中文昵称.
@@ -406,6 +418,7 @@ async def run_chat(
         today_plan_brief=today_plan_brief,
         plan_markdown_list=plan_markdown_list,
         tool_hint=tool_hint if tools else None,
+        learner_state_brief=learner_state_brief,
     )
     try:
         result = await agent.run(prompt)
